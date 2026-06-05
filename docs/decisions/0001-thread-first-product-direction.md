@@ -19,8 +19,8 @@ the task thread.
 
 - The task thread, composer, and next step are the primary desktop surface.
 - The first milestone validates daily personal use before expanding scope.
-- `UI_UX_SPEC.md` is authoritative for interactions and visual direction.
-- `PLAN.md` remains the architecture reference where it does not conflict with
+- `docs/ai/UI_UX_SPEC.md` is authoritative for interactions and visual direction.
+- `docs/ai/PLAN.md` remains the architecture reference where it does not conflict with
   this decision or the narrowed dogfood milestone.
 - Web, public website, AI, integrations, and cross-platform packaging remain
   deferred until validation.

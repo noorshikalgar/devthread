@@ -101,7 +101,7 @@ Explain local SQLite storage, no account requirement, no automatic sharing, no e
 Display:
 
 ```text
-Latest: v0.3.0
+Latest: release_v_0.3.0_alpha
 Released: June 4, 2026
 
 New
@@ -134,7 +134,7 @@ Link to repository, releases, issues, discussions, documentation, security, priv
 
 ### Source Of Truth
 
-- Git tags define versions.
+- Release tags use `release_v_*`, such as `release_v_0.0.4_alpha`.
 - GitHub Releases define published versions, release notes, and downloadable assets.
 - GitHub Issues track bugs/features.
 - GitHub Discussions may host community questions.
@@ -159,10 +159,10 @@ Normalized shape:
 
 ```json
 {
-  "version": "v0.3.0",
+  "version": "release_v_0.3.0_alpha",
   "name": "Task Threads",
   "publishedAt": "2026-06-04T12:00:00Z",
-  "url": "https://github.com/ORG/taskline/releases/tag/v0.3.0",
+  "url": "https://github.com/ORG/taskline/releases/tag/release_v_0.3.0_alpha",
   "notes": {
     "features": [],
     "improvements": [],
@@ -252,7 +252,7 @@ Short demos use muted looping WebM/MP4, poster images, and reduced-motion suppor
 
 ## 8. Visual Direction
 
-Use the tokens from `UI_UX_SPEC.md`: Geist Sans, JetBrains Mono, restrained charcoal surfaces, and semantic progress/finding/blocker/decision accents.
+Use the tokens from `docs/ai/UI_UX_SPEC.md`: Geist Sans, JetBrains Mono, restrained charcoal surfaces, and semantic progress/finding/blocker/decision accents.
 
 The website may be more expressive than the app but remains product-focused:
 

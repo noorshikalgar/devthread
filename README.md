@@ -100,9 +100,9 @@ Use this when preparing screenshots, demos, or feedback videos.
 CI lives in [`.github/workflows/build.yml`](.github/workflows/build.yml).
 It runs lint/typecheck, tests, and cross-platform Tauri builds.
 
-On version tags, the release job uploads generated installers and binaries to a
-GitHub Release, including signed updater artifacts and `latest.json` for the
-in-app update checker:
+On `release_v_*` tags, the release job uploads generated installers and
+binaries to a GitHub Release, including signed updater artifacts and
+`latest.json` for the in-app update checker:
 
 - macOS Apple Silicon `.dmg`
 - Windows `.msi` and NSIS `.exe`
@@ -113,7 +113,7 @@ To cut a release:
 1. Bump the version in `apps/desktop/package.json` and
    `apps/desktop/src-tauri/tauri.conf.json`.
 2. Commit the version bump.
-3. Create and push a tag, for example `v0.1.0`.
+3. Create and push a release tag, for example `release_v_0.1.0_alpha`.
 
 Installers are currently unsigned. macOS Gatekeeper and Windows SmartScreen may
 show first-run warnings until signing and notarization are wired up.

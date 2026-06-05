@@ -473,7 +473,7 @@ The web/PWA companion supports core local features using SQLite WASM/OPFS, but m
 - background behavior is limited
 - desktop and web data do not automatically share without future sync
 
-The public single-page website contains product information, downloads, current-version features/fixes, GitHub project links, and documentation links. It is separate from the optional web companion. See `WEBSITE_SPEC.md`.
+The public single-page website contains product information, downloads, current-version features/fixes, GitHub project links, and documentation links. It is separate from the optional web companion. See `docs/ai/WEBSITE_SPEC.md`.
 
 ## 10. Architecture
 
@@ -1684,7 +1684,7 @@ Acceptance:
 - Website builds when GitHub metadata fetch fails by using validated fallback data.
 - Displayed version and downloads match the latest stable GitHub Release.
 - Website accurately represents the thread-first experience using real product media.
-- Website meets all requirements in `WEBSITE_SPEC.md`.
+- Website meets all requirements in `docs/ai/WEBSITE_SPEC.md`.
 
 ## 31. Success Metrics
 
