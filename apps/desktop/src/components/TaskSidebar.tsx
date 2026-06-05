@@ -232,13 +232,16 @@ export function TaskSidebar({
       <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <nav
           aria-label="Tasks"
-          className="flex w-full min-w-0 flex-col gap-2 overflow-hidden px-2 py-2"
+          className="flex w-full min-w-0 flex-col overflow-hidden"
         >
           {!!activeTasks.length && (
-            <section className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+            <section
+              aria-label="Active tasks"
+              className="flex min-w-0 flex-col overflow-hidden border-b border-border/70 bg-muted/20"
+            >
               <button
                 aria-expanded={openActiveTasks}
-                className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent/40 hover:text-foreground"
                 onClick={() => setOpenActiveTasks((open) => !open)}
                 type="button"
               >
@@ -254,12 +257,13 @@ export function TaskSidebar({
                 </span>
               </button>
               {openActiveTasks && (
-                <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden pl-4">
+                <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden px-2 pb-2">
                   {activeTasks.map((task) => (
                     <button
                       className={cn(
-                        "min-w-0 truncate rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                        selectedId === task.id && "text-foreground",
+                        "min-w-0 truncate rounded-sm border border-transparent px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                        selectedId === task.id &&
+                          "border-border bg-background text-foreground shadow-sm",
                       )}
                       key={task.id}
                       onClick={() => onSelect(task.id)}
@@ -272,34 +276,37 @@ export function TaskSidebar({
               )}
             </section>
           )}
-          {folders.map((folder) => (
-            <FolderGroup
-              collapsed={collapsedFolderIds.has(folder.id)}
-              folder={folder}
-              folders={folders}
-              key={folder.id}
-              onMove={handleMove}
-              onDeleteTask={setTaskToDelete}
-              onRenameFolder={openRenameFolderDialog}
-              onSelect={onSelect}
-              onToggleFolder={toggleFolder}
-              selectedId={selectedId}
-              tasks={grouped.get(folder.id) ?? []}
-            />
-          ))}
-          {grouped.get(UNCATEGORIZED)?.length ? (
-            <FolderGroup
-              folder={null}
-              folders={folders}
-              onMove={handleMove}
-              onDeleteTask={setTaskToDelete}
-              onRenameFolder={openRenameFolderDialog}
-              onSelect={onSelect}
-              onToggleFolder={toggleFolder}
-              selectedId={selectedId}
-              tasks={grouped.get(UNCATEGORIZED) ?? []}
-            />
-          ) : null}
+
+          <div className="flex min-w-0 flex-col gap-2 overflow-hidden px-2 py-2">
+            {folders.map((folder) => (
+              <FolderGroup
+                collapsed={collapsedFolderIds.has(folder.id)}
+                folder={folder}
+                folders={folders}
+                key={folder.id}
+                onMove={handleMove}
+                onDeleteTask={setTaskToDelete}
+                onRenameFolder={openRenameFolderDialog}
+                onSelect={onSelect}
+                onToggleFolder={toggleFolder}
+                selectedId={selectedId}
+                tasks={grouped.get(folder.id) ?? []}
+              />
+            ))}
+            {grouped.get(UNCATEGORIZED)?.length ? (
+              <FolderGroup
+                folder={null}
+                folders={folders}
+                onMove={handleMove}
+                onDeleteTask={setTaskToDelete}
+                onRenameFolder={openRenameFolderDialog}
+                onSelect={onSelect}
+                onToggleFolder={toggleFolder}
+                selectedId={selectedId}
+                tasks={grouped.get(UNCATEGORIZED) ?? []}
+              />
+            ) : null}
+          </div>
 
           {!hasAnyContent && (
             <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
