@@ -504,7 +504,7 @@ export default function App() {
             </div>
           </>
         ) : (
-          <EmptyState onOpenSidebar={() => setSidebarOpen(true)} />
+          <EmptyState onCreateTask={createTask} />
         )}
       </main>
       <CommandPalette
@@ -771,7 +771,7 @@ function ThreadColumn({
   );
 }
 
-function EmptyState({ onOpenSidebar }: { onOpenSidebar: () => void }) {
+function EmptyState({ onCreateTask }: { onCreateTask: () => Promise<void> }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold tracking-tight">
@@ -782,15 +782,15 @@ function EmptyState({ onOpenSidebar }: { onOpenSidebar: () => void }) {
           Keep your work moving in Taskline.
         </h1>
         <p className="text-sm text-muted-foreground">
-          Open the sidebar to start a new task, or press{" "}
+          Create a task to start capturing context, or press{" "}
           <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground">
             ⌘K
           </span>{" "}
           to search.
         </p>
       </div>
-      <Button onClick={onOpenSidebar} size="sm" variant="outline">
-        Open sidebar
+      <Button onClick={() => void onCreateTask()} size="sm" variant="outline">
+        Create new task
       </Button>
     </div>
   );
