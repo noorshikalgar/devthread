@@ -71,7 +71,7 @@ describe("Timeline", () => {
     expect(screen.getByText("Show less")).toBeInTheDocument();
   });
 
-  it("opens a full-view dialog when an attachment is clicked", async () => {
+  it("opens a full-view dialog with a visible close button and zoom controls", async () => {
     const attachment: Attachment = {
       id: "att-a",
       workLogEntryId: "entry-a",
@@ -103,14 +103,67 @@ describe("Timeline", () => {
     fireEvent.click(thumbnail);
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toBeInTheDocument();
     const fullImage = dialog.querySelector("img");
     expect(fullImage).toHaveAttribute(
       "src",
       "tauri://localhost//tmp/screenshot.png",
     );
-    expect(dialog).toHaveTextContent("screenshot.png");
 
-    fireEvent.keyDown(dialog, { key: "Escape" });
+    const closeButton = screen.getByRole("button", {
+      name: "Close image viewer",
+    });
+    expect(closeButton).toBeInTheDocument();
+
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByText("125%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset zoom" }));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("pans the image on mouse drag and resets on the reset button", async () => {
+    const attachment: Attachment = {
+      id: "att-b",
+      workLogEntryId: "entry-a",
+      originalName: "wide.png",
+      mediaType: "image/png",
+      path: "/tmp/wide.png",
+      byteSize: 4096,
+      createdAt: "2026-06-05T00:00:00Z",
+    };
+
+    render(
+      <Timeline
+        attachments={[attachment]}
+        entries={[entry]}
+        hasMore={false}
+        historyEntryId={null}
+        onEdit={vi.fn()}
+        onHistory={vi.fn()}
+        onLoadMore={vi.fn()}
+        onRestoreRevision={vi.fn()}
+        onTrash={vi.fn()}
+        revisions={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View wide.png" }));
+    const dialog = await screen.findByRole("dialog");
+    const image = dialog.querySelector("img")!;
+
+    expect(image.style.transform).toBe("translate(0px, 0px) scale(1)");
+
+    fireEvent.mouseDown(image, { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(image, { button: 0, clientX: 140, clientY: 80 });
+    fireEvent.mouseUp(image);
+    expect(image.style.transform).toBe("translate(40px, -20px) scale(1)");
+
+    fireEvent.mouseDown(image, { button: 0, clientX: 140, clientY: 80 });
+    fireEvent.mouseMove(image, { button: 0, clientX: 90, clientY: 130 });
+    fireEvent.mouseUp(window);
+    expect(image.style.transform).toBe("translate(-10px, 30px) scale(1)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset zoom" }));
+    expect(image.style.transform).toBe("translate(0px, 0px) scale(1)");
   });
 });
