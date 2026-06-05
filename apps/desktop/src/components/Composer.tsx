@@ -32,6 +32,7 @@ import {
   type PendingImage,
   type Visibility,
 } from "@/lib/types";
+import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -411,8 +412,12 @@ export function Composer({ taskId, onSubmit }: Props) {
             {links.map((link) => (
               <a
                 className="flex min-w-[200px] max-w-[280px] flex-col rounded-md border border-border bg-muted/40 px-3 py-2 text-xs hover:bg-accent"
-                href={link.url}
+                href={safeExternalUrl(link.url) ?? "#"}
                 key={link.url}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void openExternalUrl(link.url);
+                }}
                 rel="noreferrer"
                 target="_blank"
               >

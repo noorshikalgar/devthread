@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/duration";
+import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { extractLinkPreviews, isLongEntry } from "@/lib/content";
 import {
@@ -426,7 +427,15 @@ function TimelineEntry({
               <ReactMarkdown
                 components={{
                   a: ({ href, children }) => (
-                    <a href={safeUrl(href)} rel="noreferrer" target="_blank">
+                    <a
+                      href={safeExternalUrl(href) ?? "#"}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void openExternalUrl(href);
+                      }}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
                       {children}
                     </a>
                   ),
@@ -592,7 +601,11 @@ function LinkPreviewCard({
         "group/link flex overflow-hidden rounded-md border border-border bg-muted/40 transition-colors hover:bg-accent",
         imageUrl ? "min-h-28" : "items-center justify-between gap-3 px-3 py-2",
       )}
-      href={link.url}
+      href={safeExternalUrl(link.url) ?? "#"}
+      onClick={(event) => {
+        event.preventDefault();
+        void openExternalUrl(link.url);
+      }}
       rel="noreferrer"
       target="_blank"
     >
@@ -630,16 +643,6 @@ function LinkPreviewCard({
       />
     </a>
   );
-}
-
-function safeUrl(value?: string) {
-  if (!value) return "#";
-  try {
-    const parsed = new URL(value);
-    return ["http:", "https:"].includes(parsed.protocol) ? value : "#";
-  } catch {
-    return "#";
-  }
 }
 
 function formatTime(value: string) {
