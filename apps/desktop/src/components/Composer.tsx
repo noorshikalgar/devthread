@@ -299,7 +299,7 @@ export function Composer({ taskId, onSubmit }: Props) {
             <Textarea
               aria-label="What happened?"
               autoFocus
-              className="min-h-[88px] resize-y border-0 bg-transparent p-1 text-sm leading-6 shadow-none focus-visible:ring-0"
+              className="max-h-[220px] min-h-[88px] resize-none overflow-y-auto border-0 bg-transparent p-1 text-sm leading-6 shadow-none focus-visible:ring-0"
               onBlur={() => setFocused(false)}
               onChange={(event) => changeContent(event.target.value)}
               onFocus={() => setFocused(true)}
