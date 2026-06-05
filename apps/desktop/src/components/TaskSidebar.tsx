@@ -47,7 +47,7 @@ interface Props {
   folders: FolderModel[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onCreate: () => Promise<void>;
+  onCreate: (folderId?: string | null) => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
@@ -284,6 +284,7 @@ export function TaskSidebar({
                 folder={folder}
                 folders={folders}
                 key={folder.id}
+                onCreate={onCreate}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
                 onRenameFolder={openRenameFolderDialog}
@@ -297,6 +298,7 @@ export function TaskSidebar({
               <FolderGroup
                 folder={null}
                 folders={folders}
+                onCreate={onCreate}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
                 onRenameFolder={openRenameFolderDialog}
@@ -359,6 +361,7 @@ function FolderGroup({
   selectedId,
   collapsed,
   onSelect,
+  onCreate,
   onRenameFolder,
   onToggleFolder,
   onMove,
@@ -370,6 +373,7 @@ function FolderGroup({
   selectedId: string | null;
   collapsed?: boolean;
   onSelect: (id: string) => void;
+  onCreate: (folderId?: string | null) => Promise<void>;
   onRenameFolder: (folder: FolderModel) => void;
   onToggleFolder: (folderId: string) => void;
   onMove: (taskId: string, folderId: string | null) => Promise<void>;
@@ -407,6 +411,11 @@ function FolderGroup({
             </button>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-44">
+            <ContextMenuItem onSelect={() => void onCreate(folder.id)}>
+              <Plus className="size-3.5 text-muted-foreground" />
+              New task in folder
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem onSelect={() => onRenameFolder(folder)}>
               <Pencil className="size-3.5 text-muted-foreground" />
               Rename folder

@@ -203,4 +203,35 @@ describe("TaskSidebar", () => {
       expect(renameFolder).toHaveBeenCalledWith("folder-a", "Product polish"),
     );
   });
+
+  it("creates a task directly in a folder from the folder context menu", async () => {
+    const create = vi.fn().mockResolvedValue(undefined);
+    const folders: Folder[] = [
+      {
+        id: "folder-a",
+        name: "Backlog",
+        createdAt: "2026-06-05T00:00:00Z",
+        updatedAt: "2026-06-05T00:00:00Z",
+      },
+    ];
+
+    render(
+      <TaskSidebar
+        folders={folders}
+        onCreate={create}
+        onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId={null}
+        tasks={[]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Backlog"));
+    fireEvent.click(screen.getByText("New task in folder"));
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith("folder-a"));
+  });
 });

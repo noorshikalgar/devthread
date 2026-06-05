@@ -203,8 +203,12 @@ export default function App() {
     }
   }
 
-  async function createTask() {
-    const task = await api.createTask(DEFAULT_TASK_TITLE);
+  async function createTask(folderId?: string | null) {
+    const created = await api.createTask(DEFAULT_TASK_TITLE);
+    const task =
+      folderId && !created.folderId
+        ? await api.moveTask(created.id, folderId)
+        : created;
     setTasks((current) => [task, ...current]);
     setSelectedId(task.id);
     setPendingTitleEdit(true);
