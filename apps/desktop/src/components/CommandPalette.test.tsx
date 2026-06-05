@@ -148,12 +148,16 @@ describe("CommandPalette", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /regular expression/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /regular expression/i }),
+    );
     fireEvent.change(screen.getByPlaceholderText(/Search tasks/), {
       target: { value: "Ship.*mode" },
     });
 
     expect(screen.getByText("Ship dark mode")).toBeInTheDocument();
-    expect(screen.queryByText("Investigate flaky test")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Investigate flaky test"),
+    ).not.toBeInTheDocument();
   });
 });
