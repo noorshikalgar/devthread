@@ -775,11 +775,11 @@ function EmptyState({ onOpenSidebar }: { onOpenSidebar: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold tracking-tight">
-        DT
+        TL
       </div>
       <div className="space-y-1">
         <h1 className="text-balance text-xl font-semibold tracking-tight">
-          Keep the thread of your work.
+          Keep your work moving in Taskline.
         </h1>
         <p className="text-sm text-muted-foreground">
           Open the sidebar to start a new task, or press{" "}
