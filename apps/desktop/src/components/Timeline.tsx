@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { extractLinkPreviews, isLongEntry } from "@/lib/content";
 import {
   type Attachment,
@@ -158,6 +159,7 @@ function TimelineEntry({
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(entry.contentMarkdown);
   const [expanded, setExpanded] = useState(false);
+  const [viewingImage, setViewingImage] = useState<Attachment | null>(null);
   const [linkMetadata, setLinkMetadata] = useState<
     Record<string, LinkMetadata | null>
   >({});
@@ -322,12 +324,12 @@ function TimelineEntry({
             {!!attachments.length && (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-2">
                 {attachments.map((attachment) => (
-                  <a
-                    className="block overflow-hidden rounded-md border border-border bg-muted transition-colors hover:border-foreground/40"
-                    href={convertFileSrc(attachment.path)}
+                  <button
+                    aria-label={`View ${attachment.originalName}`}
+                    className="block overflow-hidden rounded-md border border-border bg-muted text-left transition-colors hover:border-foreground/40"
                     key={attachment.id}
-                    rel="noreferrer"
-                    target="_blank"
+                    onClick={() => setViewingImage(attachment)}
+                    type="button"
                   >
                     <img
                       alt={attachment.originalName}
@@ -335,7 +337,7 @@ function TimelineEntry({
                       loading="lazy"
                       src={convertFileSrc(attachment.path)}
                     />
-                  </a>
+                  </button>
                 ))}
               </div>
             )}
@@ -422,6 +424,13 @@ function TimelineEntry({
           </Button>
         </div>
       )}
+
+      <ImageViewerDialog
+        attachment={viewingImage}
+        onOpenChange={(open) => {
+          if (!open) setViewingImage(null);
+        }}
+      />
     </li>
   );
 }

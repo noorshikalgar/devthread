@@ -3,9 +3,13 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkLogEntry } from "../lib/types";
+import type { Attachment, WorkLogEntry } from "../lib/types";
 import { Timeline } from "./Timeline";
 import { renderWithProviders as render } from "../test-utils";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (path: string) => `tauri://localhost/${path}`,
+}));
 
 vi.mock("@/lib/api", () => ({
   api: {
@@ -65,5 +69,48 @@ describe("Timeline", () => {
     const showMore = screen.getByText("Show more");
     fireEvent.click(showMore);
     expect(screen.getByText("Show less")).toBeInTheDocument();
+  });
+
+  it("opens a full-view dialog when an attachment is clicked", async () => {
+    const attachment: Attachment = {
+      id: "att-a",
+      workLogEntryId: "entry-a",
+      originalName: "screenshot.png",
+      mediaType: "image/png",
+      path: "/tmp/screenshot.png",
+      byteSize: 12_345,
+      createdAt: "2026-06-05T00:00:00Z",
+    };
+
+    render(
+      <Timeline
+        attachments={[attachment]}
+        entries={[entry]}
+        hasMore={false}
+        historyEntryId={null}
+        onEdit={vi.fn()}
+        onHistory={vi.fn()}
+        onLoadMore={vi.fn()}
+        onRestoreRevision={vi.fn()}
+        onTrash={vi.fn()}
+        revisions={[]}
+      />,
+    );
+
+    const thumbnail = screen.getByRole("button", {
+      name: "View screenshot.png",
+    });
+    fireEvent.click(thumbnail);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    const fullImage = dialog.querySelector("img");
+    expect(fullImage).toHaveAttribute(
+      "src",
+      "tauri://localhost//tmp/screenshot.png",
+    );
+    expect(dialog).toHaveTextContent("screenshot.png");
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
   });
 });
