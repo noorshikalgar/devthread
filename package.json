@@ -1,0 +1,19 @@
+{
+  "name": "devthread",
+  "private": true,
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "build": "turbo build",
+    "check": "turbo check",
+    "dev": "pnpm --filter @devthread/desktop tauri dev",
+    "dev:web": "pnpm --filter @devthread/desktop dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "turbo test",
+    "test:rust": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.4"
+  }
+}

@@ -1,0 +1,7 @@
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/target/
+pnpm-lock.yaml
+PLAN.md
+UI_UX_SPEC.md
+WEBSITE_SPEC.md
+docs/

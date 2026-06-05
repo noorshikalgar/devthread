@@ -1,0 +1,257 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+
+  .theme-tokyo-night-dark {
+    --background: 235 19% 13%;
+    --foreground: 230 44% 86%;
+    --card: 240 15% 10%;
+    --card-foreground: 230 44% 86%;
+    --popover: 231 26% 16%;
+    --popover-foreground: 230 44% 86%;
+    --primary: 222 89% 72%;
+    --primary-foreground: 229 31% 9%;
+    --secondary: 229 23% 21%;
+    --secondary-foreground: 230 44% 86%;
+    --muted: 229 24% 19%;
+    --muted-foreground: 229 23% 44%;
+    --accent: 229 23% 21%;
+    --accent-foreground: 230 44% 86%;
+    --destructive: 349 89% 72%;
+    --destructive-foreground: 229 31% 9%;
+    --border: 231 23% 33%;
+    --input: 231 23% 33%;
+    --ring: 267 84% 79%;
+  }
+
+  .theme-tokyo-night-light {
+    --background: 228 16% 92%;
+    --foreground: 229 26% 27%;
+    --card: 225 24% 96%;
+    --card-foreground: 229 26% 27%;
+    --popover: 225 24% 96%;
+    --popover-foreground: 229 26% 27%;
+    --primary: 218 61% 41%;
+    --primary-foreground: 225 24% 96%;
+    --secondary: 228 25% 88%;
+    --secondary-foreground: 229 26% 27%;
+    --muted: 228 25% 88%;
+    --muted-foreground: 228 4% 44%;
+    --accent: 224 42% 86%;
+    --accent-foreground: 229 26% 27%;
+    --destructive: 349 35% 41%;
+    --destructive-foreground: 225 24% 96%;
+    --border: 229 23% 81%;
+    --input: 229 23% 81%;
+    --ring: 261 39% 40%;
+  }
+
+  .theme-zed-dark {
+    --background: 220 13% 18%;
+    --foreground: 219 14% 71%;
+    --card: 216 13% 15%;
+    --card-foreground: 219 14% 71%;
+    --popover: 216 13% 15%;
+    --popover-foreground: 219 14% 71%;
+    --primary: 207 82% 66%;
+    --primary-foreground: 216 13% 15%;
+    --secondary: 216 14% 23%;
+    --secondary-foreground: 219 14% 78%;
+    --muted: 216 14% 23%;
+    --muted-foreground: 220 6% 53%;
+    --accent: 222 13% 26%;
+    --accent-foreground: 219 14% 78%;
+    --destructive: 355 65% 65%;
+    --destructive-foreground: 216 13% 15%;
+    --border: 221 13% 28%;
+    --input: 221 13% 28%;
+    --ring: 286 60% 70%;
+  }
+
+  .theme-zed-light {
+    --background: 0 0% 98%;
+    --foreground: 228 8% 24%;
+    --card: 0 0% 100%;
+    --card-foreground: 228 8% 24%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 8% 24%;
+    --primary: 221 88% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 2% 90%;
+    --secondary-foreground: 228 8% 24%;
+    --muted: 240 2% 90%;
+    --muted-foreground: 228 6% 44%;
+    --accent: 222 35% 95%;
+    --accent-foreground: 228 8% 24%;
+    --destructive: 355 62% 54%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 4% 86%;
+    --input: 240 4% 86%;
+    --ring: 301 61% 40%;
+  }
+}
+
+@layer components {
+  .markdown {
+    @apply max-w-none overflow-hidden text-sm leading-6 text-foreground;
+  }
+
+  .markdown > * + * {
+    @apply mt-3;
+  }
+
+  .markdown h1,
+  .markdown h2,
+  .markdown h3 {
+    @apply font-semibold leading-snug tracking-tight;
+  }
+
+  .markdown h1 {
+    @apply text-lg;
+  }
+
+  .markdown h2 {
+    @apply text-base;
+  }
+
+  .markdown h3 {
+    @apply text-sm;
+  }
+
+  .markdown p {
+    @apply break-words;
+  }
+
+  .markdown a {
+    @apply font-medium text-primary underline underline-offset-4;
+  }
+
+  .markdown ul,
+  .markdown ol {
+    @apply pl-5;
+  }
+
+  .markdown ul {
+    @apply list-disc;
+  }
+
+  .markdown ol {
+    @apply list-decimal;
+  }
+
+  .markdown li + li {
+    @apply mt-1;
+  }
+
+  .markdown blockquote {
+    @apply border-l-2 border-border pl-3 text-muted-foreground;
+  }
+
+  .markdown code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+  }
+
+  .markdown pre {
+    @apply overflow-x-auto rounded-md border border-border bg-muted p-3;
+  }
+
+  .markdown pre code {
+    @apply bg-transparent p-0 text-xs;
+  }
+
+  .markdown table {
+    @apply w-full border-collapse overflow-hidden rounded-md text-xs;
+  }
+
+  .markdown th,
+  .markdown td {
+    @apply border border-border px-2 py-1 text-left align-top;
+  }
+
+  .markdown th {
+    @apply bg-muted font-semibold;
+  }
+
+  .markdown--collapsed {
+    @apply relative max-h-48;
+  }
+
+  .markdown--collapsed::after {
+    @apply pointer-events-none absolute inset-x-0 bottom-0 h-16;
+    content: "";
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--background) / 0),
+      hsl(var(--background))
+    );
+  }
+
+  .remote-image-blocked {
+    @apply inline-flex rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+}
