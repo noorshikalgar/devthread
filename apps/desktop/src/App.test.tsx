@@ -24,7 +24,9 @@ vi.mock("./lib/api", () => ({
     createFolder: vi.fn(),
     renameFolder: vi.fn(),
     moveTask: vi.fn(),
+    deleteTask: vi.fn(),
     createAttachment: vi.fn(),
+    fetchLinkPreview: vi.fn(),
   },
 }));
 
@@ -197,10 +199,12 @@ describe("TaskHeader", () => {
 
   it("opens settings from the app rail and changes theme", async () => {
     mockAppApi();
+    Element.prototype.scrollIntoView = vi.fn();
     render(<App />);
 
     fireEvent.click(screen.getByLabelText("Open settings"));
-    fireEvent.click(screen.getByRole("button", { name: /Tokyo Night Light/ }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Theme" }));
+    fireEvent.click(await screen.findByText("Tokyo Night Light"));
 
     expect(localStorage.getItem("devthread:theme")).toBe("tokyo-night-light");
     expect(document.documentElement).toHaveClass("theme-tokyo-night-light");

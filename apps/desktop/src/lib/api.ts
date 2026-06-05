@@ -30,6 +30,7 @@ export const api = {
     invoke<Task>("move_task", {
       input: { taskId, folderId },
     }),
+  deleteTask: (id: string) => invoke<void>("delete_task", { id }),
   listFolders: () => invoke<Folder[]>("list_folders"),
   createFolder: (name: string) =>
     invoke<Folder>("create_folder", { input: { name } }),

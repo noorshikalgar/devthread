@@ -7,6 +7,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { Folder as FolderModel, Task } from "@/lib/types";
@@ -18,6 +19,9 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -47,6 +51,7 @@ interface Props {
   onCreateFolder: (name: string) => Promise<void>;
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
+  onDeleteTask: (taskId: string) => Promise<void>;
 }
 
 const UNCATEGORIZED = "__ungrouped__";
@@ -60,6 +65,7 @@ export function TaskSidebar({
   onCreateFolder,
   onRenameFolder,
   onMoveTask,
+  onDeleteTask,
 }: Props) {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
@@ -69,6 +75,8 @@ export function TaskSidebar({
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(
     null,
   );
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [openActiveTasks, setOpenActiveTasks] = useState(true);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -161,6 +169,10 @@ export function TaskSidebar({
   }
 
   const hasAnyContent = filtered.length > 0 || folders.length > 0;
+  const activeTasks = useMemo(
+    () => filtered.filter((task) => task.status === "active"),
+    [filtered],
+  );
 
   return (
     <aside className="flex h-full w-full flex-col border-r border-border bg-card text-card-foreground">
@@ -220,8 +232,46 @@ export function TaskSidebar({
       <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <nav
           aria-label="Tasks"
-          className="flex w-full min-w-0 flex-col gap-3 overflow-hidden p-3"
+          className="flex w-full min-w-0 flex-col gap-2 overflow-hidden px-2 py-2"
         >
+          {!!activeTasks.length && (
+            <section className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+              <button
+                aria-expanded={openActiveTasks}
+                className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                onClick={() => setOpenActiveTasks((open) => !open)}
+                type="button"
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3 transition-transform duration-150 ease-out",
+                    openActiveTasks && "rotate-90",
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate">Active tasks</span>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                  {activeTasks.length}
+                </span>
+              </button>
+              {openActiveTasks && (
+                <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden pl-4">
+                  {activeTasks.map((task) => (
+                    <button
+                      className={cn(
+                        "min-w-0 truncate rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                        selectedId === task.id && "text-foreground",
+                      )}
+                      key={task.id}
+                      onClick={() => onSelect(task.id)}
+                      type="button"
+                    >
+                      {task.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
           {folders.map((folder) => (
             <FolderGroup
               collapsed={collapsedFolderIds.has(folder.id)}
@@ -229,6 +279,7 @@ export function TaskSidebar({
               folders={folders}
               key={folder.id}
               onMove={handleMove}
+              onDeleteTask={setTaskToDelete}
               onRenameFolder={openRenameFolderDialog}
               onSelect={onSelect}
               onToggleFolder={toggleFolder}
@@ -241,6 +292,7 @@ export function TaskSidebar({
               folder={null}
               folders={folders}
               onMove={handleMove}
+              onDeleteTask={setTaskToDelete}
               onRenameFolder={openRenameFolderDialog}
               onSelect={onSelect}
               onToggleFolder={toggleFolder}
@@ -283,6 +335,17 @@ export function TaskSidebar({
         }}
         onSubmit={submitFolderDialog}
       />
+      <DeleteTaskDialog
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          await onDeleteTask(taskToDelete.id);
+          setTaskToDelete(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setTaskToDelete(null);
+        }}
+        task={taskToDelete}
+      />
     </aside>
   );
 }
@@ -297,6 +360,7 @@ function FolderGroup({
   onRenameFolder,
   onToggleFolder,
   onMove,
+  onDeleteTask,
 }: {
   folder: FolderModel | null;
   folders: FolderModel[];
@@ -307,6 +371,7 @@ function FolderGroup({
   onRenameFolder: (folder: FolderModel) => void;
   onToggleFolder: (folderId: string) => void;
   onMove: (taskId: string, folderId: string | null) => Promise<void>;
+  onDeleteTask: (task: Task) => void;
 }) {
   if (!tasks.length && !folder) return null;
   const grouped = Boolean(folder);
@@ -351,7 +416,7 @@ function FolderGroup({
         <div
           className={cn(
             "flex min-w-0 flex-col gap-0.5 overflow-hidden",
-            grouped && "relative ml-[18px] border-l border-border/80 pl-3 pt-1",
+            grouped && "relative ml-[12px] border-l border-border/80 pl-2 pt-1",
           )}
         >
           {tasks.map((task) => (
@@ -360,6 +425,7 @@ function FolderGroup({
               grouped={grouped}
               key={task.id}
               onMove={onMove}
+              onDeleteTask={onDeleteTask}
               onSelect={onSelect}
               selected={selectedId === task.id}
               task={task}
@@ -445,11 +511,68 @@ function FolderDialog({
   );
 }
 
+function DeleteTaskDialog({
+  task,
+  onOpenChange,
+  onConfirm,
+}: {
+  task: Task | null;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!task) setDeleting(false);
+  }, [task]);
+
+  if (!task) return null;
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete task?</DialogTitle>
+          <DialogDescription>
+            This removes the task and its timeline from the local workspace.
+            Later we can add a safer archive-first flow for tasks you may want
+            to keep.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+          {task.title}
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="ghost"
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={deleting}
+            onClick={() => {
+              setDeleting(true);
+              void onConfirm().finally(() => setDeleting(false));
+            }}
+            type="button"
+            variant="destructive"
+          >
+            {deleting ? "Deleting..." : "Delete task"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TaskRow({
   task,
   selected,
   onSelect,
   onMove,
+  onDeleteTask,
   folders,
   grouped,
 }: {
@@ -457,6 +580,7 @@ function TaskRow({
   selected: boolean;
   onSelect: (id: string) => void;
   onMove: (taskId: string, folderId: string | null) => Promise<void>;
+  onDeleteTask: (task: Task) => void;
   folders: FolderModel[];
   grouped: boolean;
 }) {
@@ -466,9 +590,9 @@ function TaskRow({
         <Button
           aria-current={selected ? "page" : undefined}
           className={cn(
-            "h-auto w-full min-w-0 justify-start gap-2 overflow-hidden rounded-md px-2.5 py-2 text-left shadow-none",
+            "group/task h-auto w-full min-w-0 justify-start gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left shadow-none",
             grouped &&
-              "relative before:absolute before:left-[-11px] before:top-1/2 before:h-px before:w-2 before:bg-border/80",
+              "relative before:absolute before:left-[-7px] before:top-1/2 before:h-px before:w-1.5 before:bg-border/80",
             selected
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -503,31 +627,58 @@ function TaskRow({
               />
             </span>
           </span>
+          <span
+            aria-label={`Delete ${task.title}`}
+            className="ml-auto hidden h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/task:flex group-hover/task:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteTask(task);
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <Trash2 className="size-3.5" />
+          </span>
         </Button>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuLabel>Move to</ContextMenuLabel>
-        {folders.length === 0 && (
-          <ContextMenuItem disabled>No folders yet</ContextMenuItem>
-        )}
-        {folders.map((folder) => (
-          <ContextMenuItem
-            disabled={folder.id === task.folderId}
-            key={folder.id}
-            onSelect={() => void onMove(task.id, folder.id)}
-          >
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
             <Folder className="size-3.5 text-muted-foreground" />
-            <span className="truncate">{folder.name}</span>
-          </ContextMenuItem>
-        ))}
-        {task.folderId && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => void onMove(task.id, null)}>
-              Remove from folder
-            </ContextMenuItem>
-          </>
-        )}
+            Move to
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-48">
+            {folders.length === 0 && (
+              <ContextMenuItem disabled>No folders yet</ContextMenuItem>
+            )}
+            {folders.map((folder) => (
+              <ContextMenuItem
+                disabled={folder.id === task.folderId}
+                key={folder.id}
+                onSelect={() => void onMove(task.id, folder.id)}
+              >
+                <Folder className="size-3.5 text-muted-foreground" />
+                <span className="truncate">{folder.name}</span>
+              </ContextMenuItem>
+            ))}
+            {task.folderId && (
+              <>
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={() => void onMove(task.id, null)}>
+                  Remove from folder
+                </ContextMenuItem>
+              </>
+            )}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={() => onDeleteTask(task)}
+        >
+          <Trash2 className="size-3.5" />
+          Delete
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

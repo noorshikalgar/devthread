@@ -315,6 +315,27 @@ impl Database {
         get_task(&connection, &input.task_id)
     }
 
+    pub fn delete_task(&self, task_id: &str) -> Result<()> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        let stamp = now();
+        let changed = transaction.execute(
+            "UPDATE tasks SET deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![task_id, stamp],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Task"));
+        }
+        transaction.execute(
+            "UPDATE work_log_entries SET deleted_at = ?2, updated_at = ?2
+             WHERE task_id = ?1 AND deleted_at IS NULL",
+            params![task_id, stamp],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
         let connection = self.connection()?;
         let mut statement = connection.prepare(

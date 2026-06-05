@@ -1,5 +1,5 @@
 import {
-  Check,
+  Archive,
   Info,
   ListTodo,
   Moon,
@@ -16,12 +16,21 @@ import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline } from "@/components/Timeline";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
@@ -118,9 +127,25 @@ export default function App() {
     "all",
   );
   const [threadSearch, setThreadSearch] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [globalRegex, setGlobalRegex] = useState(false);
+  const [archiveView, setArchiveView] = useState(false);
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
     [selectedId, tasks],
+  );
+  const sidebarTasks = useMemo(
+    () =>
+      tasks.filter((task) =>
+        archiveView ? task.status === "archived" : task.status !== "archived",
+      ),
+    [archiveView, tasks],
+  );
+  const globalResults = useMemo(
+    () => searchWorkspace(tasks, entries, globalSearch, globalRegex),
+    [entries, globalRegex, globalSearch, tasks],
   );
 
   useEffect(() => {
@@ -330,6 +355,15 @@ export default function App() {
     );
   }
 
+  async function deleteTask(taskId: string) {
+    await api.deleteTask(taskId);
+    setTasks((current) => current.filter((task) => task.id !== taskId));
+    if (selectedId === taskId) {
+      const next = tasks.find((task) => task.id !== taskId) ?? null;
+      setSelectedId(next?.id ?? null);
+    }
+  }
+
   function selectFolder(folderId: string | null) {
     if (!sidebarOpen) setSidebarOpen(true);
     const firstTask = tasks.find((task) => task.folderId === folderId);
@@ -379,10 +413,15 @@ export default function App() {
   return (
     <div className="flex h-full min-h-0 w-full bg-background text-foreground">
       <AppRail
+        archiveActive={archiveView}
+        onArchiveToggle={() => {
+          setArchiveView((active) => !active);
+          setSidebarOpen(true);
+        }}
+        onSearchOpen={() => setGlobalSearchOpen(true)}
+        onSettingsOpen={() => setSettingsOpen(true)}
         onTaskToggle={() => setSidebarOpen((open) => !open)}
-        onThemeChange={setTheme}
         tasksActive={sidebarOpen}
-        theme={theme}
       />
 
       <div
@@ -397,11 +436,12 @@ export default function App() {
             folders={folders}
             onCreate={createTask}
             onCreateFolder={createFolder}
+            onDeleteTask={deleteTask}
             onMoveTask={moveTask}
             onRenameFolder={renameFolder}
             onSelect={setSelectedId}
             selectedId={selectedId}
-            tasks={tasks}
+            tasks={sidebarTasks}
           />
         </div>
         {sidebarOpen && (
@@ -484,129 +524,349 @@ export default function App() {
         open={paletteOpen}
         tasks={tasks}
       />
+      <GlobalSearchDialog
+        entries={entries}
+        onOpenChange={setGlobalSearchOpen}
+        onRegexChange={setGlobalRegex}
+        onSearchChange={setGlobalSearch}
+        onSelectEntry={selectEntry}
+        onSelectTask={setSelectedId}
+        open={globalSearchOpen}
+        regex={globalRegex}
+        results={globalResults}
+        search={globalSearch}
+        tasks={tasks}
+      />
+      <SettingsDialog
+        onOpenChange={setSettingsOpen}
+        onThemeChange={setTheme}
+        open={settingsOpen}
+        theme={theme}
+      />
     </div>
   );
 }
 
 function AppRail({
   tasksActive,
-  theme,
+  archiveActive,
   onTaskToggle,
-  onThemeChange,
+  onSearchOpen,
+  onArchiveToggle,
+  onSettingsOpen,
 }: {
   tasksActive: boolean;
-  theme: AppTheme;
+  archiveActive: boolean;
   onTaskToggle: () => void;
-  onThemeChange: (theme: AppTheme) => void;
+  onSearchOpen: () => void;
+  onArchiveToggle: () => void;
+  onSettingsOpen: () => void;
 }) {
-  const themeGroups = Array.from(
-    new Set(APP_THEMES.map((option) => option.family)),
-  );
-
   return (
     <aside className="flex h-full w-12 shrink-0 flex-col items-center border-r border-border bg-card py-3 text-card-foreground">
+      <RailButton
+        active={tasksActive}
+        icon={ListTodo}
+        label={tasksActive ? "Hide task sidebar" : "Show task sidebar"}
+        onClick={onTaskToggle}
+        tooltip="Tasks"
+      />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            aria-label={tasksActive ? "Hide task sidebar" : "Show task sidebar"}
-            aria-pressed={tasksActive}
-            className={cn(
-              "relative rounded-md",
-              tasksActive &&
-                "bg-secondary text-secondary-foreground before:absolute before:left-[-9px] before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-            )}
-            onClick={onTaskToggle}
+            aria-label="Open global search"
+            className="mt-1 rounded-md"
+            onClick={onSearchOpen}
             size="icon-sm"
             variant="ghost"
           >
-            <ListTodo />
+            <Search />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Tasks</TooltipContent>
+        <TooltipContent side="right">Search</TooltipContent>
       </Tooltip>
 
-      <div className="mt-auto">
-        <Popover>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  aria-label="Open settings"
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <Settings />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="right">Settings</TooltipContent>
-          </Tooltip>
-          <PopoverContent
-            align="end"
-            className="w-72 p-0"
-            side="right"
-            sideOffset={10}
-          >
-            <div className="border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold">Settings</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Local workspace preferences
-              </p>
-            </div>
-            <div className="p-2">
-              <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                General
-              </div>
-              {themeGroups.map((family) => (
-                <div className="space-y-1 pb-2 last:pb-0" key={family}>
-                  <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                    {family}
-                  </div>
-                  {APP_THEMES.filter((option) => option.family === family).map(
-                    (option) => (
-                      <ThemeOption
-                        active={theme === option.id}
-                        dark={option.dark}
-                        key={option.id}
-                        label={option.label}
-                        onClick={() => onThemeChange(option.id)}
-                      />
-                    ),
-                  )}
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+      <div className="mt-auto flex flex-col gap-1">
+        <RailButton
+          active={archiveActive}
+          icon={Archive}
+          label={archiveActive ? "Hide archived tasks" : "Show archived tasks"}
+          onClick={onArchiveToggle}
+          tooltip="Archive"
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Open settings"
+              onClick={onSettingsOpen}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <Settings />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Settings</TooltipContent>
+        </Tooltip>
       </div>
     </aside>
   );
 }
 
-function ThemeOption({
+function RailButton({
   active,
-  dark,
   label,
+  tooltip,
+  icon: Icon,
   onClick,
 }: {
   active: boolean;
-  dark: boolean;
   label: string;
+  tooltip: string;
+  icon: typeof ListTodo;
   onClick: () => void;
 }) {
-  const Icon = dark ? Moon : Sun;
   return (
-    <Button
-      aria-pressed={active}
-      className="h-8 w-full justify-start gap-2 px-2 text-xs"
-      onClick={onClick}
-      variant={active ? "secondary" : "ghost"}
-    >
-      <Icon className="size-3.5 text-muted-foreground" />
-      <span className="flex-1 text-left">{label}</span>
-      {active && <Check className="size-3.5 text-muted-foreground" />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-label={label}
+          aria-pressed={active}
+          className={cn(
+            "relative rounded-md",
+            active &&
+              "bg-secondary text-secondary-foreground before:absolute before:left-[-9px] before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+          )}
+          onClick={onClick}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <Icon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{tooltip}</TooltipContent>
+    </Tooltip>
   );
+}
+
+function SettingsDialog({
+  open,
+  theme,
+  onOpenChange,
+  onThemeChange,
+}: {
+  open: boolean;
+  theme: AppTheme;
+  onOpenChange: (open: boolean) => void;
+  onThemeChange: (theme: AppTheme) => void;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="grid h-[460px] w-[min(760px,calc(100vw-32px))] max-w-none grid-cols-[180px_minmax(0,1fr)] gap-0 overflow-hidden p-0">
+        <aside className="border-r border-border bg-card/60 p-3">
+          <DialogTitle className="px-2 py-2 text-base">Settings</DialogTitle>
+          <button
+            className="mt-3 flex w-full items-center rounded-md bg-secondary px-2 py-1.5 text-left text-xs font-medium text-secondary-foreground"
+            type="button"
+          >
+            General
+          </button>
+        </aside>
+        <section className="min-w-0 p-6">
+          <DialogHeader>
+            <DialogTitle>General</DialogTitle>
+            <DialogDescription>
+              Workspace preferences stored locally on this device.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-6 max-w-sm space-y-2">
+            <label
+              className="text-xs font-medium text-muted-foreground"
+              htmlFor="theme-select"
+            >
+              Theme
+            </label>
+            <Select
+              onValueChange={(value) => {
+                if (isAppTheme(value)) onThemeChange(value);
+              }}
+              value={theme}
+            >
+              <SelectTrigger id="theme-select">
+                <SelectValue placeholder="Select theme" />
+              </SelectTrigger>
+              <SelectContent>
+                {APP_THEMES.map((option) => {
+                  const Icon = option.dark ? Moon : Sun;
+                  return (
+                    <SelectItem key={option.id} value={option.id}>
+                      <span className="inline-flex items-center gap-2">
+                        <Icon className="size-3.5 text-muted-foreground" />
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        </section>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GlobalSearchDialog({
+  open,
+  search,
+  regex,
+  results,
+  onOpenChange,
+  onSearchChange,
+  onRegexChange,
+  onSelectTask,
+  onSelectEntry,
+}: {
+  open: boolean;
+  search: string;
+  regex: boolean;
+  tasks: Task[];
+  entries: WorkLogEntry[];
+  results: GlobalSearchResult[];
+  onOpenChange: (open: boolean) => void;
+  onSearchChange: (value: string) => void;
+  onRegexChange: (value: boolean) => void;
+  onSelectTask: (id: string) => void;
+  onSelectEntry: (taskId: string, entryId: string) => void;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="top-[18%] w-[min(720px,calc(100vw-32px))] max-w-none translate-y-0 gap-0 overflow-hidden p-0">
+        <DialogTitle className="sr-only">Search workspace</DialogTitle>
+        <div className="border-b border-border p-3">
+          <div className="relative flex items-center gap-2">
+            <Search className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground" />
+            <Input
+              autoFocus
+              className="h-8 pl-7 pr-12 text-sm"
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search tasks and loaded updates"
+              value={search}
+            />
+            <Button
+              aria-label="Use regular expression"
+              aria-pressed={regex}
+              className={cn(
+                "absolute right-1 h-6 w-8 px-0 font-mono text-[11px]",
+                regex && "bg-secondary text-secondary-foreground",
+              )}
+              onClick={() => onRegexChange(!regex)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              .*
+            </Button>
+          </div>
+        </div>
+        <ScrollArea className="max-h-[420px]">
+          <div className="p-2">
+            {!search.trim() ? (
+              <p className="px-2 py-8 text-center text-xs text-muted-foreground">
+                Type to search across task titles, next steps, and loaded
+                timeline updates.
+              </p>
+            ) : results.length ? (
+              results.map((result) => (
+                <button
+                  className="flex w-full min-w-0 flex-col rounded-md px-2 py-2 text-left hover:bg-accent"
+                  key={`${result.type}-${result.id}`}
+                  onClick={() => {
+                    onOpenChange(false);
+                    if (result.type === "task") onSelectTask(result.id);
+                    else onSelectEntry(result.taskId, result.id);
+                  }}
+                  type="button"
+                >
+                  <span className="text-xs font-medium text-foreground">
+                    {result.title}
+                  </span>
+                  <span className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                    {result.detail}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-2 py-8 text-center text-xs text-muted-foreground">
+                No matches.
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface GlobalSearchResult {
+  id: string;
+  type: "task" | "entry";
+  taskId: string;
+  title: string;
+  detail: string;
+}
+
+function searchWorkspace(
+  tasks: Task[],
+  entries: WorkLogEntry[],
+  query: string,
+  regex: boolean,
+): GlobalSearchResult[] {
+  const term = query.trim();
+  if (!term) return [];
+  const matcher = createMatcher(term, regex);
+  if (!matcher) return [];
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const results: GlobalSearchResult[] = [];
+
+  for (const task of tasks) {
+    const haystack = `${task.title} ${task.status} ${task.nextStep ?? ""}`;
+    if (matcher(haystack)) {
+      results.push({
+        id: task.id,
+        taskId: task.id,
+        type: "task",
+        title: task.title,
+        detail: task.nextStep || task.status,
+      });
+    }
+  }
+
+  for (const entry of entries) {
+    if (matcher(entry.contentMarkdown)) {
+      results.push({
+        id: entry.id,
+        taskId: entry.taskId,
+        type: "entry",
+        title: taskMap.get(entry.taskId)?.title ?? "Timeline update",
+        detail: entry.contentMarkdown,
+      });
+    }
+  }
+
+  return results.slice(0, 50);
+}
+
+function createMatcher(query: string, regex: boolean) {
+  if (!regex) {
+    const lower = query.toLowerCase();
+    return (value: string) => value.toLowerCase().includes(lower);
+  }
+  try {
+    const expression = new RegExp(query, "i");
+    return (value: string) => expression.test(value);
+  } catch {
+    return null;
+  }
 }
 
 function isAppTheme(value: string | null): value is AppTheme {

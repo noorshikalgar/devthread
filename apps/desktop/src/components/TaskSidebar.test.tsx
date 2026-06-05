@@ -28,6 +28,7 @@ describe("TaskSidebar", () => {
         folders={[]}
         onCreate={create}
         onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -48,6 +49,7 @@ describe("TaskSidebar", () => {
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={createFolder}
+        onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -82,8 +84,9 @@ describe("TaskSidebar", () => {
         id: "t-1",
         title: "Grouped task with a very long readable title",
         folderId: "folder-a",
+        status: "planned",
       },
-      { ...baseTask, id: "t-2", title: "Loose" },
+      { ...baseTask, id: "t-2", title: "Loose", status: "planned" },
     ];
 
     render(
@@ -91,6 +94,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -129,6 +133,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={select}
@@ -139,6 +144,7 @@ describe("TaskSidebar", () => {
             id: "t-1",
             title: "Testing the UI",
             folderId: "folder-a",
+            status: "planned",
           },
         ]}
       />,
@@ -177,6 +183,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={renameFolder}
         onSelect={() => undefined}

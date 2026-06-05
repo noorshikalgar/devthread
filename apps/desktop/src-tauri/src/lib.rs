@@ -47,6 +47,11 @@ fn move_task(
 }
 
 #[tauri::command]
+fn delete_task(database: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_task(&id).map_err(to_message)
+}
+
+#[tauri::command]
 fn list_folders(database: tauri::State<'_, Database>) -> Result<Vec<repository::Folder>, String> {
     database.list_folders().map_err(to_message)
 }
@@ -178,7 +183,8 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     let image_url = meta_content(&html, "property", "og:image")
         .or_else(|| meta_content(&html, "property", "og:image:url"))
         .or_else(|| meta_content(&html, "name", "twitter:image"))
-        .and_then(|image| resolve_preview_url(&final_url, &image));
+        .and_then(|image| resolve_preview_url(&final_url, &image))
+        .or_else(|| youtube_thumbnail_url(&final_url));
     let site_name = meta_content(&html, "property", "og:site_name");
 
     Ok(LinkMetadata {
@@ -301,6 +307,25 @@ fn resolve_preview_url(base: &reqwest::Url, value: &str) -> Option<String> {
     matches!(parsed.scheme(), "http" | "https").then(|| parsed.to_string())
 }
 
+fn youtube_thumbnail_url(url: &reqwest::Url) -> Option<String> {
+    let host = url.host_str()?.trim_start_matches("www.");
+    let video_id = if host == "youtu.be" {
+        url.path_segments()?.next()?.to_owned()
+    } else if host == "youtube.com" || host == "m.youtube.com" {
+        url.query_pairs()
+            .find_map(|(key, value)| (key == "v").then(|| value.into_owned()))?
+    } else {
+        return None;
+    };
+
+    let clean_id: String = video_id
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+        .take(32)
+        .collect();
+    (!clean_id.is_empty()).then(|| format!("https://i.ytimg.com/vi/{clean_id}/hqdefault.jpg"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -322,6 +347,7 @@ pub fn run() {
             create_task,
             update_task,
             move_task,
+            delete_task,
             list_folders,
             create_folder,
             rename_folder,
