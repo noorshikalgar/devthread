@@ -171,7 +171,7 @@ describe("TaskHeader", () => {
     fireEvent.mouseUp(window);
 
     expect(shell).toHaveStyle({ width: "420px" });
-    expect(localStorage.getItem("devthread:sidebar-width")).toBe("420");
+    expect(localStorage.getItem("taskline:sidebar-width")).toBe("420");
 
     fireEvent.doubleClick(handle);
     expect(shell).toHaveStyle({ width: "280px" });
@@ -206,7 +206,7 @@ describe("TaskHeader", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Theme" }));
     fireEvent.click(await screen.findByText("Tokyo Night Light"));
 
-    expect(localStorage.getItem("devthread:theme")).toBe("tokyo-night-light");
+    expect(localStorage.getItem("taskline:theme")).toBe("tokyo-night-light");
     expect(document.documentElement).toHaveClass("theme-tokyo-night-light");
     expect(document.documentElement).not.toHaveClass("dark");
   });

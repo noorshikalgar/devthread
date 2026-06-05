@@ -98,15 +98,15 @@ jobs:
           - os: macos-14
             label: macos-arm64
             target: aarch64-apple-darwin
-            binary: devthread
+            binary: taskline
           - os: windows-latest
             label: windows-x64
             target: x86_64-pc-windows-msvc
-            binary: devthread.exe
+            binary: taskline.exe
           - os: ubuntu-latest
             label: linux-x64
             target: x86_64-unknown-linux-gnu
-            binary: devthread
+            binary: taskline
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -144,19 +144,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Tauri build
-        run: pnpm --filter @devthread/desktop tauri build --target ${{ matrix.target }}
+        run: pnpm --filter @taskline/desktop tauri build --target ${{ matrix.target }}
 
       - name: Upload raw binary
         uses: actions/upload-artifact@v4
         with:
-          name: devthread-${{ matrix.label }}-binary
+          name: taskline-${{ matrix.label }}-binary
           if-no-files-found: error
           path: apps/desktop/src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary }}
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: devthread-${{ matrix.label }}-installers
+          name: taskline-${{ matrix.label }}-installers
           if-no-files-found: warn
           path: |
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg

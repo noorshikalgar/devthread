@@ -1,6 +1,6 @@
-# DevThread
+# Taskline
 
-DevThread is a private, local-first developer work journal. This repository
+Taskline is a private, local-first developer work journal. This repository
 currently contains the macOS-first task-thread dogfood milestone.
 
 ## Development
@@ -22,7 +22,7 @@ pnpm test:rust
 pnpm build
 ```
 
-The desktop application stores `devthread.sqlite3` under the operating
+The desktop application stores `taskline.sqlite3` under the operating
 system's normal application-data directory. See
 [`docs/dogfood/backup-and-recovery.md`](docs/dogfood/backup-and-recovery.md)
 before relying on dogfood data.

@@ -158,7 +158,7 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
         .get(parsed.clone())
         .header(
             reqwest::header::USER_AGENT,
-            "DevThread/0.1 link preview (+https://devthread.local)",
+            "Taskline/0.1 link preview (+https://taskline.local)",
         )
         .send()
         .await
@@ -337,7 +337,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let database = Database::open(data_dir.join("devthread.sqlite3"))
+            let database = Database::open(data_dir.join("taskline.sqlite3"))
                 .map_err(|error| error.redacted())?;
             app.manage(database);
             Ok(())
@@ -364,5 +364,5 @@ pub fn run() {
             fetch_link_preview
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run DevThread");
+        .expect("failed to run Taskline");
 }

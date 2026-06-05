@@ -5,7 +5,7 @@ Date: 2026-06-04
 
 ## Decision
 
-DevThread is a thread-first developer work journal. Its defining interaction is
+Taskline is a thread-first developer work journal. Its defining interaction is
 adding a typed update to a task timeline and later using that timeline to
 resume or explain the work.
 

@@ -75,13 +75,13 @@ describe("Composer", () => {
 
     fireEvent.change(screen.getByPlaceholderText(/What happened\?/), {
       target: {
-        value: "Review https://github.com/example/devthread/issues/42",
+        value: "Review https://github.com/example/taskline/issues/42",
       },
     });
 
     expect(screen.getByText("github.com")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/What happened\?/)).toHaveValue(
-      "Review https://github.com/example/devthread/issues/42",
+      "Review https://github.com/example/taskline/issues/42",
     );
   });
 

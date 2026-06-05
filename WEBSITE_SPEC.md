@@ -1,4 +1,4 @@
-# DevThread Public Website Specification
+# Taskline Public Website Specification
 
 Status: Deferred until the task-thread dogfood milestone validates product direction  
 Prepared: 2026-06-04  
@@ -6,7 +6,7 @@ Purpose: Public product, download, release, and project-information website
 
 ## 1. Objective
 
-Create a fast single-page React website that explains DevThread, shows the actual product experience, provides trustworthy download/version information, and connects visitors to the open-source GitHub project.
+Create a fast single-page React website that explains Taskline, shows the actual product experience, provides trustworthy download/version information, and connects visitors to the open-source GitHub project.
 
 The website is separate from the Tauri desktop application, the future local-data web companion, and project documentation. It is static and deployable to GitHub Pages, Cloudflare Pages, Netlify, Vercel, or any static host.
 
@@ -15,7 +15,7 @@ The website is separate from the Tauri desktop application, the future local-dat
 Use:
 
 - React, TypeScript, and Vite
-- Tailwind CSS using DevThread design tokens
+- Tailwind CSS using Taskline design tokens
 - Lucide icons
 - locally bundled Geist Sans and JetBrains Mono
 - Vitest and Playwright
@@ -56,7 +56,7 @@ Clearly state: open source, local-first, no account required, private by default
 
 ### Header
 
-- DevThread wordmark
+- Taskline wordmark
 - Product
 - How it works
 - Latest release
@@ -162,7 +162,7 @@ Normalized shape:
   "version": "v0.3.0",
   "name": "Task Threads",
   "publishedAt": "2026-06-04T12:00:00Z",
-  "url": "https://github.com/ORG/devthread/releases/tag/v0.3.0",
+  "url": "https://github.com/ORG/taskline/releases/tag/v0.3.0",
   "notes": {
     "features": [],
     "improvements": [],
@@ -172,7 +172,7 @@ Normalized shape:
   "assets": [
     {
       "platform": "macos-arm64",
-      "name": "DevThread_0.3.0_aarch64.dmg",
+      "name": "Taskline_0.3.0_aarch64.dmg",
       "url": "...",
       "size": 123456
     }
@@ -277,7 +277,7 @@ Required:
 Suggested title:
 
 ```text
-DevThread - A local-first developer work journal
+Taskline - A local-first developer work journal
 ```
 
 ## 10. Accessibility And Performance
@@ -384,7 +384,7 @@ apps/website/
 ## 14. Definition Of Done
 
 1. Single-page React/Vite static website.
-2. First viewport clearly shows DevThread and the real thread UI.
+2. First viewport clearly shows Taskline and the real thread UI.
 3. Visitors understand the product without feature jargon.
 4. Latest version and release notes derive from GitHub Release data.
 5. Downloads map only to existing release assets.

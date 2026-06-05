@@ -50,9 +50,9 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const SELECTED_TASK_KEY = "devthread:selected-task";
-const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
-const THEME_KEY = "devthread:theme";
+const SELECTED_TASK_KEY = "taskline:selected-task";
+const SIDEBAR_WIDTH_KEY = "taskline:sidebar-width";
+const THEME_KEY = "taskline:theme";
 const DEFAULT_TASK_TITLE = "Untitled task";
 const PAGE_SIZE = 100;
 const DEFAULT_SIDEBAR_WIDTH = 280;

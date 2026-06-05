@@ -5,11 +5,11 @@ describe("extractLinkPreviews", () => {
   it("extracts unique safe web links", () => {
     expect(
       extractLinkPreviews(
-        "Review https://github.com/example/devthread/issues/42 and https://github.com/example/devthread/issues/42.",
+        "Review https://github.com/example/taskline/issues/42 and https://github.com/example/taskline/issues/42.",
       ),
     ).toEqual([
       {
-        url: "https://github.com/example/devthread/issues/42",
+        url: "https://github.com/example/taskline/issues/42",
         host: "github.com",
         label: "42",
       },

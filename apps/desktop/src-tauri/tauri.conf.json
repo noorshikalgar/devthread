@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DevThread",
+  "productName": "Taskline",
   "version": "0.1.0",
-  "identifier": "dev.devthread.desktop",
+  "identifier": "dev.taskline.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev:tauri-web",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DevThread",
+        "title": "Taskline",
         "width": 1320,
         "height": 860,
         "minWidth": 560,
@@ -33,7 +33,7 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Thread-first developer work journal",
-    "longDescription": "DevThread keeps a chronological journal of progress, findings, blockers, and decisions for each task — all stored locally on your machine.",
+    "longDescription": "Taskline keeps a chronological journal of progress, findings, blockers, and decisions for each task — all stored locally on your machine.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

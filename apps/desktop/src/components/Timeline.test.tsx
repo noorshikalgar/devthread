@@ -10,7 +10,7 @@ import { renderWithProviders as render } from "../test-utils";
 vi.mock("@/lib/api", () => ({
   api: {
     fetchLinkPreview: vi.fn().mockResolvedValue({
-      url: "https://github.com/example/devthread/issues/42",
+      url: "https://github.com/example/taskline/issues/42",
       title: "Issue 42",
       description: "Preview description",
       imageUrl: "https://github.com/preview.png",
@@ -25,7 +25,7 @@ const entry: WorkLogEntry = {
   entryType: "finding",
   contentMarkdown: `## Finding
 
-This is **important**. Review https://github.com/example/devthread/issues/42.
+This is **important**. Review https://github.com/example/taskline/issues/42.
 
 ${"Long context. ".repeat(80)}`,
   visibility: "private",

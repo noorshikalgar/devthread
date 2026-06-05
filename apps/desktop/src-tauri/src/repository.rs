@@ -214,7 +214,7 @@ impl Database {
     fn memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
         Self::configure(&connection)?;
-        let attachments_dir = std::env::temp_dir().join(format!("devthread-test-{}", id()));
+        let attachments_dir = std::env::temp_dir().join(format!("taskline-test-{}", id()));
         fs::create_dir_all(&attachments_dir).map_err(|error| {
             RepositoryError::Invalid(format!("Could not prepare attachments: {error}"))
         })?;
@@ -880,7 +880,7 @@ mod tests {
     #[test]
     fn file_database_survives_reopen() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("devthread.sqlite3");
+        let path = directory.path().join("taskline.sqlite3");
         let task_id = {
             let database = Database::open(&path).unwrap();
             task(&database).id
