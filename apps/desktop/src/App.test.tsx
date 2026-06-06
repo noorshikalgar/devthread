@@ -4,7 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App, { TaskHeader } from "./App";
-import type { Task } from "./lib/types";
+import type { Task, TaskQuickLink } from "./lib/types";
 import { renderWithProviders as render } from "./test-utils";
 
 vi.mock("./lib/api", () => ({
@@ -13,6 +13,7 @@ vi.mock("./lib/api", () => ({
     listFolders: vi.fn(),
     listEntries: vi.fn(),
     listAttachments: vi.fn(),
+    listQuickLinks: vi.fn(),
     createTask: vi.fn(),
     updateTask: vi.fn(),
     createEntry: vi.fn(),
@@ -26,6 +27,8 @@ vi.mock("./lib/api", () => ({
     moveTask: vi.fn(),
     deleteTask: vi.fn(),
     createAttachment: vi.fn(),
+    createQuickLink: vi.fn(),
+    deleteQuickLink: vi.fn(),
     fetchLinkPreview: vi.fn(),
   },
 }));
@@ -52,6 +55,17 @@ const task: Task = {
   updatedAt: "2026-06-05T00:00:00Z",
 };
 
+const quickLink: TaskQuickLink = {
+  id: "quick-link-a",
+  taskId: "task-a",
+  url: "https://figma.com/file/taskline",
+  title: "Taskline flow",
+  domain: "figma.com",
+  provider: "figma",
+  createdAt: "2026-06-05T00:00:00Z",
+  updatedAt: "2026-06-05T00:00:00Z",
+};
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -64,6 +78,7 @@ function mockAppApi() {
   vi.mocked(api.listFolders).mockResolvedValue([]);
   vi.mocked(api.listEntries).mockResolvedValue([]);
   vi.mocked(api.listAttachments).mockResolvedValue([]);
+  vi.mocked(api.listQuickLinks).mockResolvedValue([]);
 }
 
 describe("TaskHeader", () => {
@@ -180,6 +195,44 @@ describe("TaskHeader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log time" }));
     expect(
       await screen.findByRole("dialog", { name: /Log time/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("copies a task summary and shows quick links in the task header", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <TaskHeader
+        entriesLoaded={5}
+        onCreateQuickLink={vi.fn()}
+        onDeleteQuickLink={vi.fn()}
+        onLogTime={vi.fn()}
+        onUpdate={vi.fn()}
+        quickLinks={[quickLink]}
+        task={{ ...task, estimatedMinutes: 480 }}
+        totalMinutes={120}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Copy task summary"));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        [
+          "Keep context",
+          "Status: Active",
+          "Estimate: 1d",
+          "Logged: 2h",
+          "Updates: 5",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      screen.getByLabelText("Open quick link: Taskline flow"),
     ).toBeInTheDocument();
   });
 

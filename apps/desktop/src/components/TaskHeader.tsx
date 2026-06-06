@@ -1,5 +1,24 @@
-import { Calculator, Clock4, Pause, Play, type LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  Calculator,
+  Clock4,
+  Copy,
+  ExternalLink,
+  Figma,
+  FileSpreadsheet,
+  FileText,
+  Github,
+  KanbanSquare,
+  Link,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Plus,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { LogTimeDialog, type LogTimeInput } from "@/components/LogTimeDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +28,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,16 +49,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { openExternalUrl } from "@/lib/openExternal";
 import { STATUS_DOT, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
-import { type Task, type TaskStatus } from "@/lib/types";
+import { type Task, type TaskQuickLink, type TaskStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   task: Task;
   entriesLoaded: number;
   totalMinutes: number;
+  quickLinks?: TaskQuickLink[];
   pendingTitleEdit?: boolean;
   onLogTime: (input: LogTimeInput) => Promise<void>;
+  onCreateQuickLink?: (url: string) => Promise<void>;
+  onDeleteQuickLink?: (id: string) => Promise<void>;
   onEstimateChange?: (minutes: number | null) => Promise<void>;
   onPendingTitleEditConsumed?: () => void;
   onStatusChange?: (status: TaskStatus) => Promise<void>;
@@ -44,8 +75,11 @@ export function TaskHeader({
   task,
   entriesLoaded,
   totalMinutes,
+  quickLinks = [],
   pendingTitleEdit,
   onLogTime,
+  onCreateQuickLink,
+  onDeleteQuickLink,
   onEstimateChange,
   onPendingTitleEditConsumed,
   onStatusChange,
@@ -58,6 +92,7 @@ export function TaskHeader({
   const [statusOpen, setStatusOpen] = useState(false);
   const [logTimeOpen, setLogTimeOpen] = useState(false);
   const [estimateOpen, setEstimateOpen] = useState(false);
+  const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const titleInput = useRef<HTMLInputElement>(null);
   const titleInputMounted = useRef(false);
 
@@ -159,8 +194,8 @@ export function TaskHeader({
           )}
         </div>
 
-        {showWorkSessionAction && (
-          <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5">
+          {showWorkSessionAction && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -184,8 +219,53 @@ export function TaskHeader({
                 {task.status === "active" ? "Pause work" : "Start work"}
               </TooltipContent>
             </Tooltip>
-          </div>
-        )}
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Copy task summary"
+                onClick={() =>
+                  void copyTaskSummary(task, entriesLoaded, totalMinutes)
+                }
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Copy />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Copy task summary</TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label="More task actions"
+                size="icon-sm"
+                variant="ghost"
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Task</DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={() =>
+                  void copyTaskSummary(task, entriesLoaded, totalMinutes)
+                }
+              >
+                <Copy className="mr-2 size-3.5" />
+                Copy summary
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={!onCreateQuickLink || quickLinks.length >= 3}
+                onSelect={() => setQuickLinkOpen(true)}
+              >
+                <Plus className="mr-2 size-3.5" />
+                Add quick link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -269,6 +349,15 @@ export function TaskHeader({
               : "No estimate"
           }
         />
+        <QuickLinks
+          links={quickLinks}
+          onAdd={
+            onCreateQuickLink && quickLinks.length < 3
+              ? () => setQuickLinkOpen(true)
+              : undefined
+          }
+          onDelete={onDeleteQuickLink}
+        />
       </div>
       <LogTimeDialog
         onOpenChange={setLogTimeOpen}
@@ -284,6 +373,14 @@ export function TaskHeader({
         }}
         open={estimateOpen}
         taskTitle={task.title}
+      />
+      <QuickLinkDialog
+        onOpenChange={setQuickLinkOpen}
+        onSubmit={async (url) => {
+          if (!onCreateQuickLink) return;
+          await onCreateQuickLink(url);
+        }}
+        open={quickLinkOpen}
       />
     </header>
   );
@@ -338,6 +435,194 @@ function TaskFact({
         <TooltipContent>{tooltip}</TooltipContent>
       </Tooltip>
     </div>
+  );
+}
+
+function QuickLinks({
+  links,
+  onAdd,
+  onDelete,
+}: {
+  links: TaskQuickLink[];
+  onAdd?: () => void;
+  onDelete?: (id: string) => Promise<void>;
+}) {
+  if (!links.length && !onAdd) return null;
+
+  return (
+    <div className="inline-flex h-8 items-center overflow-hidden rounded-md border border-border bg-muted/20">
+      <span className="inline-flex h-full items-center border-r border-border/70 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Links
+      </span>
+      <span className="inline-flex h-full items-center gap-1 px-1.5">
+        {links.map((link) => (
+          <QuickLinkButton key={link.id} link={link} onDelete={onDelete} />
+        ))}
+        {onAdd && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Add quick link"
+                className="h-6 w-6"
+                onClick={onAdd}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add quick link</TooltipContent>
+          </Tooltip>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function QuickLinkButton({
+  link,
+  onDelete,
+}: {
+  link: TaskQuickLink;
+  onDelete?: (id: string) => Promise<void>;
+}) {
+  const Icon = quickLinkIcon(link.provider);
+
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              aria-label={`Open quick link: ${link.title}`}
+              className={cn(
+                "h-6 w-6 text-muted-foreground hover:text-foreground",
+                quickLinkColor(link.provider),
+              )}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <Icon className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">{link.title}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {link.domain}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {link.url}
+            </p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuLabel className="truncate">{link.title}</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
+          <ExternalLink className="mr-2 size-3.5" />
+          Open link
+        </DropdownMenuItem>
+        {onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => void onDelete(link.id)}
+            >
+              <Trash2 className="mr-2 size-3.5" />
+              Remove
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function QuickLinkDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (url: string) => Promise<void>;
+}) {
+  const [url, setUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setUrl("");
+    setSaving(false);
+    setError("");
+  }, [open]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await onSubmit(url);
+      onOpenChange(false);
+      toast.success("Quick link added");
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Link className="size-4 text-muted-foreground" />
+            Add quick link
+          </DialogTitle>
+          <DialogDescription>
+            Pin a Jira, Figma, Confluence, document, or file link to this task
+            header.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={submit}>
+          <div className="space-y-2">
+            <Label htmlFor="quick-link-url">Link</Label>
+            <Input
+              autoFocus
+              id="quick-link-url"
+              onChange={(event) => {
+                setUrl(event.target.value);
+                if (error) setError("");
+              }}
+              placeholder="https://..."
+              value={url}
+            />
+            <p className="text-xs text-muted-foreground">
+              Taskline resolves the final URL when possible and keeps only a
+              compact icon in the header.
+            </p>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="ghost"
+            >
+              Cancel
+            </Button>
+            <Button disabled={saving || !url.trim()} type="submit">
+              {saving ? "Adding..." : "Add link"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -493,4 +778,60 @@ function formatShortDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function quickLinkIcon(provider: string): LucideIcon {
+  if (provider === "figma") return Figma;
+  if (provider === "jira") return KanbanSquare;
+  if (provider === "confluence") return BookOpen;
+  if (provider === "sheet") return FileSpreadsheet;
+  if (provider === "doc" || provider === "office") return FileText;
+  if (provider === "github") return Github;
+  return Link;
+}
+
+function quickLinkColor(provider: string) {
+  if (provider === "figma") return "text-fuchsia-400 hover:text-fuchsia-300";
+  if (provider === "jira") return "text-sky-400 hover:text-sky-300";
+  if (provider === "confluence") return "text-blue-400 hover:text-blue-300";
+  if (provider === "sheet") return "text-emerald-400 hover:text-emerald-300";
+  if (provider === "doc" || provider === "office") {
+    return "text-indigo-400 hover:text-indigo-300";
+  }
+  if (provider === "github") return "text-foreground hover:text-foreground";
+  return "";
+}
+
+async function copyTaskSummary(
+  task: Task,
+  entriesLoaded: number,
+  totalMinutes: number,
+) {
+  const summary = [
+    task.title,
+    `Status: ${STATUS_LABEL[task.status]}`,
+    `Estimate: ${
+      task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "None"
+    }`,
+    `Logged: ${totalMinutes > 0 ? formatDuration(totalMinutes) : "0m"}`,
+    `Updates: ${entriesLoaded}`,
+  ].join("\n");
+
+  await writeClipboard(summary);
+  toast.success("Task summary copied");
+}
+
+async function writeClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }

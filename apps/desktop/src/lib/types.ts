@@ -100,3 +100,14 @@ export interface LinkMetadata {
   imageUrl: string | null;
   siteName: string | null;
 }
+
+export interface TaskQuickLink {
+  id: string;
+  taskId: string;
+  url: string;
+  title: string;
+  domain: string;
+  provider: string;
+  createdAt: string;
+  updatedAt: string;
+}

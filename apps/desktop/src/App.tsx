@@ -70,6 +70,7 @@ import tasklineMark from "@/assets/taskline-mark.svg";
 import { APP_THEMES, isAppTheme, type AppThemeId } from "@/lib/themes";
 import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
+import { quickLinkDraftFromUrl } from "@/lib/quickLinks";
 import { STATUS_LABEL } from "@/lib/status";
 import {
   type Attachment,
@@ -77,6 +78,7 @@ import {
   type Folder,
   type PendingImage,
   type Task,
+  type TaskQuickLink,
   type TaskStatus,
   type Visibility,
   type WorkLogEntry,
@@ -123,6 +125,7 @@ export default function App() {
   const [pendingTitleEdit, setPendingTitleEdit] = useState(false);
   const [entries, setEntries] = useState<WorkLogEntry[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [quickLinks, setQuickLinks] = useState<TaskQuickLink[]>([]);
 
   const totalMinutes = useMemo(
     () =>
@@ -252,10 +255,16 @@ export default function App() {
   useEffect(() => {
     if (!selectedId) {
       setEntries([]);
+      setAttachments([]);
+      setQuickLinks([]);
       return;
     }
     localStorage.setItem(SELECTED_TASK_KEY, selectedId);
+    setEntries([]);
+    setAttachments([]);
+    setQuickLinks([]);
     void loadEntries(selectedId);
+    void loadQuickLinks(selectedId);
   }, [selectedId]);
 
   useEffect(() => {
@@ -313,6 +322,14 @@ export default function App() {
       setAttachments(nextAttachments);
       setHasMore(next.length === PAGE_SIZE);
       setHistoryEntryId(null);
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }
+
+  async function loadQuickLinks(taskId: string) {
+    try {
+      setQuickLinks(await api.listQuickLinks(taskId));
     } catch (cause) {
       setError(String(cause));
     }
@@ -402,6 +419,39 @@ export default function App() {
     } catch (cause) {
       setError(`Estimate changed, but the timeline log failed: ${cause}`);
     }
+  }
+
+  async function createQuickLink(url: string) {
+    if (!selectedId) return;
+    const normalized = quickLinkDraftFromUrl(url);
+    if (!normalized) {
+      throw new Error("Paste a valid web URL.");
+    }
+
+    let draft = normalized;
+    try {
+      const metadata = await api.fetchLinkPreview(normalized.url);
+      draft = quickLinkDraftFromUrl(normalized.url, metadata) ?? normalized;
+    } catch {
+      draft = normalized;
+    }
+
+    const saved = await api.createQuickLink(
+      selectedId,
+      draft.url,
+      draft.title,
+      draft.domain,
+      draft.provider,
+    );
+    setQuickLinks((current) => {
+      const withoutDuplicate = current.filter((link) => link.id !== saved.id);
+      return [...withoutDuplicate, saved].slice(0, 3);
+    });
+  }
+
+  async function deleteQuickLink(id: string) {
+    await api.deleteQuickLink(id);
+    setQuickLinks((current) => current.filter((link) => link.id !== id));
   }
 
   async function createEntry(
@@ -767,6 +817,8 @@ export default function App() {
               <TaskHeader
                 entriesLoaded={entries.length}
                 key={selectedTask.id}
+                onCreateQuickLink={createQuickLink}
+                onDeleteQuickLink={deleteQuickLink}
                 onLogTime={logTime}
                 onEstimateChange={(minutes) =>
                   updateTaskEstimate(selectedTask, minutes)
@@ -777,6 +829,7 @@ export default function App() {
                 }
                 onUpdate={updateTask}
                 pendingTitleEdit={pendingTitleEdit}
+                quickLinks={quickLinks}
                 task={selectedTask}
                 totalMinutes={totalMinutes}
               />

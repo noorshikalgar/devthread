@@ -5,6 +5,7 @@ import type {
   Folder,
   LinkMetadata,
   Task,
+  TaskQuickLink,
   TaskStatus,
   Visibility,
   WorkLogEntry,
@@ -83,6 +84,19 @@ export const api = {
   restoreEntry: (entryId: string) => invoke<void>("restore_entry", { entryId }),
   listAttachments: (taskId: string) =>
     invoke<Attachment[]>("list_attachments", { taskId }),
+  listQuickLinks: (taskId: string) =>
+    invoke<TaskQuickLink[]>("list_quick_links", { taskId }),
+  createQuickLink: (
+    taskId: string,
+    url: string,
+    title: string,
+    domain: string,
+    provider: string,
+  ) =>
+    invoke<TaskQuickLink>("create_quick_link", {
+      input: { taskId, url, title, domain, provider },
+    }),
+  deleteQuickLink: (id: string) => invoke<void>("delete_quick_link", { id }),
   fetchLinkPreview: (url: string) =>
     invoke<LinkMetadata>("fetch_link_preview", { url }),
   createAttachment: (
