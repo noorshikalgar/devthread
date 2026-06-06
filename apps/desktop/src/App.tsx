@@ -2016,7 +2016,7 @@ function SummaryTab({
       <div className="mt-6 grid min-h-0 flex-1 grid-cols-2 gap-4">
         <div className="flex min-h-0 flex-col gap-3">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md">
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {order.map((key, index) => {
                 const field = SUMMARY_TEMPLATE_FIELDS.find(
                   (candidate) => candidate.key === key,
@@ -2044,7 +2044,7 @@ function SummaryTab({
                   >
                     <label
                       className={cn(
-                        "flex cursor-pointer items-center gap-2.5 rounded-md py-2 pr-2.5 select-none",
+                        "flex cursor-pointer items-center gap-2.5 rounded-md py-1.5 pr-2.5 select-none",
                         disabled && "cursor-not-allowed opacity-50",
                       )}
                     >
@@ -2072,16 +2072,8 @@ function SummaryTab({
                           strokeWidth={3}
                         />
                       </span>
-                      <span className="min-w-0 truncate text-xs">
-                        <span className="font-medium leading-5">
-                          {field.label}
-                        </span>
-                        {field.description && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {" "}
-                            ({field.description})
-                          </span>
-                        )}
+                      <span className="min-w-0 truncate text-xs font-medium leading-5">
+                        {field.label}
                       </span>
                     </label>
                   </div>
