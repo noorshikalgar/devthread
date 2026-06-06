@@ -185,49 +185,6 @@ export function TaskHeader({
   return (
     <header className="flex flex-col gap-2.5 border-b border-border bg-background/85 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-start gap-2">
-        <Popover onOpenChange={setStatusOpen} open={statusOpen}>
-          <PopoverTrigger asChild>
-            <button
-              aria-label={`Status: ${statusLabel}. Click to change.`}
-              className="mt-0.5 inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-              type="button"
-            >
-              <span
-                aria-hidden
-                className={cn("size-1.5 rounded-full", STATUS_DOT[task.status])}
-              />
-              <span className="font-medium">{statusLabel}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-44 p-1">
-            <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Status
-            </p>
-            {STATUS_ORDER.map((status) => {
-              const active = task.status === status;
-              return (
-                <button
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
-                    active && "bg-accent",
-                  )}
-                  key={status}
-                  onClick={() => {
-                    setStatusOpen(false);
-                    void changeStatus(status as TaskStatus);
-                  }}
-                  type="button"
-                >
-                  <span
-                    aria-hidden
-                    className={cn("size-1.5 rounded-full", STATUS_DOT[status])}
-                  />
-                  {STATUS_LABEL[status]}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {titleDraft === null ? (
             <Tooltip>
@@ -416,6 +373,52 @@ export function TaskHeader({
         </div>
       </div>
 
+      <div className="flex items-center">
+        <Popover onOpenChange={setStatusOpen} open={statusOpen}>
+          <PopoverTrigger asChild>
+            <button
+              aria-label={`Status: ${statusLabel}. Click to change.`}
+              className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+              type="button"
+            >
+              <span
+                aria-hidden
+                className={cn("size-1.5 rounded-full", STATUS_DOT[task.status])}
+              />
+              <span className="font-medium">{statusLabel}</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-44 p-1">
+            <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Status
+            </p>
+            {STATUS_ORDER.map((status) => {
+              const active = task.status === status;
+              return (
+                <button
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
+                    active && "bg-accent",
+                  )}
+                  key={status}
+                  onClick={() => {
+                    setStatusOpen(false);
+                    void changeStatus(status as TaskStatus);
+                  }}
+                  type="button"
+                >
+                  <span
+                    aria-hidden
+                    className={cn("size-1.5 rounded-full", STATUS_DOT[status])}
+                  />
+                  {STATUS_LABEL[status]}
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <QuickLinks
@@ -456,7 +459,7 @@ export function TaskHeader({
                 <Clock4 className="size-3.5" />
                 Log time
                 {totalMinutes > 0 && (
-                  <span className="ml-0.5 font-mono text-[10px] text-muted-foreground">
+                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
                     · {formatDuration(totalMinutes)}
                   </span>
                 )}
@@ -480,11 +483,11 @@ export function TaskHeader({
                 <Calculator className="size-3.5" />
                 Estimate
                 {task.estimatedMinutes != null && task.estimatedMinutes > 0 ? (
-                  <span className="ml-0.5 font-mono text-[10px] text-muted-foreground">
+                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
                     · {formatDuration(task.estimatedMinutes)}
                   </span>
                 ) : (
-                  <span className="ml-0.5 font-mono text-[10px] text-muted-foreground">
+                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
                     · none
                   </span>
                 )}
@@ -552,33 +555,31 @@ function QuickLinks({
   if (!links.length && !onAdd) return null;
 
   return (
-    <div className="inline-flex h-8 items-center overflow-hidden rounded-md border border-border bg-muted/20">
-      <span className="inline-flex h-full items-center border-r border-border/70 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         Links
       </span>
-      <span className="inline-flex h-full items-center gap-1 px-1.5">
-        {links.map((link) => (
-          <QuickLinkButton
-            key={link.id}
-            link={link}
-            onDelete={onDelete}
-            onEdit={onEdit}
-          />
-        ))}
-        {onAdd && (
-          <HoverTooltip content="Add quick link">
-            <Button
-              aria-label="Add quick link"
-              className="h-6 w-6"
-              onClick={onAdd}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Plus className="size-3.5" />
-            </Button>
-          </HoverTooltip>
-        )}
-      </span>
+      {links.map((link) => (
+        <QuickLinkButton
+          key={link.id}
+          link={link}
+          onDelete={onDelete}
+          onEdit={onEdit}
+        />
+      ))}
+      {onAdd && (
+        <HoverTooltip content="Add quick link">
+          <Button
+            aria-label="Add quick link"
+            className="h-6 w-6"
+            onClick={onAdd}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        </HoverTooltip>
+      )}
     </div>
   );
 }
