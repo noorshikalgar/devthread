@@ -16,6 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
@@ -500,7 +505,7 @@ function TimelineEntry({
             )}
 
             {!!links.length && (
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {links.map((link) => (
                   <LinkPreviewCard
                     key={link.url}
@@ -614,16 +619,13 @@ function LinkPreviewCard({
   metadata: LinkMetadata | null | undefined;
 }) {
   const title = metadata?.title || link.host;
-  const subtitle = metadata?.description || link.label || link.url;
   const site = metadata?.siteName || link.host;
   const imageUrl = metadata?.imageUrl;
+  const displayUrl = metadata?.url || link.url;
 
   return (
     <a
-      className={cn(
-        "group/link flex overflow-hidden rounded-md border border-border bg-muted/40 transition-colors hover:bg-accent",
-        imageUrl ? "min-h-28" : "items-center justify-between gap-3 px-3 py-2",
-      )}
+      className="group/link flex min-w-0 flex-col overflow-hidden rounded-md border border-border bg-muted/40 transition-colors hover:border-foreground/30 hover:bg-accent"
       href={safeExternalUrl(link.url) ?? "#"}
       onClick={(event) => {
         event.preventDefault();
@@ -632,38 +634,39 @@ function LinkPreviewCard({
       rel="noreferrer"
       target="_blank"
     >
-      {imageUrl && (
-        <span className="relative block w-36 shrink-0 overflow-hidden bg-secondary">
+      <span className="relative flex aspect-[16/9] w-full items-center justify-center overflow-hidden border-b border-border bg-secondary">
+        {imageUrl ? (
           <img
             alt=""
-            className="h-full min-h-28 w-full object-cover transition-transform duration-200 group-hover/link:scale-[1.03]"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover/link:scale-[1.03]"
             loading="lazy"
             src={imageUrl}
           />
-        </span>
-      )}
-      <span
-        className={cn(
-          "flex min-w-0 flex-1 flex-col",
-          imageUrl ? "justify-center gap-1.5 px-3 py-2.5" : "",
+        ) : (
+          <span className="px-3 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            {site}
+          </span>
         )}
-      >
+        <ExternalLink className="absolute right-2 top-2 size-3.5 text-muted-foreground opacity-80" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5">
         <span className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           {site}
         </span>
-        <span className="line-clamp-2 text-xs font-medium leading-5 text-foreground">
+        <span className="line-clamp-2 min-h-10 text-xs font-medium leading-5 text-foreground">
           {title}
         </span>
-        <span className="line-clamp-2 text-[10px] leading-4 text-muted-foreground">
-          {subtitle}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block truncate text-[10px] leading-4 text-muted-foreground">
+              {displayUrl}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-sm break-all">
+            {displayUrl}
+          </TooltipContent>
+        </Tooltip>
       </span>
-      <ExternalLink
-        className={cn(
-          "size-3.5 shrink-0 text-muted-foreground",
-          imageUrl ? "mr-3 mt-3" : "",
-        )}
-      />
     </a>
   );
 }
