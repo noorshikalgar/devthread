@@ -23,5 +23,9 @@ export function safeExternalUrl(value?: string | null) {
 export async function openExternalUrl(value?: string | null) {
   const url = safeExternalUrl(value);
   if (!url) return;
-  await openUrl(url);
+  try {
+    await openUrl(url);
+  } catch (cause) {
+    console.error("Could not open external URL", url, cause);
+  }
 }
