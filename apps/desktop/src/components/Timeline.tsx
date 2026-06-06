@@ -373,14 +373,14 @@ function TimelineEntry({
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
           <Badge
-            className="h-4 px-1 text-[9px] font-medium uppercase tracking-wider"
+            className="h-5 min-w-[52px] justify-center px-2 text-[10px] font-medium uppercase tracking-wider"
             variant={TYPE_BADGE[entry.entryType]}
           >
             {ENTRY_LABELS[entry.entryType]}
           </Badge>
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium",
+              "inline-flex h-5 min-w-[52px] items-center justify-center gap-1 rounded-md border border-border bg-background px-2 text-[10px] font-medium",
               entry.visibility === "report"
                 ? "text-foreground"
                 : "text-muted-foreground",
@@ -391,7 +391,7 @@ function TimelineEntry({
           {entry.durationMinutes != null && entry.durationMinutes > 0 && (
             <span
               aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-foreground"
+              className="inline-flex h-5 min-w-[48px] items-center justify-center gap-1 rounded-md border border-border bg-background px-2 font-mono text-[10px] text-foreground"
             >
               <Clock4 className="size-2.5 text-muted-foreground" />
               {formatDuration(entry.durationMinutes)}

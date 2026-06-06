@@ -3,7 +3,9 @@ import {
   ArchiveRestore,
   BarChart3,
   Clock4,
+  Copy,
   Download,
+  ExternalLink,
   Info,
   ListTodo,
   Moon,
@@ -56,6 +58,7 @@ import {
 import { api } from "@/lib/api";
 import { APP_THEMES, isAppTheme, type AppThemeId } from "@/lib/themes";
 import { formatDuration } from "@/lib/duration";
+import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { STATUS_LABEL } from "@/lib/status";
 import {
   type Attachment,
@@ -91,6 +94,12 @@ type UpdateState =
   | "error";
 type WorkspaceMode = "tasks" | "archive" | "worklog";
 type WorklogRange = "7d" | "4w" | "12w" | "12m";
+interface AppContextMenuState {
+  x: number;
+  y: number;
+  selectedText: string;
+  linkUrl: string | null;
+}
 
 export { TaskHeader } from "@/components/TaskHeader";
 
@@ -105,7 +114,10 @@ export default function App() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const totalMinutes = useMemo(
-    () => entries.reduce((sum, entry) => sum + (entry.durationMinutes ?? 0), 0),
+    () =>
+      entries
+        .filter((entry) => entry.entryType === "worklog")
+        .reduce((sum, entry) => sum + (entry.durationMinutes ?? 0), 0),
     [entries],
   );
   const [revisions, setRevisions] = useState<WorkLogRevision[]>([]);
@@ -139,6 +151,9 @@ export default function App() {
     [],
   );
   const [worklogLoading, setWorklogLoading] = useState(false);
+  const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
+    null,
+  );
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
     [selectedId, tasks],
@@ -183,6 +198,43 @@ export default function App() {
     }
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    function close() {
+      setContextMenu(null);
+    }
+
+    function handleContextMenu(event: globalThis.MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-radix-popper-content-wrapper]")) return;
+      const selectedText = window.getSelection()?.toString().trim() ?? "";
+      const link = target?.closest("a[href]") as HTMLAnchorElement | null;
+      const linkUrl = safeExternalUrl(link?.getAttribute("href"));
+
+      event.preventDefault();
+      if (!selectedText && !linkUrl) {
+        setContextMenu(null);
+        return;
+      }
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        selectedText,
+        linkUrl,
+      });
+    }
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("click", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("click", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("scroll", close, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -607,11 +659,16 @@ export default function App() {
           onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
-            setWorkspaceMode("tasks");
+            if (workspaceMode !== "tasks") {
+              setWorkspaceMode("tasks");
+              setSidebarOpen(true);
+              return;
+            }
             setSidebarOpen((open) => !open);
           }}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
-          tasksActive={workspaceMode === "tasks" && sidebarOpen}
+          tasksActive={workspaceMode === "tasks"}
+          tasksOpen={sidebarOpen}
           updateAvailable={updateState === "available"}
           worklogActive={workspaceMode === "worklog"}
         />
@@ -756,12 +813,14 @@ export default function App() {
         updateMessage={updateMessage}
         updateState={updateState}
       />
+      <AppContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
   );
 }
 
 function AppRail({
   tasksActive,
+  tasksOpen,
   archiveActive,
   onTaskToggle,
   onSearchOpen,
@@ -772,6 +831,7 @@ function AppRail({
   worklogActive,
 }: {
   tasksActive: boolean;
+  tasksOpen: boolean;
   archiveActive: boolean;
   onTaskToggle: () => void;
   onSearchOpen: () => void;
@@ -786,7 +846,9 @@ function AppRail({
       <RailButton
         active={tasksActive}
         icon={ListTodo}
-        label={tasksActive ? "Hide task sidebar" : "Show task sidebar"}
+        label={
+          tasksActive && tasksOpen ? "Hide task sidebar" : "Show task sidebar"
+        }
         onClick={onTaskToggle}
         tooltip="Tasks"
       />
@@ -848,6 +910,63 @@ function AppRail({
         </Tooltip>
       </div>
     </aside>
+  );
+}
+
+function AppContextMenu({
+  menu,
+  onClose,
+}: {
+  menu: AppContextMenuState | null;
+  onClose: () => void;
+}) {
+  if (!menu) return null;
+
+  async function copy(value: string) {
+    await navigator.clipboard.writeText(value);
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed z-50 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+      onClick={(event) => event.stopPropagation()}
+      style={{ left: menu.x, top: menu.y }}
+    >
+      {menu.linkUrl && (
+        <>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+            onClick={() => {
+              void openExternalUrl(menu.linkUrl);
+              onClose();
+            }}
+            type="button"
+          >
+            <ExternalLink className="size-3.5 text-muted-foreground" />
+            Open link
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+            onClick={() => void copy(menu.linkUrl!)}
+            type="button"
+          >
+            <Copy className="size-3.5 text-muted-foreground" />
+            Copy link
+          </button>
+        </>
+      )}
+      {menu.selectedText && (
+        <button
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+          onClick={() => void copy(menu.selectedText)}
+          type="button"
+        >
+          <Copy className="size-3.5 text-muted-foreground" />
+          Copy
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1241,12 +1360,18 @@ function WorklogMetricsView({
                 Darker means more logged time
               </span>
             </div>
-            <div className="grid grid-flow-col grid-rows-7 gap-1 overflow-x-auto pb-2">
+            <div
+              className="grid grid-flow-col grid-rows-7 gap-1"
+              style={{
+                gridAutoColumns: `minmax(0, ${range === "12m" ? "1fr" : "16px"})`,
+              }}
+            >
               {days.map((day) => (
                 <button
                   aria-label={`${formatShortDate(day.date)} ${formatDuration(day.minutes)}`}
                   className={cn(
-                    "size-4 rounded-[3px] border border-border/50 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    "aspect-square w-full min-w-0 rounded-[3px] border border-border/50 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    range !== "12m" && "size-4",
                     heatClass(day.minutes, maxDayMinutes),
                     selectedDay === day.key && "ring-2 ring-primary",
                   )}
