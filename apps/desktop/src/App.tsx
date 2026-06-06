@@ -648,7 +648,7 @@ export default function App() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
           onArchiveToggle={() => {

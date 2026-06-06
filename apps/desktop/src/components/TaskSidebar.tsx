@@ -252,7 +252,7 @@ export function TaskSidebar({
                   )}
                 />
                 <span className="min-w-0 flex-1 truncate">Active tasks</span>
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[10px] text-muted-foreground">
                   {activeTasks.length}
                 </span>
               </button>
