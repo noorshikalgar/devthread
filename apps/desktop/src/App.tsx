@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
+  Check,
   Clock4,
   Copy,
   Download,
@@ -72,6 +73,14 @@ import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { quickLinkDraftFromUrl } from "@/lib/quickLinks";
 import { STATUS_LABEL } from "@/lib/status";
+import {
+  DEFAULT_SUMMARY_TEMPLATE,
+  loadSummaryTemplate,
+  saveSummaryTemplate,
+  SUMMARY_TEMPLATE_FIELDS,
+  type SummaryTemplate,
+} from "@/lib/summaryTemplate";
+import { formatTaskSummary } from "@/lib/taskSummary";
 import {
   type Attachment,
   type EntryType,
@@ -155,6 +164,9 @@ export default function App() {
   const [timelineRegex, setTimelineRegex] = useState(false);
   const [timelineCompact, setTimelineCompact] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>(() =>
+    loadSummaryTemplate(),
+  );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("tasks");
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
@@ -204,6 +216,10 @@ export default function App() {
       }
     };
   }, [theme]);
+
+  useEffect(() => {
+    saveSummaryTemplate(summaryTemplate);
+  }, [summaryTemplate]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -905,8 +921,13 @@ export default function App() {
         onInstallUpdate={installUpdate}
         onOpenChange={setSettingsOpen}
         onRestart={() => relaunch()}
+        onSummaryTemplateChange={setSummaryTemplate}
+        onSummaryTemplateReset={() =>
+          setSummaryTemplate({ ...DEFAULT_SUMMARY_TEMPLATE })
+        }
         onThemeChange={setTheme}
         open={settingsOpen}
+        summaryTemplate={summaryTemplate}
         theme={theme}
         update={update}
         updateMessage={updateMessage}
@@ -1776,10 +1797,141 @@ function StatusBar({
   );
 }
 
+const SAMPLE_SUMMARY_TASK = {
+  id: "sample-task",
+  title: "Ship the summary template",
+  descriptionMarkdown: "",
+  status: "active" as const,
+  nextStep: null,
+  estimatedMinutes: 8 * 60,
+  folderId: null,
+  createdAt: "2025-01-01T09:00:00Z",
+  updatedAt: "2025-01-02T12:30:00Z",
+};
+
+const SAMPLE_SUMMARY_ENTRIES = [
+  { contentMarkdown: "Implemented the template schema", durationMinutes: 90 },
+  { contentMarkdown: "Wired up the live preview", durationMinutes: 45 },
+  { contentMarkdown: "Reviewed with the team", durationMinutes: 30 },
+];
+
+const SAMPLE_SUMMARY_LINKS = [
+  {
+    id: "link-sample",
+    taskId: "sample-task",
+    url: "https://figma.com/file/abc",
+    title: "Header mockup",
+    domain: "figma.com",
+    provider: "figma",
+    createdAt: "2025-01-01T10:00:00Z",
+    updatedAt: "2025-01-01T10:00:00Z",
+  },
+];
+
+function SummaryTab({
+  template,
+  onChange,
+  onReset,
+}: {
+  template: SummaryTemplate;
+  onChange: (template: SummaryTemplate) => void;
+  onReset: () => void;
+}) {
+  const preview = formatTaskSummary(
+    SAMPLE_SUMMARY_TASK,
+    {
+      totalMinutes: 4 * 60 + 30,
+      entriesLoaded: SAMPLE_SUMMARY_ENTRIES.length,
+      entries: SAMPLE_SUMMARY_ENTRIES,
+      quickLinks: SAMPLE_SUMMARY_LINKS,
+    },
+    template,
+  );
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Summary</DialogTitle>
+        <DialogDescription>
+          Choose which fields go into a copied task or folder summary.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
+        <div className="space-y-3">
+          {SUMMARY_TEMPLATE_FIELDS.map((field) => {
+            const checked = template[field.key];
+            const disabled =
+              field.key === "worklogEntries" && !template.worklog;
+            return (
+              <label
+                className={cn(
+                  "flex items-start gap-2.5",
+                  disabled && "opacity-50",
+                )}
+                key={field.key}
+              >
+                <span className="relative mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border bg-background">
+                  <input
+                    aria-label={field.label}
+                    checked={checked}
+                    className="peer absolute inset-0 h-full w-full cursor-pointer appearance-none rounded disabled:cursor-not-allowed"
+                    disabled={disabled}
+                    onChange={(event) =>
+                      onChange({
+                        ...template,
+                        [field.key]: event.target.checked,
+                      })
+                    }
+                    type="checkbox"
+                  />
+                  <Check
+                    aria-hidden
+                    className="pointer-events-none size-3 text-primary opacity-0 peer-checked:opacity-100"
+                    strokeWidth={3}
+                  />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium leading-5">
+                    {field.label}
+                  </span>
+                  <span className="block text-[11px] leading-4 text-muted-foreground">
+                    {field.description}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+          <Button
+            className="mt-2"
+            onClick={onReset}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Reset to defaults
+          </Button>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs font-medium text-muted-foreground">
+            Preview
+          </span>
+          <pre
+            aria-label="Summary preview"
+            className="mt-2 max-h-[280px] min-h-[180px] flex-1 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-[11px] leading-5 text-foreground"
+          >
+            {preview}
+          </pre>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function SettingsDialog({
   appVersion,
   downloadProgress,
   open,
+  summaryTemplate,
   theme,
   update,
   updateMessage,
@@ -1788,11 +1940,14 @@ function SettingsDialog({
   onInstallUpdate,
   onOpenChange,
   onRestart,
+  onSummaryTemplateChange,
+  onSummaryTemplateReset,
   onThemeChange,
 }: {
   appVersion: string;
   downloadProgress: number;
   open: boolean;
+  summaryTemplate: SummaryTemplate;
   theme: AppThemeId;
   update: Update | null;
   updateMessage: string;
@@ -1801,9 +1956,11 @@ function SettingsDialog({
   onInstallUpdate: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
   onRestart: () => Promise<void>;
+  onSummaryTemplateChange: (template: SummaryTemplate) => void;
+  onSummaryTemplateReset: () => void;
   onThemeChange: (theme: AppThemeId) => void;
 }) {
-  const [tab, setTab] = useState<"general" | "about">("general");
+  const [tab, setTab] = useState<"general" | "summary" | "about">("general");
   const busy = updateState === "checking" || updateState === "downloading";
 
   return (
@@ -1816,6 +1973,11 @@ function SettingsDialog({
               active={tab === "general"}
               label="General"
               onClick={() => setTab("general")}
+            />
+            <SettingsTabButton
+              active={tab === "summary"}
+              label="Summary"
+              onClick={() => setTab("summary")}
             />
             <SettingsTabButton
               active={tab === "about"}
@@ -1888,6 +2050,12 @@ function SettingsDialog({
                 </Select>
               </div>
             </>
+          ) : tab === "summary" ? (
+            <SummaryTab
+              onChange={onSummaryTemplateChange}
+              onReset={onSummaryTemplateReset}
+              template={summaryTemplate}
+            />
           ) : (
             <>
               <DialogHeader>

@@ -436,6 +436,60 @@ describe("TaskHeader", () => {
     }
   });
 
+  it("edits the summary template from settings and persists the choice", async () => {
+    mockAppApi();
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+
+    const quickLinks = await screen.findByLabelText("Quick links");
+    expect(quickLinks).not.toBeChecked();
+
+    fireEvent.click(quickLinks);
+    expect(quickLinks).toBeChecked();
+
+    expect(localStorage.getItem("devthread:summary-template")).toContain(
+      '"quickLinks":true',
+    );
+  });
+
+  it("resets the summary template from settings", async () => {
+    mockAppApi();
+    localStorage.setItem(
+      "devthread:summary-template",
+      JSON.stringify({
+        status: false,
+        estimate: false,
+        worklog: false,
+        worklogEntries: true,
+        quickLinks: true,
+        createdDate: true,
+        updatedDate: true,
+      }),
+    );
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reset to defaults" }),
+    );
+
+    const stored = JSON.parse(
+      localStorage.getItem("devthread:summary-template") ?? "{}",
+    );
+    expect(stored).toEqual({
+      status: true,
+      estimate: true,
+      worklog: true,
+      worklogEntries: false,
+      quickLinks: false,
+      createdDate: false,
+      updatedDate: false,
+    });
+  });
+
   it("logs task status changes into the timeline", async () => {
     mockAppApi();
     vi.mocked(api.updateTask).mockResolvedValue({ ...task, status: "done" });
