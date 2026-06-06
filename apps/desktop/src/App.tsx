@@ -81,6 +81,8 @@ import {
   type SummaryTemplate,
 } from "@/lib/summaryTemplate";
 import { formatTaskSummary } from "@/lib/taskSummary";
+import { copyFolderSummary, type FolderSummaryTask } from "@/lib/folderSummary";
+import { copyFolderCsv } from "@/lib/csv";
 import {
   type Attachment,
   type EntryType,
@@ -613,6 +615,51 @@ export default function App() {
     );
   }
 
+  async function copyFolder(
+    folder: Folder,
+    format: "markdown" | "csv",
+    template = summaryTemplate,
+  ) {
+    const folderTasks = tasks.filter(
+      (candidate) => candidate.folderId === folder.id,
+    );
+    if (!folderTasks.length) {
+      toast.error(`${folder.name} is empty`);
+      return;
+    }
+    const summaries: FolderSummaryTask[] = await Promise.all(
+      folderTasks.map(async (task) => {
+        const [entries, quickLinks] = await Promise.all([
+          api.listEntries(task.id, 1000, 0),
+          api.listQuickLinks(task.id),
+        ]);
+        return {
+          task,
+          context: {
+            entries,
+            quickLinks,
+            entriesLoaded: entries.length,
+            totalMinutes: entries.reduce(
+              (total, entry) => total + (entry.durationMinutes ?? 0),
+              0,
+            ),
+          },
+        };
+      }),
+    );
+    try {
+      if (format === "csv") {
+        await copyFolderCsv(folder, summaries, template);
+        toast.success(`${folder.name} copied as CSV`);
+      } else {
+        await copyFolderSummary(folder, summaries, template);
+        toast.success(`${folder.name} copied as Markdown`);
+      }
+    } catch (cause) {
+      toast.error(`Could not copy ${folder.name}: ${String(cause)}`);
+    }
+  }
+
   async function moveTask(taskId: string, folderId: string | null) {
     const updated = await api.moveTask(taskId, folderId);
     setTasks((current) =>
@@ -790,6 +837,7 @@ export default function App() {
           <div className="h-full" style={{ width: sidebarWidth }}>
             <TaskSidebar
               folders={folders}
+              onCopyFolder={copyFolder}
               onCreate={createTask}
               onCreateFolder={createFolder}
               onDeleteTask={deleteTask}

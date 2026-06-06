@@ -32,6 +32,7 @@ describe("TaskSidebar", () => {
         folders={[]}
         onCreate={create}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -53,6 +54,7 @@ describe("TaskSidebar", () => {
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={createFolder}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -98,6 +100,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -137,6 +140,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -187,6 +191,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={renameFolder}
@@ -224,6 +229,7 @@ describe("TaskSidebar", () => {
         folders={folders}
         onCreate={create}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -251,6 +257,7 @@ describe("TaskSidebar", () => {
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
@@ -268,5 +275,52 @@ describe("TaskSidebar", () => {
         ["Refine sidebar", "Status: Planned", "Estimate: 2h"].join("\n"),
       ),
     );
+  });
+
+  it("copies the folder as Markdown or CSV from the folder context menu", async () => {
+    const onCopyFolder = vi.fn();
+    const folders: Folder[] = [
+      {
+        id: "folder-a",
+        name: "Backlog",
+        createdAt: "2026-06-05T00:00:00Z",
+        updatedAt: "2026-06-05T00:00:00Z",
+      },
+    ];
+    const tasks = [
+      {
+        ...baseTask,
+        id: "t-1",
+        title: "Refine sidebar",
+        folderId: "folder-a",
+        status: "planned" as const,
+        estimatedMinutes: 120,
+      },
+    ];
+
+    render(
+      <TaskSidebar
+        folders={folders}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onCopyFolder={onCopyFolder}
+        onDeleteTask={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId={null}
+        tasks={tasks}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Backlog"));
+    fireEvent.click(screen.getByText("Copy"));
+    fireEvent.click(screen.getByText("Copy as Markdown"));
+    expect(onCopyFolder).toHaveBeenLastCalledWith(folders[0], "markdown");
+
+    fireEvent.contextMenu(screen.getByText("Backlog"));
+    fireEvent.click(screen.getByText("Copy"));
+    fireEvent.click(screen.getByText("Copy as CSV"));
+    expect(onCopyFolder).toHaveBeenLastCalledWith(folders[0], "csv");
   });
 });

@@ -1,6 +1,8 @@
 import {
   ChevronRight,
   Copy,
+  FileSpreadsheet,
+  FileText,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -52,6 +54,10 @@ interface Props {
   onSelect: (id: string) => void;
   onCreate: (folderId?: string | null) => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
+  onCopyFolder: (
+    folder: FolderModel,
+    format: "markdown" | "csv",
+  ) => Promise<void> | void;
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
@@ -64,6 +70,7 @@ export function TaskSidebar({
   folders,
   selectedId,
   onSelect,
+  onCopyFolder,
   onCreate,
   onCreateFolder,
   onRenameFolder,
@@ -290,6 +297,7 @@ export function TaskSidebar({
                 folder={folder}
                 folders={folders}
                 key={folder.id}
+                onCopyFolder={onCopyFolder}
                 onCreate={onCreate}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
@@ -304,6 +312,7 @@ export function TaskSidebar({
               <FolderGroup
                 folder={null}
                 folders={folders}
+                onCopyFolder={onCopyFolder}
                 onCreate={onCreate}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
@@ -367,6 +376,7 @@ function FolderGroup({
   selectedId,
   collapsed,
   onSelect,
+  onCopyFolder,
   onCreate,
   onRenameFolder,
   onToggleFolder,
@@ -379,6 +389,10 @@ function FolderGroup({
   selectedId: string | null;
   collapsed?: boolean;
   onSelect: (id: string) => void;
+  onCopyFolder: (
+    folder: FolderModel,
+    format: "markdown" | "csv",
+  ) => Promise<void> | void;
   onCreate: (folderId?: string | null) => Promise<void>;
   onRenameFolder: (folder: FolderModel) => void;
   onToggleFolder: (folderId: string) => void;
@@ -421,6 +435,40 @@ function FolderGroup({
               <Plus className="size-3.5 text-muted-foreground" />
               New task in folder
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuSub>
+              <ContextMenuSubTrigger
+                disabled={tasks.length === 0}
+                title={
+                  tasks.length === 0
+                    ? "Folder is empty"
+                    : `Copy ${tasks.length} task${tasks.length === 1 ? "" : "s"}`
+                }
+              >
+                <Copy className="size-3.5 text-muted-foreground" />
+                Copy
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-48">
+                <ContextMenuItem
+                  disabled={tasks.length === 0}
+                  onSelect={() => {
+                    void onCopyFolder(folder, "markdown");
+                  }}
+                >
+                  <FileText className="size-3.5 text-muted-foreground" />
+                  Copy as Markdown
+                </ContextMenuItem>
+                <ContextMenuItem
+                  disabled={tasks.length === 0}
+                  onSelect={() => {
+                    void onCopyFolder(folder, "csv");
+                  }}
+                >
+                  <FileSpreadsheet className="size-3.5 text-muted-foreground" />
+                  Copy as CSV
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={() => onRenameFolder(folder)}>
               <Pencil className="size-3.5 text-muted-foreground" />
