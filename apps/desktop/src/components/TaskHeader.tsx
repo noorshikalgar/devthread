@@ -373,54 +373,57 @@ export function TaskHeader({
         </div>
       </div>
 
-      <div className="flex items-center">
-        <Popover onOpenChange={setStatusOpen} open={statusOpen}>
-          <PopoverTrigger asChild>
-            <button
-              aria-label={`Status: ${statusLabel}. Click to change.`}
-              className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-              type="button"
-            >
-              <span
-                aria-hidden
-                className={cn("size-1.5 rounded-full", STATUS_DOT[task.status])}
-              />
-              <span className="font-medium">{statusLabel}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-44 p-1">
-            <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Status
-            </p>
-            {STATUS_ORDER.map((status) => {
-              const active = task.status === status;
-              return (
-                <button
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Popover onOpenChange={setStatusOpen} open={statusOpen}>
+            <PopoverTrigger asChild>
+              <button
+                aria-label={`Status: ${statusLabel}. Click to change.`}
+                className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                type="button"
+              >
+                <span
+                  aria-hidden
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
-                    active && "bg-accent",
+                    "size-1.5 rounded-full",
+                    STATUS_DOT[task.status],
                   )}
-                  key={status}
-                  onClick={() => {
-                    setStatusOpen(false);
-                    void changeStatus(status as TaskStatus);
-                  }}
-                  type="button"
-                >
-                  <span
-                    aria-hidden
-                    className={cn("size-1.5 rounded-full", STATUS_DOT[status])}
-                  />
-                  {STATUS_LABEL[status]}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                />
+                <span className="font-medium">{statusLabel}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-44 p-1">
+              <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Status
+              </p>
+              {STATUS_ORDER.map((status) => {
+                const active = task.status === status;
+                return (
+                  <button
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
+                      active && "bg-accent",
+                    )}
+                    key={status}
+                    onClick={() => {
+                      setStatusOpen(false);
+                      void changeStatus(status as TaskStatus);
+                    }}
+                    type="button"
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        STATUS_DOT[status],
+                      )}
+                    />
+                    {STATUS_LABEL[status]}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
           <QuickLinks
             links={quickLinks}
             onAdd={
@@ -556,9 +559,7 @@ function QuickLinks({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Links
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">Links</span>
       {links.map((link) => (
         <QuickLinkButton
           key={link.id}
