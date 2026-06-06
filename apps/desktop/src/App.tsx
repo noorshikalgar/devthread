@@ -1946,69 +1946,72 @@ function SummaryTab({
   function handlePointerDown(index: number) {
     return (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
-      const target = event.currentTarget;
-      target.setPointerCapture(event.pointerId);
+      const pointerId = event.pointerId;
+      const startX = event.clientX;
+      const startY = event.clientY;
       dragRef.current = {
-        pointerId: event.pointerId,
+        pointerId,
         fromIndex: index,
-        startX: event.clientX,
-        startY: event.clientY,
+        startX,
+        startY,
         active: false,
       };
-    };
-  }
 
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    if (!drag.active && Math.hypot(dx, dy) < 4) return;
-    const element = document.elementFromPoint(
-      event.clientX,
-      event.clientY,
-    ) as HTMLElement | null;
-    const row = element?.closest("[data-field-index]") as HTMLElement | null;
-    const rawIndex = row
-      ? Number.parseInt(row.dataset.fieldIndex ?? "-1", 10)
-      : -1;
-    if (rawIndex !== drag.fromIndex || drag.active) {
-      drag.active = true;
-    }
-    const next = {
-      fromIndex: drag.fromIndex,
-      toIndex: rawIndex,
-      active: true,
-    };
-    if (
-      dragView?.fromIndex !== next.fromIndex ||
-      dragView?.toIndex !== next.toIndex ||
-      dragView?.active !== next.active
-    ) {
-      setDragView(next);
-    }
-  }
+      const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        const drag = dragRef.current;
+        if (!drag) return;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (!drag.active && Math.hypot(dx, dy) < 4) return;
+        if (!drag.active) {
+          drag.active = true;
+        }
+        const element = document.elementFromPoint(
+          ev.clientX,
+          ev.clientY,
+        ) as HTMLElement | null;
+        const row = element?.closest(
+          "[data-field-index]",
+        ) as HTMLElement | null;
+        const rawIndex = row
+          ? Number.parseInt(row.dataset.fieldIndex ?? "-1", 10)
+          : -1;
+        setDragView({
+          fromIndex: drag.fromIndex,
+          toIndex: rawIndex,
+          active: true,
+        });
+      };
 
-  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    if (drag.active) {
-      const view = dragView;
-      if (
-        view &&
-        view.active &&
-        view.toIndex !== null &&
-        view.toIndex >= 0 &&
-        view.fromIndex !== view.toIndex
-      ) {
-        moveItem(drag.fromIndex, view.toIndex);
-      }
-    }
-    dragRef.current = null;
-    setDragView(null);
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        const drag = dragRef.current;
+        if (!drag) return;
+        if (drag.active) {
+          setDragView((view) => {
+            if (
+              view &&
+              view.active &&
+              view.toIndex !== null &&
+              view.toIndex >= 0 &&
+              view.fromIndex !== view.toIndex
+            ) {
+              moveItem(drag.fromIndex, view.toIndex);
+            }
+            return null;
+          });
+        }
+        dragRef.current = null;
+        setDragView(null);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    };
   }
 
   return (
@@ -2047,10 +2050,7 @@ function SummaryTab({
                     )}
                     data-field-index={index}
                     key={key}
-                    onPointerCancel={endDrag}
                     onPointerDown={handlePointerDown(index)}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={endDrag}
                   >
                     <label
                       className={cn(
