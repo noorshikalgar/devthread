@@ -56,6 +56,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import tasklineMark from "@/assets/taskline-mark.svg";
 import { APP_THEMES, isAppTheme, type AppThemeId } from "@/lib/themes";
 import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
@@ -1798,9 +1799,7 @@ function SettingsDialog({
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-6 flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-lg font-semibold tracking-tight text-secondary-foreground">
-                  TL
-                </div>
+                <img alt="" className="h-14 w-14 shrink-0" src={tasklineMark} />
                 <div className="min-w-0 space-y-1">
                   <h3 className="text-base font-semibold">Taskline</h3>
                   <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -2020,9 +2019,7 @@ function ThreadColumn({
 function EmptyState({ onCreateTask }: { onCreateTask: () => Promise<void> }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold tracking-tight">
-        TL
-      </div>
+      <img alt="" className="h-12 w-12" src={tasklineMark} />
       <div className="space-y-1">
         <h1 className="text-balance text-xl font-semibold tracking-tight">
           Keep your work moving in Taskline.

@@ -1,0 +1,15 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Taskline mark</title>
+  <desc id="desc">A compact timeline mark with connected task nodes.</desc>
+  <rect x="7" y="7" width="50" height="50" rx="14" fill="#151823"/>
+  <rect x="7.5" y="7.5" width="49" height="49" rx="13.5" stroke="#2F3650"/>
+  <path d="M22 17V47" stroke="#64708F" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M22 20H44" stroke="#B7C5FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 32H38" stroke="#8BE9C7" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 44H34.5L45 33.5" stroke="#FFB454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22" cy="20" r="4.5" fill="#8AA2FF" stroke="#151823" stroke-width="2"/>
+  <circle cx="22" cy="32" r="4.5" fill="#12C99B" stroke="#151823" stroke-width="2"/>
+  <circle cx="22" cy="44" r="4.5" fill="#C678DD" stroke="#151823" stroke-width="2"/>
+  <circle cx="44" cy="20" r="3" fill="#B7C5FF"/>
+  <circle cx="45" cy="33.5" r="3" fill="#FFB454"/>
+</svg>
