@@ -1,8 +1,8 @@
 mod repository;
 
 use repository::{
-    CreateAttachmentInput, CreateEntryInput, CreateFolderInput, CreateTaskInput, Database,
-    MoveTaskInput, RenameFolderInput, UpdateEntryInput, UpdateTaskInput,
+    CreateAttachmentInput, CreateEntryInput, CreateFolderInput, CreateQuickLinkInput,
+    CreateTaskInput, Database, MoveTaskInput, RenameFolderInput, UpdateEntryInput, UpdateTaskInput,
 };
 use serde::Serialize;
 use tauri::Manager;
@@ -159,6 +159,27 @@ fn create_attachment(
 }
 
 #[tauri::command]
+fn list_quick_links(
+    database: tauri::State<'_, Database>,
+    task_id: String,
+) -> Result<Vec<repository::TaskQuickLink>, String> {
+    database.list_quick_links(&task_id).map_err(to_message)
+}
+
+#[tauri::command]
+fn create_quick_link(
+    database: tauri::State<'_, Database>,
+    input: CreateQuickLinkInput,
+) -> Result<repository::TaskQuickLink, String> {
+    database.create_quick_link(input).map_err(to_message)
+}
+
+#[tauri::command]
+fn delete_quick_link(database: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_quick_link(&id).map_err(to_message)
+}
+
+#[tauri::command]
 async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid preview URL.".to_owned())?;
     if !matches!(parsed.scheme(), "http" | "https") {
@@ -199,7 +220,7 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     let site_name = meta_content(&html, "property", "og:site_name");
 
     Ok(LinkMetadata {
-        url,
+        url: final_url.to_string(),
         title,
         description,
         image_url,
@@ -415,6 +436,9 @@ pub fn run() {
             restore_entry,
             list_attachments,
             create_attachment,
+            list_quick_links,
+            create_quick_link,
+            delete_quick_link,
             fetch_link_preview
         ])
         .run(tauri::generate_context!())

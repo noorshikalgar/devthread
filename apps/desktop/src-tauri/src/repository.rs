@@ -17,7 +17,9 @@ const WORKLOG_ENTRY_TYPE_MIGRATION: &str = include_str!("../migrations/004_workl
 const STATUS_ENTRY_TYPE_MIGRATION: &str = include_str!("../migrations/005_status_entry_type.sql");
 const ESTIMATE_ENTRY_TYPE_MIGRATION: &str =
     include_str!("../migrations/006_estimate_entry_type.sql");
+const QUICK_LINK_MIGRATION: &str = include_str!("../migrations/007_quick_links.sql");
 const MAX_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
+const MAX_QUICK_LINKS_PER_TASK: i64 = 3;
 const TASK_STATUSES: &[&str] = &["planned", "active", "blocked", "paused", "done", "archived"];
 const ENTRY_TYPES: &[&str] = &[
     "note",
@@ -215,6 +217,29 @@ pub struct CreateAttachmentInput {
     pub base64_data: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskQuickLink {
+    pub id: String,
+    pub task_id: String,
+    pub url: String,
+    pub title: String,
+    pub domain: String,
+    pub provider: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateQuickLinkInput {
+    pub task_id: String,
+    pub url: String,
+    pub title: String,
+    pub domain: String,
+    pub provider: String,
+}
+
 pub struct Database {
     connection: Mutex<Connection>,
     attachments_dir: PathBuf,
@@ -263,6 +288,7 @@ impl Database {
         Self::ensure_status_entry_type(connection)?;
         Self::ensure_estimate_entry_type(connection)?;
         connection.execute_batch(FOLDER_MIGRATION)?;
+        connection.execute_batch(QUICK_LINK_MIGRATION)?;
         Ok(())
     }
 
@@ -816,6 +842,89 @@ impl Database {
         })
     }
 
+    pub fn list_quick_links(&self, task_id: &str) -> Result<Vec<TaskQuickLink>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT id, task_id, url, title, domain, provider, created_at, updated_at
+             FROM task_quick_links
+             WHERE task_id = ?1 AND deleted_at IS NULL
+             ORDER BY created_at ASC, id ASC",
+        )?;
+        let links = statement
+            .query_map(params![task_id], map_quick_link)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(links)
+    }
+
+    pub fn create_quick_link(&self, input: CreateQuickLinkInput) -> Result<TaskQuickLink> {
+        let url = required(input.url, "Quick link URL")?;
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(RepositoryError::Invalid(
+                "Quick link must be a web URL.".into(),
+            ));
+        }
+        let title = required(input.title, "Quick link title")?;
+        let domain = required(input.domain, "Quick link domain")?;
+        let provider = required(input.provider, "Quick link provider")?;
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        ensure_task(&transaction, &input.task_id)?;
+
+        if let Some(existing_id) = transaction
+            .query_row(
+                "SELECT id FROM task_quick_links WHERE task_id = ?1 AND url = ?2",
+                params![input.task_id, url],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+        {
+            let stamp = now();
+            transaction.execute(
+                "UPDATE task_quick_links
+                 SET title = ?2, domain = ?3, provider = ?4, updated_at = ?5, deleted_at = NULL
+                 WHERE id = ?1",
+                params![existing_id, title, domain, provider, stamp],
+            )?;
+            transaction.commit()?;
+            return get_quick_link(&connection, &existing_id);
+        }
+
+        let active_count: i64 = transaction.query_row(
+            "SELECT COUNT(*) FROM task_quick_links WHERE task_id = ?1 AND deleted_at IS NULL",
+            params![input.task_id],
+            |row| row.get(0),
+        )?;
+        if active_count >= MAX_QUICK_LINKS_PER_TASK {
+            return Err(RepositoryError::Invalid(
+                "Tasks can have up to 3 quick links.".into(),
+            ));
+        }
+
+        let link_id = id();
+        let stamp = now();
+        transaction.execute(
+            "INSERT INTO task_quick_links
+             (id, task_id, url, title, domain, provider, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+            params![link_id, input.task_id, url, title, domain, provider, stamp],
+        )?;
+        transaction.commit()?;
+        get_quick_link(&connection, &link_id)
+    }
+
+    pub fn delete_quick_link(&self, id: &str) -> Result<()> {
+        let connection = self.connection()?;
+        let changed = connection.execute(
+            "UPDATE task_quick_links SET deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![id, now()],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Quick link"));
+        }
+        Ok(())
+    }
+
     fn set_entry_deleted(&self, entry_id: &str, deleted_at: Option<String>) -> Result<()> {
         let connection = self.connection()?;
         let changed = connection.execute(
@@ -936,6 +1045,18 @@ fn get_entry(connection: &Connection, entry_id: &str) -> Result<WorkLogEntry> {
         .ok_or(RepositoryError::NotFound("Entry"))
 }
 
+fn get_quick_link(connection: &Connection, id: &str) -> Result<TaskQuickLink> {
+    connection
+        .query_row(
+            "SELECT id, task_id, url, title, domain, provider, created_at, updated_at
+             FROM task_quick_links WHERE id = ?1 AND deleted_at IS NULL",
+            params![id],
+            map_quick_link,
+        )
+        .optional()?
+        .ok_or(RepositoryError::NotFound("Quick link"))
+}
+
 fn map_task(row: &Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: row.get(0)?,
@@ -995,6 +1116,19 @@ fn map_attachment(row: &Row<'_>) -> rusqlite::Result<Attachment> {
         path: row.get(4)?,
         byte_size: row.get(5)?,
         created_at: row.get(6)?,
+    })
+}
+
+fn map_quick_link(row: &Row<'_>) -> rusqlite::Result<TaskQuickLink> {
+    Ok(TaskQuickLink {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        url: row.get(2)?,
+        title: row.get(3)?,
+        domain: row.get(4)?,
+        provider: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -1329,5 +1463,72 @@ mod tests {
 
         assert!(Path::new(&attachment.path).exists());
         assert_eq!(database.list_attachments(&task.id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn quick_links_are_limited_and_idempotent_per_task() {
+        let database = Database::memory().unwrap();
+        let task = task(&database);
+        for index in 0..3 {
+            database
+                .create_quick_link(CreateQuickLinkInput {
+                    task_id: task.id.clone(),
+                    url: format!("https://example.com/{index}"),
+                    title: format!("Resource {index}"),
+                    domain: "example.com".into(),
+                    provider: "web".into(),
+                })
+                .unwrap();
+        }
+
+        let duplicate = database
+            .create_quick_link(CreateQuickLinkInput {
+                task_id: task.id.clone(),
+                url: "https://example.com/1".into(),
+                title: "Updated resource".into(),
+                domain: "example.com".into(),
+                provider: "web".into(),
+            })
+            .unwrap();
+        assert_eq!(duplicate.title, "Updated resource");
+        assert_eq!(database.list_quick_links(&task.id).unwrap().len(), 3);
+
+        let result = database.create_quick_link(CreateQuickLinkInput {
+            task_id: task.id.clone(),
+            url: "https://example.com/4".into(),
+            title: "Too much".into(),
+            domain: "example.com".into(),
+            provider: "web".into(),
+        });
+        assert!(matches!(result, Err(RepositoryError::Invalid(_))));
+    }
+
+    #[test]
+    fn deleting_a_quick_link_frees_a_header_slot() {
+        let database = Database::memory().unwrap();
+        let task = task(&database);
+        let link = database
+            .create_quick_link(CreateQuickLinkInput {
+                task_id: task.id.clone(),
+                url: "https://figma.com/file/taskline".into(),
+                title: "Design file".into(),
+                domain: "figma.com".into(),
+                provider: "figma".into(),
+            })
+            .unwrap();
+
+        database.delete_quick_link(&link.id).unwrap();
+        assert!(database.list_quick_links(&task.id).unwrap().is_empty());
+
+        let replacement = database
+            .create_quick_link(CreateQuickLinkInput {
+                task_id: task.id.clone(),
+                url: "https://docs.google.com/spreadsheets/d/demo".into(),
+                title: "Plan sheet".into(),
+                domain: "docs.google.com".into(),
+                provider: "sheet".into(),
+            })
+            .unwrap();
+        assert_eq!(replacement.provider, "sheet");
     }
 }
