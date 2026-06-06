@@ -215,7 +215,9 @@ fn to_message(error: repository::RepositoryError) -> String {
 fn meta_content(html: &str, key_attribute: &str, key_value: &str) -> Option<String> {
     let key_value_lower = key_value.to_ascii_lowercase();
     for tag in meta_tags(html) {
-        let key = attr_value(tag, key_attribute)?;
+        let Some(key) = attr_value(tag, key_attribute) else {
+            continue;
+        };
         if key.to_ascii_lowercase() == key_value_lower {
             return attr_value(tag, "content").and_then(clean_html_value);
         }
@@ -224,8 +226,11 @@ fn meta_content(html: &str, key_attribute: &str, key_value: &str) -> Option<Stri
 }
 
 fn meta_tags(html: &str) -> impl Iterator<Item = &str> {
-    html.match_indices("<meta").filter_map(|(start, _)| {
+    html.match_indices('<').filter_map(|(start, _)| {
         let rest = &html[start..];
+        if rest.len() < 5 || !rest[..5].eq_ignore_ascii_case("<meta") {
+            return None;
+        }
         let end = rest.find('>')?;
         Some(&rest[..=end])
     })
@@ -335,6 +340,40 @@ fn youtube_thumbnail_url(url: &reqwest::Url) -> Option<String> {
         .take(32)
         .collect();
     (!clean_id.is_empty()).then(|| format!("https://i.ytimg.com/vi/{clean_id}/hqdefault.jpg"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meta_content_skips_unrelated_tags_before_open_graph_image() {
+        let html = r#"
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta property="og:image" content="https://aivoid.dev/images/generated/kubelet-metrics-collection-internals.png">
+        "#;
+
+        assert_eq!(
+            meta_content(html, "property", "og:image").as_deref(),
+            Some("https://aivoid.dev/images/generated/kubelet-metrics-collection-internals.png")
+        );
+    }
+
+    #[test]
+    fn meta_content_handles_uppercase_tags_and_relative_preview_urls() {
+        let html = r#"
+            <META NAME="twitter:image" CONTENT="/images/preview.png">
+        "#;
+        let base = reqwest::Url::parse("https://taskline.test/posts/example/").unwrap();
+        let image = meta_content(html, "name", "twitter:image")
+            .and_then(|value| resolve_preview_url(&base, &value));
+
+        assert_eq!(
+            image.as_deref(),
+            Some("https://taskline.test/images/preview.png")
+        );
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
