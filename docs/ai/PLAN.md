@@ -1,14 +1,14 @@
-# Taskline: Production-Ready Product and Implementation Plan
+# DevThread: Production-Ready Product and Implementation Plan
 
-Status: Decision-complete planning blueprint  
-Prepared: 2026-06-04  
-Target repository: `~/projects/taskline`  
-Working product name: **Taskline**  
+Status: Decision-complete planning blueprint
+Prepared: 2026-06-04
+Target repository: `~/projects/devthread`
+Working product name: **DevThread**
 Name status: Provisional; complete trademark, package-name, and domain checks before public launch.
 
 ## 1. Executive Summary
 
-Taskline is an open-source, local-first developer work journal for preserving the context behind daily engineering work.
+DevThread is an open-source, local-first developer work journal for preserving the context behind daily engineering work.
 
 It helps a developer answer:
 
@@ -20,7 +20,7 @@ It helps a developer answer:
 - What should I continue next?
 - What can I safely share as a work update?
 
-Taskline combines:
+DevThread combines:
 
 - a fast inbox
 - developer-friendly Markdown notes
@@ -30,7 +30,7 @@ Taskline combines:
 - linked external context such as Jira, GitHub, GitLab, Figma, and Confluence
 - editable daily, weekly, and date-range summaries
 
-Taskline is explicitly **not**:
+DevThread is explicitly **not**:
 
 - a Jira replacement
 - a team project-management suite
@@ -52,7 +52,7 @@ Engineering work is difficult to summarize because the important context is scat
 - Chat and meetings hold decisions and interruptions.
 - The developer's memory holds findings, failed attempts, and reasons.
 
-Existing tools usually optimize for organizational planning or time measurement. Taskline optimizes for **continuity of personal engineering context**.
+Existing tools usually optimize for organizational planning or time measurement. DevThread optimizes for **continuity of personal engineering context**.
 
 The product promise:
 
@@ -68,7 +68,7 @@ Current products prove demand for adjacent capabilities:
 - Obsidian proves local files and extensibility are compelling, but it requires setup and is not work-log oriented.
 - Jira and Confluence remain organizational sources of truth but require frequent manual updates.
 
-Taskline must not compete by collecting the largest feature list.
+DevThread must not compete by collecting the largest feature list.
 
 Its differentiation is:
 
@@ -87,7 +87,7 @@ Inkdrop-like immediacy
 2. **Private is the default. Sharing is always deliberate.**
 3. **Capture must be faster than opening Jira.**
 4. **The product must remain useful with no account and no internet.**
-5. **External tools remain sources of truth; Taskline preserves personal context around them.**
+5. **External tools remain sources of truth; DevThread preserves personal context around them.**
 6. **AI drafts and organizes. It never judges productivity or shares automatically.**
 7. **Every destructive or external write action is previewable and reversible where possible.**
 8. **Desktop is the primary experience. Web is a capable companion with documented browser limitations.**
@@ -253,7 +253,7 @@ Compact filters may temporarily narrow the thread by type, date, visibility, or 
 
 ### 6.5 End Of Day
 
-Taskline prepares an editable summary from report-eligible entries:
+DevThread prepares an editable summary from report-eligible entries:
 
 ```text
 API-142 · Optimize customer response
@@ -336,7 +336,7 @@ Client B
 Personal
 ```
 
-A user may represent their real teams as workspaces, but Taskline does not assume membership or shared access.
+A user may represent their real teams as workspaces, but DevThread does not assume membership or shared access.
 
 ### 7.2 Inbox
 
@@ -480,7 +480,7 @@ The public single-page website contains product information, downloads, current-
 ### 10.1 Monorepo Structure
 
 ```text
-taskline/
+devthread/
   README.md
   LICENSE
   SECURITY.md
@@ -786,7 +786,7 @@ Store binary attachments outside SQLite:
 
 ```text
 data/
-  taskline.sqlite3
+  devthread.sqlite3
   attachments/
     ab/cd/<sha256>
   backups/
@@ -1412,7 +1412,7 @@ Support:
 
 V1:
 
-- Taskline JSON archive
+- DevThread JSON archive
 - Markdown files/folders
 - CSV tasks/work logs using mapping wizard
 
@@ -1758,7 +1758,7 @@ Mitigation:
 
 V1 is complete when a developer can:
 
-1. Install Taskline on macOS, Windows, or Linux.
+1. Install DevThread on macOS, Windows, or Linux.
 2. Use it without an account or network.
 3. Capture an unsorted note/task/link instantly.
 4. Organize it into a workspace/folder.

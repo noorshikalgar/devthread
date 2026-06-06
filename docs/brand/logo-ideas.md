@@ -1,10 +1,10 @@
-# Taskline Logo Ideas
+# DevThread Logo Ideas
 
-Taskline should feel like a developer tool, not a generic todo app. The mark should survive at 16px in the sidebar, app dock, and release assets.
+DevThread should feel like a developer tool, not a generic todo app. The mark should survive at 16px in the sidebar, app dock, and release assets.
 
-## Direction A: Threaded Taskline
+## Direction A: Threaded DevThread
 
-Status: implemented as the first draft in `taskline-mark.svg`.
+Status: implemented as the first draft in `devthread-mark.svg`.
 
 A vertical timeline with three task nodes. The short horizontal strokes form a subtle T/L shape, while the final angled segment suggests completion or a decision point.
 
@@ -23,7 +23,7 @@ Two bracket shapes, like `{ }` or `[ ]`, connected by small dots. This says deve
 
 ## Direction D: Commit Trail
 
-A compact git-log line with one highlighted node and a tiny check path. Strong for engineers, but slightly closer to Git tooling than Taskline's broader work-journal idea.
+A compact git-log line with one highlighted node and a tiny check path. Strong for engineers, but slightly closer to Git tooling than DevThread's broader work-journal idea.
 
 ## Current Palette
 

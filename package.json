@@ -1,12 +1,12 @@
 {
-  "name": "taskline",
+  "name": "devthread",
   "private": true,
   "packageManager": "pnpm@11.5.1",
   "scripts": {
     "build": "turbo build",
     "check": "turbo check",
-    "dev": "pnpm --filter @taskline/desktop tauri dev",
-    "dev:web": "pnpm --filter @taskline/desktop dev",
+    "dev": "pnpm --filter @devthread/desktop tauri dev",
+    "dev:web": "pnpm --filter @devthread/desktop dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "turbo test",

@@ -1,16 +1,16 @@
 [package]
-name = "taskline"
+name = "devthread"
 version = "0.1.0"
 description = "A private, local-first developer work journal"
-authors = ["Taskline contributors"]
+authors = ["DevThread contributors"]
 edition = "2021"
 
 [lib]
-name = "taskline_lib"
+name = "devthread_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "Taskline"
+name = "DevThread"
 path = "src/main.rs"
 
 [build-dependencies]

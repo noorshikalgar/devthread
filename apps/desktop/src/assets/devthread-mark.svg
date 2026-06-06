@@ -1,5 +1,5 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Taskline mark</title>
+  <title id="title">DevThread mark</title>
   <desc id="desc">A compact timeline mark with connected task nodes.</desc>
   <rect x="7" y="7" width="50" height="50" rx="14" fill="#151823"/>
   <rect x="7.5" y="7.5" width="49" height="49" rx="13.5" stroke="#2F3650"/>

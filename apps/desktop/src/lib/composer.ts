@@ -116,5 +116,5 @@ export function stripMentions(content: string): string {
 }
 
 export function draftKey(taskId: string) {
-  return `taskline:draft:${taskId}`;
+  return `devthread:draft:${taskId}`;
 }

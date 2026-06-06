@@ -66,7 +66,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import tasklineMark from "@/assets/taskline-mark.svg";
+import devthreadMark from "@/assets/devthread-mark.svg";
 import { APP_THEMES, isAppTheme, type AppThemeId } from "@/lib/themes";
 import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
@@ -87,9 +87,9 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const SELECTED_TASK_KEY = "taskline:selected-task";
-const SIDEBAR_WIDTH_KEY = "taskline:sidebar-width";
-const THEME_KEY = "taskline:theme";
+const SELECTED_TASK_KEY = "devthread:selected-task";
+const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
+const THEME_KEY = "devthread:theme";
 const DEFAULT_TASK_TITLE = "Untitled task";
 const PAGE_SIZE = 100;
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -422,8 +422,7 @@ export default function App() {
     }
   }
 
-  async function createQuickLink(url: string) {
-    if (!selectedId) return;
+  async function resolveQuickLinkDraft(url: string) {
     const normalized = quickLinkDraftFromUrl(url);
     if (!normalized) {
       throw new Error("Paste a valid web URL.");
@@ -436,7 +435,12 @@ export default function App() {
     } catch {
       draft = normalized;
     }
+    return draft;
+  }
 
+  async function createQuickLink(url: string) {
+    if (!selectedId) return;
+    const draft = await resolveQuickLinkDraft(url);
     const saved = await api.createQuickLink(
       selectedId,
       draft.url,
@@ -448,6 +452,20 @@ export default function App() {
       const withoutDuplicate = current.filter((link) => link.id !== saved.id);
       return [...withoutDuplicate, saved].slice(0, 3);
     });
+  }
+
+  async function updateQuickLink(id: string, url: string) {
+    const draft = await resolveQuickLinkDraft(url);
+    const saved = await api.updateQuickLink(
+      id,
+      draft.url,
+      draft.title,
+      draft.domain,
+      draft.provider,
+    );
+    setQuickLinks((current) =>
+      current.map((link) => (link.id === saved.id ? saved : link)),
+    );
   }
 
   async function deleteQuickLink(id: string) {
@@ -654,7 +672,7 @@ export default function App() {
       await update.downloadAndInstall(onEvent, { timeout: 120_000 });
       setUpdateState("installed");
       setUpdateMessage(
-        "Update installed. Restart when you are ready; your local Taskline data stays in the app-data folder.",
+        "Update installed. Restart when you are ready; your local DevThread data stays in the app-data folder.",
       );
     } catch (cause) {
       setUpdateState("error");
@@ -821,6 +839,7 @@ export default function App() {
                 compactTimeline={timelineCompact}
                 onCreateQuickLink={createQuickLink}
                 onDeleteQuickLink={deleteQuickLink}
+                onUpdateQuickLink={updateQuickLink}
                 onCompactTimelineChange={setTimelineCompact}
                 onLogTime={logTime}
                 onEstimateChange={(minutes) =>
@@ -1871,15 +1890,19 @@ function SettingsDialog({
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>About Taskline</DialogTitle>
+                <DialogTitle>About DevThread</DialogTitle>
                 <DialogDescription>
                   Local-first work journal, currently in alpha.
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-6 flex items-start gap-4">
-                <img alt="" className="h-14 w-14 shrink-0" src={tasklineMark} />
+                <img
+                  alt=""
+                  className="h-14 w-14 shrink-0"
+                  src={devthreadMark}
+                />
                 <div className="min-w-0 space-y-1">
-                  <h3 className="text-base font-semibold">Taskline</h3>
+                  <h3 className="text-base font-semibold">DevThread</h3>
                   <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                     Version {appVersion}
                   </p>
@@ -1988,7 +2011,7 @@ function updateActionLabel(state: UpdateState, version?: string) {
   if (state === "checking") return "Checking...";
   if (state === "downloading") return "Downloading...";
   if (state === "available") return `Update to ${version ?? "new version"}`;
-  if (state === "installed") return "Restart Taskline";
+  if (state === "installed") return "Restart DevThread";
   if (state === "error") return "Check again";
   return "Check for updates";
 }
@@ -2185,10 +2208,10 @@ function ThreadColumn({
 function EmptyState({ onCreateTask }: { onCreateTask: () => Promise<void> }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-      <img alt="" className="h-12 w-12" src={tasklineMark} />
+      <img alt="" className="h-12 w-12" src={devthreadMark} />
       <div className="space-y-1">
         <h1 className="text-balance text-xl font-semibold tracking-tight">
-          Keep your work moving in Taskline.
+          Keep your work moving in DevThread.
         </h1>
         <p className="text-sm text-muted-foreground">
           Create a task to start capturing context, or press{" "}

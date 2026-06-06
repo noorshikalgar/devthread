@@ -2,7 +2,8 @@ mod repository;
 
 use repository::{
     CreateAttachmentInput, CreateEntryInput, CreateFolderInput, CreateQuickLinkInput,
-    CreateTaskInput, Database, MoveTaskInput, RenameFolderInput, UpdateEntryInput, UpdateTaskInput,
+    CreateTaskInput, Database, MoveTaskInput, RenameFolderInput, UpdateEntryInput,
+    UpdateQuickLinkInput, UpdateTaskInput,
 };
 use serde::Serialize;
 use tauri::Manager;
@@ -175,6 +176,14 @@ fn create_quick_link(
 }
 
 #[tauri::command]
+fn update_quick_link(
+    database: tauri::State<'_, Database>,
+    input: UpdateQuickLinkInput,
+) -> Result<repository::TaskQuickLink, String> {
+    database.update_quick_link(input).map_err(to_message)
+}
+
+#[tauri::command]
 fn delete_quick_link(database: tauri::State<'_, Database>, id: String) -> Result<(), String> {
     database.delete_quick_link(&id).map_err(to_message)
 }
@@ -190,7 +199,7 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
         .get(parsed.clone())
         .header(
             reqwest::header::USER_AGENT,
-            "Taskline/0.1 link preview (+https://taskline.local)",
+            "DevThread/0.1 link preview (+https://devthread.local)",
         )
         .send()
         .await
@@ -386,13 +395,13 @@ mod tests {
         let html = r#"
             <META NAME="twitter:image" CONTENT="/images/preview.png">
         "#;
-        let base = reqwest::Url::parse("https://taskline.test/posts/example/").unwrap();
+        let base = reqwest::Url::parse("https://devthread.test/posts/example/").unwrap();
         let image = meta_content(html, "name", "twitter:image")
             .and_then(|value| resolve_preview_url(&base, &value));
 
         assert_eq!(
             image.as_deref(),
-            Some("https://taskline.test/images/preview.png")
+            Some("https://devthread.test/images/preview.png")
         );
     }
 }
@@ -411,7 +420,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let database = Database::open(data_dir.join("taskline.sqlite3"))
+            let database = Database::open(data_dir.join("devthread.sqlite3"))
                 .map_err(|error| error.redacted())?;
             app.manage(database);
             Ok(())
@@ -438,9 +447,10 @@ pub fn run() {
             create_attachment,
             list_quick_links,
             create_quick_link,
+            update_quick_link,
             delete_quick_link,
             fetch_link_preview
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Taskline");
+        .expect("failed to run DevThread");
 }

@@ -1,6 +1,6 @@
-<svg width="248" height="64" viewBox="0 0 248 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Taskline wordmark</title>
-  <desc id="desc">Taskline logo with the timeline mark and wordmark.</desc>
+<svg width="1024" height="1024" viewBox="7 7 50 50" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">DevThread mark</title>
+  <desc id="desc">A compact timeline mark with connected task nodes.</desc>
   <rect x="7" y="7" width="50" height="50" rx="14" fill="#151823"/>
   <rect x="7.5" y="7.5" width="49" height="49" rx="13.5" stroke="#2F3650"/>
   <path d="M22 17V47" stroke="#64708F" stroke-width="2.5" stroke-linecap="round"/>
@@ -12,6 +12,4 @@
   <circle cx="22" cy="44" r="4.5" fill="#C678DD" stroke="#151823" stroke-width="2"/>
   <circle cx="44" cy="20" r="3" fill="#B7C5FF"/>
   <circle cx="45" cy="33.5" r="3" fill="#FFB454"/>
-  <text x="72" y="40" fill="#F4F7FF" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="27" font-weight="700" letter-spacing="0">Taskline</text>
-  <path d="M72 47H188" stroke="#8BE9C7" stroke-width="2" stroke-linecap="round" opacity="0.72"/>
 </svg>

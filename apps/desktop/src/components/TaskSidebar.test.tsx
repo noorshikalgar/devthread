@@ -19,7 +19,10 @@ const baseTask: Task = {
   updatedAt: "2026-06-05T00:00:00Z",
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("TaskSidebar", () => {
   it("creates a new task immediately when the new task button is pressed", async () => {
@@ -234,5 +237,36 @@ describe("TaskSidebar", () => {
     fireEvent.click(screen.getByText("New task in folder"));
 
     await waitFor(() => expect(create).toHaveBeenCalledWith("folder-a"));
+  });
+
+  it("copies a task summary from the task context menu", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <TaskSidebar
+        folders={[]}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId={null}
+        tasks={[{ ...baseTask, estimatedMinutes: 120, status: "planned" }]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Refine sidebar"));
+    fireEvent.click(screen.getByText("Copy summary"));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        ["Refine sidebar", "Status: Planned", "Estimate: 2h"].join("\n"),
+      ),
+    );
   });
 });

@@ -1,5 +1,6 @@
 import {
   ChevronRight,
+  Copy,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -10,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { Folder as FolderModel, Task } from "@/lib/types";
 import { STATUS_BG, STATUS_DOT } from "@/lib/status";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { copyTaskSummary } from "@/lib/taskSummary";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -261,7 +264,7 @@ export function TaskSidebar({
                   {activeTasks.map((task) => (
                     <button
                       className={cn(
-                        "min-w-0 truncate rounded-sm border border-transparent px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                        "min-w-0 rounded-sm border border-transparent px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                         selectedId === task.id &&
                           "border-border bg-accent/50 text-foreground",
                       )}
@@ -269,7 +272,10 @@ export function TaskSidebar({
                       onClick={() => onSelect(task.id)}
                       type="button"
                     >
-                      {task.title}
+                      <EllipsisTooltip
+                        className="w-full truncate"
+                        text={task.title}
+                      />
                     </button>
                   ))}
                 </div>
@@ -649,6 +655,17 @@ function TaskRow({
         </Button>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
+        <ContextMenuItem
+          onSelect={() => {
+            void copyTaskSummary(task).then(() =>
+              toast.success("Task summary copied"),
+            );
+          }}
+        >
+          <Copy className="size-3.5 text-muted-foreground" />
+          Copy summary
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <Folder className="size-3.5 text-muted-foreground" />
@@ -712,7 +729,7 @@ function EllipsisTooltip({
       </TooltipTrigger>
       <TooltipContent
         align="start"
-        className="max-w-80 break-words border border-border bg-popover text-popover-foreground"
+        className="max-w-80 whitespace-normal break-words leading-5"
         side="top"
       >
         {text}

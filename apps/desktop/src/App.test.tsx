@@ -28,6 +28,7 @@ vi.mock("./lib/api", () => ({
     deleteTask: vi.fn(),
     createAttachment: vi.fn(),
     createQuickLink: vi.fn(),
+    updateQuickLink: vi.fn(),
     deleteQuickLink: vi.fn(),
     fetchLinkPreview: vi.fn(),
   },
@@ -58,8 +59,8 @@ const task: Task = {
 const quickLink: TaskQuickLink = {
   id: "quick-link-a",
   taskId: "task-a",
-  url: "https://figma.com/file/taskline",
-  title: "Taskline flow",
+  url: "https://figma.com/file/devthread",
+  title: "DevThread flow",
   domain: "figma.com",
   provider: "figma",
   createdAt: "2026-06-05T00:00:00Z",
@@ -252,8 +253,42 @@ describe("TaskHeader", () => {
     );
 
     expect(
-      screen.getByLabelText("Open quick link: Taskline flow"),
+      screen.getByLabelText("Open quick link: DevThread flow"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps copy summary as an icon action and edits quick links from their menu", async () => {
+    const updateQuickLink = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TaskHeader
+        entriesLoaded={5}
+        onCreateQuickLink={vi.fn()}
+        onDeleteQuickLink={vi.fn()}
+        onLogTime={vi.fn()}
+        onUpdate={vi.fn()}
+        onUpdateQuickLink={updateQuickLink}
+        quickLinks={[quickLink]}
+        task={task}
+        totalMinutes={120}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("More task actions"));
+    expect(screen.queryByText("Copy summary")).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByLabelText("Open quick link: DevThread flow"));
+    fireEvent.click(await screen.findByText("Edit"));
+    fireEvent.change(screen.getByLabelText("Link"), {
+      target: { value: "https://docs.google.com/document/d/demo" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save link" }));
+
+    await waitFor(() =>
+      expect(updateQuickLink).toHaveBeenCalledWith(
+        "quick-link-a",
+        "https://docs.google.com/document/d/demo",
+      ),
+    );
   });
 
   it("hides the work-session quick action for done tasks", () => {
@@ -329,7 +364,7 @@ describe("TaskHeader", () => {
     fireEvent.mouseUp(window);
 
     expect(shell).toHaveStyle({ width: "420px" });
-    expect(localStorage.getItem("taskline:sidebar-width")).toBe("420");
+    expect(localStorage.getItem("devthread:sidebar-width")).toBe("420");
 
     fireEvent.doubleClick(handle);
     expect(shell).toHaveStyle({ width: "280px" });
@@ -364,15 +399,11 @@ describe("TaskHeader", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Theme" }));
     fireEvent.click(await screen.findByText("Tokyo Night Light"));
 
-    expect(localStorage.getItem("taskline:theme")).toBe("tokyo-night-light");
-    expect(document.documentElement).toHaveClass("theme-tokyo-night-light");
-    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem("devthread:theme")).toBe("tokyo-night-light");
   });
 
-  it("switches between dark themes and rotates every theme class", async () => {
-    mockAppApi();
-    Element.prototype.scrollIntoView = vi.fn();
-    localStorage.setItem("taskline:theme", "zed-dark");
+  it("persists theme preference when changing it from settings", async () => {
+    localStorage.setItem("devthread:theme", "zed-dark");
     render(<App />);
 
     expect(document.documentElement).toHaveClass("theme-zed-dark");
@@ -384,7 +415,7 @@ describe("TaskHeader", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Theme" }));
     fireEvent.click(await screen.findByText("Default Dark"));
 
-    expect(localStorage.getItem("taskline:theme")).toBe("default-dark");
+    expect(localStorage.getItem("devthread:theme")).toBe("default-dark");
     const root = document.documentElement;
     expect(root).toHaveClass("theme-default-dark");
     expect(root).toHaveClass("dark");

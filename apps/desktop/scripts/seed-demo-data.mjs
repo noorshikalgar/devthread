@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(scriptDir, "..");
-const dbPath = process.env.TASKLINE_DB_PATH ?? defaultDatabasePath();
+const dbPath = process.env.DEVTHREAD_DB_PATH ?? defaultDatabasePath();
 const migrationsDir = join(appDir, "src-tauri", "migrations");
 
 mkdirSync(dirname(dbPath), { recursive: true });
@@ -111,7 +111,7 @@ VALUES
   ('demo-entry-composer-2', 'demo-task-composer', 'progress', 'Bare @ now opens the full entry-type list, and typing after @ filters the menu down to matching types.', 'report', '2026-06-04T16:25:00Z', '2026-06-04T16:25:00Z', '2026-06-04T16:25:00Z', NULL),
   ('demo-entry-composer-3', 'demo-task-composer', 'blocker', 'The remaining polish is keyboard flow: selection should close the dropdown, preserve cursor position, and never leave partial filter text behind.', 'report', '2026-06-05T09:42:00Z', '2026-06-05T09:42:00Z', '2026-06-05T09:42:00Z', NULL),
 
-  ('demo-entry-feedback-1', 'demo-task-feedback-video', 'note', 'Goal for the video: show Taskline as a local work journal, not a generic task board. The strongest flow is task context, daily updates, and quick type switching.', 'private', '2026-06-04T08:38:00Z', '2026-06-04T08:38:00Z', '2026-06-04T08:38:00Z', NULL),
+  ('demo-entry-feedback-1', 'demo-task-feedback-video', 'note', 'Goal for the video: show DevThread as a local work journal, not a generic task board. The strongest flow is task context, daily updates, and quick type switching.', 'private', '2026-06-04T08:38:00Z', '2026-06-04T08:38:00Z', '2026-06-04T08:38:00Z', NULL),
   ('demo-entry-feedback-2', 'demo-task-feedback-video', 'decision', 'Keep the demo to four realistic threads across two folders. That gives enough hierarchy and timeline density without making the sidebar feel staged.', 'report', '2026-06-04T17:12:00Z', '2026-06-04T17:12:00Z', '2026-06-04T17:12:00Z', NULL),
   ('demo-entry-feedback-3', 'demo-task-feedback-video', 'next_step', 'Record a pass with the sidebar partially widened so the ellipsis and tooltip behavior are visible for long task names.', 'private', '2026-06-05T10:08:00Z', '2026-06-05T10:08:00Z', '2026-06-05T10:08:00Z', NULL),
 
@@ -153,7 +153,7 @@ function defaultDatabasePath() {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) {
     throw new Error(
-      "Could not determine home directory. Set TASKLINE_DB_PATH.",
+      "Could not determine home directory. Set DEVTHREAD_DB_PATH.",
     );
   }
 
@@ -162,22 +162,22 @@ function defaultDatabasePath() {
       home,
       "Library",
       "Application Support",
-      "dev.taskline.desktop",
-      "taskline.sqlite3",
+      "io.devthread.desktop",
+      "devthread.sqlite3",
     );
   }
 
   if (process.platform === "win32") {
     return join(
       process.env.APPDATA ?? join(home, "AppData", "Roaming"),
-      "dev.taskline.desktop",
-      "taskline.sqlite3",
+      "io.devthread.desktop",
+      "devthread.sqlite3",
     );
   }
 
   return join(
     process.env.XDG_DATA_HOME ?? join(home, ".local", "share"),
-    "dev.taskline.desktop",
-    "taskline.sqlite3",
+    "io.devthread.desktop",
+    "devthread.sqlite3",
   );
 }

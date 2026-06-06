@@ -22,8 +22,8 @@ describe("quick links", () => {
 
   it("uses fetched metadata title and final URL when available", () => {
     const draft = quickLinkDraftFromUrl("https://short.test/a", {
-      url: "https://github.com/noorshikalgar/taskline",
-      title: "Taskline repo",
+      url: "https://github.com/noorshikalgar/devthread",
+      title: "DevThread repo",
       description: null,
       imageUrl: null,
       siteName: "GitHub",
@@ -32,8 +32,8 @@ describe("quick links", () => {
     expect(draft).toMatchObject({
       domain: "github.com",
       provider: "github",
-      title: "Taskline repo",
-      url: "https://github.com/noorshikalgar/taskline",
+      title: "DevThread repo",
+      url: "https://github.com/noorshikalgar/devthread",
     });
   });
 });

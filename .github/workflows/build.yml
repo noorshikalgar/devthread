@@ -99,15 +99,15 @@ jobs:
           - os: macos-14
             label: macos-arm64
             target: aarch64-apple-darwin
-            binary: taskline
+            binary: devthread
           - os: windows-latest
             label: windows-x64
             target: x86_64-pc-windows-msvc
-            binary: taskline.exe
+            binary: devthread.exe
           - os: ubuntu-latest
             label: linux-x64
             target: x86_64-unknown-linux-gnu
-            binary: taskline
+            binary: devthread
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -148,19 +148,19 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @taskline/desktop tauri build --target ${{ matrix.target }}
+        run: pnpm --filter @devthread/desktop tauri build --target ${{ matrix.target }}
 
       - name: Upload raw binary
         uses: actions/upload-artifact@v4
         with:
-          name: taskline-${{ matrix.label }}-binary
+          name: devthread-${{ matrix.label }}-binary
           if-no-files-found: error
           path: apps/desktop/src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary }}
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: taskline-${{ matrix.label }}-installers
+          name: devthread-${{ matrix.label }}-installers
           if-no-files-found: warn
           path: |
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
@@ -229,7 +229,7 @@ jobs:
           generateReleaseNotes: true
           projectPath: apps/desktop
           releaseDraft: false
-          releaseName: Taskline ${{ github.ref_name }}
+          releaseName: DevThread ${{ github.ref_name }}
           tagName: ${{ github.ref_name }}
           tauriScript: pnpm tauri
           uploadUpdaterJson: true

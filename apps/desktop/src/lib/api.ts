@@ -96,6 +96,16 @@ export const api = {
     invoke<TaskQuickLink>("create_quick_link", {
       input: { taskId, url, title, domain, provider },
     }),
+  updateQuickLink: (
+    id: string,
+    url: string,
+    title: string,
+    domain: string,
+    provider: string,
+  ) =>
+    invoke<TaskQuickLink>("update_quick_link", {
+      input: { id, url, title, domain, provider },
+    }),
   deleteQuickLink: (id: string) => invoke<void>("delete_quick_link", { id }),
   fetchLinkPreview: (url: string) =>
     invoke<LinkMetadata>("fetch_link_preview", { url }),

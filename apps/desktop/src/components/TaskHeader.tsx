@@ -14,6 +14,7 @@ import {
   ListTree,
   MoreHorizontal,
   Pause,
+  Pencil,
   Play,
   Plus,
   Trash2,
@@ -53,6 +54,7 @@ import {
 import { formatDuration, parseDuration } from "@/lib/duration";
 import { openExternalUrl } from "@/lib/openExternal";
 import { STATUS_DOT, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
+import { copyTaskSummary as copyTaskSummaryToClipboard } from "@/lib/taskSummary";
 import { type Task, type TaskQuickLink, type TaskStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +68,7 @@ interface Props {
   onLogTime: (input: LogTimeInput) => Promise<void>;
   onCompactTimelineChange?: (compact: boolean) => void;
   onCreateQuickLink?: (url: string) => Promise<void>;
+  onUpdateQuickLink?: (id: string, url: string) => Promise<void>;
   onDeleteQuickLink?: (id: string) => Promise<void>;
   onEstimateChange?: (minutes: number | null) => Promise<void>;
   onPendingTitleEditConsumed?: () => void;
@@ -85,6 +88,7 @@ export function TaskHeader({
   onLogTime,
   onCompactTimelineChange,
   onCreateQuickLink,
+  onUpdateQuickLink,
   onDeleteQuickLink,
   onEstimateChange,
   onPendingTitleEditConsumed,
@@ -99,6 +103,8 @@ export function TaskHeader({
   const [logTimeOpen, setLogTimeOpen] = useState(false);
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
+  const [editingQuickLink, setEditingQuickLink] =
+    useState<TaskQuickLink | null>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const titleInputMounted = useRef(false);
 
@@ -163,14 +169,25 @@ export function TaskHeader({
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {titleDraft === null ? (
-            <button
-              aria-label="Edit task title"
-              className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[22px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
-              onClick={() => setTitleDraft(task.title)}
-              type="button"
-            >
-              <span className="truncate">{task.title}</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  aria-label="Edit task title"
+                  className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[22px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
+                  onClick={() => setTitleDraft(task.title)}
+                  type="button"
+                >
+                  <span className="truncate">{task.title}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                align="start"
+                className="max-w-md whitespace-normal break-words leading-5"
+                side="bottom"
+              >
+                {task.title}
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <Input
               aria-label="Task title"
@@ -260,7 +277,7 @@ export function TaskHeader({
               <Button
                 aria-label="Copy task summary"
                 onClick={() =>
-                  void copyTaskSummary(task, entriesLoaded, totalMinutes)
+                  void copyHeaderTaskSummary(task, entriesLoaded, totalMinutes)
                 }
                 size="icon-sm"
                 variant="ghost"
@@ -283,17 +300,11 @@ export function TaskHeader({
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuLabel>Task</DropdownMenuLabel>
               <DropdownMenuItem
-                onSelect={() =>
-                  void copyTaskSummary(task, entriesLoaded, totalMinutes)
-                }
-              >
-                <Copy className="mr-2 size-3.5" />
-                Copy summary
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
                 disabled={!onCreateQuickLink || quickLinks.length >= 3}
-                onSelect={() => setQuickLinkOpen(true)}
+                onSelect={() => {
+                  setEditingQuickLink(null);
+                  setQuickLinkOpen(true);
+                }}
               >
                 <Plus className="mr-2 size-3.5" />
                 Add quick link
@@ -383,10 +394,21 @@ export function TaskHeader({
             links={quickLinks}
             onAdd={
               onCreateQuickLink && quickLinks.length < 3
-                ? () => setQuickLinkOpen(true)
+                ? () => {
+                    setEditingQuickLink(null);
+                    setQuickLinkOpen(true);
+                  }
                 : undefined
             }
             onDelete={onDeleteQuickLink}
+            onEdit={
+              onUpdateQuickLink
+                ? (link) => {
+                    setEditingQuickLink(link);
+                    setQuickLinkOpen(true);
+                  }
+                : undefined
+            }
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -438,10 +460,18 @@ export function TaskHeader({
         taskTitle={task.title}
       />
       <QuickLinkDialog
-        onOpenChange={setQuickLinkOpen}
+        link={editingQuickLink}
+        onOpenChange={(open) => {
+          setQuickLinkOpen(open);
+          if (!open) setEditingQuickLink(null);
+        }}
         onSubmit={async (url) => {
-          if (!onCreateQuickLink) return;
-          await onCreateQuickLink(url);
+          if (editingQuickLink) {
+            if (!onUpdateQuickLink) return;
+            await onUpdateQuickLink(editingQuickLink.id, url);
+            return;
+          }
+          if (onCreateQuickLink) await onCreateQuickLink(url);
         }}
         open={quickLinkOpen}
       />
@@ -481,10 +511,12 @@ function TaskMetric({
 function QuickLinks({
   links,
   onAdd,
+  onEdit,
   onDelete,
 }: {
   links: TaskQuickLink[];
   onAdd?: () => void;
+  onEdit?: (link: TaskQuickLink) => void;
   onDelete?: (id: string) => Promise<void>;
 }) {
   if (!links.length && !onAdd) return null;
@@ -496,7 +528,12 @@ function QuickLinks({
       </span>
       <span className="inline-flex h-full items-center gap-1 px-1.5">
         {links.map((link) => (
-          <QuickLinkButton key={link.id} link={link} onDelete={onDelete} />
+          <QuickLinkButton
+            key={link.id}
+            link={link}
+            onDelete={onDelete}
+            onEdit={onEdit}
+          />
         ))}
         {onAdd && (
           <Tooltip>
@@ -521,31 +558,35 @@ function QuickLinks({
 
 function QuickLinkButton({
   link,
+  onEdit,
   onDelete,
 }: {
   link: TaskQuickLink;
+  onEdit?: (link: TaskQuickLink) => void;
   onDelete?: (id: string) => Promise<void>;
 }) {
   const Icon = quickLinkIcon(link.provider);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
+    <Tooltip>
+      <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
+        <DropdownMenuTrigger asChild>
+          <TooltipTrigger asChild>
             <Button
               aria-label={`Open quick link: ${link.title}`}
               className={cn(
                 "h-6 w-6 text-muted-foreground hover:text-foreground",
                 quickLinkColor(link.provider),
               )}
+              onClick={() => setMenuOpen(true)}
               size="icon-sm"
               variant="ghost"
             >
               <Icon className="size-3.5" />
             </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
+          </TooltipTrigger>
+        </DropdownMenuTrigger>
         <TooltipContent className="max-w-xs">
           <div className="space-y-1">
             <p className="font-medium text-foreground">{link.title}</p>
@@ -557,35 +598,45 @@ function QuickLinkButton({
             </p>
           </div>
         </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel className="truncate">{link.title}</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
-          <ExternalLink className="mr-2 size-3.5" />
-          Open link
-        </DropdownMenuItem>
-        {onDelete && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => void onDelete(link.id)}
-            >
-              <Trash2 className="mr-2 size-3.5" />
-              Remove
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuLabel className="truncate">
+            {link.title}
+          </DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
+            <ExternalLink className="mr-2 size-3.5" />
+            Open link
+          </DropdownMenuItem>
+          {onEdit && (
+            <DropdownMenuItem onSelect={() => onEdit(link)}>
+              <Pencil className="mr-2 size-3.5" />
+              Edit
             </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          )}
+          {onDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => void onDelete(link.id)}
+              >
+                <Trash2 className="mr-2 size-3.5" />
+                Remove
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </Tooltip>
   );
 }
 
 function QuickLinkDialog({
+  link,
   open,
   onOpenChange,
   onSubmit,
 }: {
+  link: TaskQuickLink | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (url: string) => Promise<void>;
@@ -596,10 +647,10 @@ function QuickLinkDialog({
 
   useEffect(() => {
     if (!open) return;
-    setUrl("");
+    setUrl(link?.url ?? "");
     setSaving(false);
     setError("");
-  }, [open]);
+  }, [link, open]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -608,7 +659,7 @@ function QuickLinkDialog({
     try {
       await onSubmit(url);
       onOpenChange(false);
-      toast.success("Quick link added");
+      toast.success(link ? "Quick link updated" : "Quick link added");
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -622,11 +673,12 @@ function QuickLinkDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="size-4 text-muted-foreground" />
-            Add quick link
+            {link ? "Edit quick link" : "Add quick link"}
           </DialogTitle>
           <DialogDescription>
-            Pin a Jira, Figma, Confluence, document, or file link to this task
-            header.
+            {link
+              ? "Update the pinned task resource."
+              : "Pin a Jira, Figma, Confluence, document, or file link to this task header."}
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={submit}>
@@ -643,7 +695,7 @@ function QuickLinkDialog({
               value={url}
             />
             <p className="text-xs text-muted-foreground">
-              Taskline resolves the final URL when possible and keeps only a
+              DevThread resolves the final URL when possible and keeps only a
               compact icon in the header.
             </p>
             {error && <p className="text-xs text-destructive">{error}</p>}
@@ -657,7 +709,7 @@ function QuickLinkDialog({
               Cancel
             </Button>
             <Button disabled={saving || !url.trim()} type="submit">
-              {saving ? "Adding..." : "Add link"}
+              {saving ? "Saving..." : link ? "Save link" : "Add link"}
             </Button>
           </div>
         </form>
@@ -842,36 +894,11 @@ function quickLinkColor(provider: string) {
   return "";
 }
 
-async function copyTaskSummary(
+async function copyHeaderTaskSummary(
   task: Task,
   entriesLoaded: number,
   totalMinutes: number,
 ) {
-  const summary = [
-    task.title,
-    `Status: ${STATUS_LABEL[task.status]}`,
-    `Estimate: ${
-      task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "None"
-    }`,
-    `Logged: ${totalMinutes > 0 ? formatDuration(totalMinutes) : "0m"}`,
-    `Updates: ${entriesLoaded}`,
-  ].join("\n");
-
-  await writeClipboard(summary);
+  await copyTaskSummaryToClipboard(task, { entriesLoaded, totalMinutes });
   toast.success("Task summary copied");
-}
-
-async function writeClipboard(value: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
 }

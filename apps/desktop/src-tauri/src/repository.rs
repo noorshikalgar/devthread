@@ -240,6 +240,16 @@ pub struct CreateQuickLinkInput {
     pub provider: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateQuickLinkInput {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub domain: String,
+    pub provider: String,
+}
+
 pub struct Database {
     connection: Mutex<Connection>,
     attachments_dir: PathBuf,
@@ -267,7 +277,7 @@ impl Database {
     fn memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
         Self::configure(&connection)?;
-        let attachments_dir = std::env::temp_dir().join(format!("taskline-test-{}", id()));
+        let attachments_dir = std::env::temp_dir().join(format!("devthread-test-{}", id()));
         fs::create_dir_all(&attachments_dir).map_err(|error| {
             RepositoryError::Invalid(format!("Could not prepare attachments: {error}"))
         })?;
@@ -912,6 +922,29 @@ impl Database {
         get_quick_link(&connection, &link_id)
     }
 
+    pub fn update_quick_link(&self, input: UpdateQuickLinkInput) -> Result<TaskQuickLink> {
+        let url = required(input.url, "Quick link URL")?;
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(RepositoryError::Invalid(
+                "Quick link must be a web URL.".into(),
+            ));
+        }
+        let title = required(input.title, "Quick link title")?;
+        let domain = required(input.domain, "Quick link domain")?;
+        let provider = required(input.provider, "Quick link provider")?;
+        let connection = self.connection()?;
+        let changed = connection.execute(
+            "UPDATE task_quick_links
+             SET url = ?2, title = ?3, domain = ?4, provider = ?5, updated_at = ?6
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![input.id, url, title, domain, provider, now()],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Quick link"));
+        }
+        get_quick_link(&connection, &input.id)
+    }
+
     pub fn delete_quick_link(&self, id: &str) -> Result<()> {
         let connection = self.connection()?;
         let changed = connection.execute(
@@ -1377,7 +1410,7 @@ mod tests {
     #[test]
     fn file_database_survives_reopen() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("taskline.sqlite3");
+        let path = directory.path().join("devthread.sqlite3");
         let task_id = {
             let database = Database::open(&path).unwrap();
             task(&database).id
@@ -1510,7 +1543,7 @@ mod tests {
         let link = database
             .create_quick_link(CreateQuickLinkInput {
                 task_id: task.id.clone(),
-                url: "https://figma.com/file/taskline".into(),
+                url: "https://figma.com/file/devthread".into(),
                 title: "Design file".into(),
                 domain: "figma.com".into(),
                 provider: "figma".into(),
@@ -1530,5 +1563,33 @@ mod tests {
             })
             .unwrap();
         assert_eq!(replacement.provider, "sheet");
+    }
+
+    #[test]
+    fn quick_links_can_be_edited() {
+        let database = Database::memory().unwrap();
+        let task = task(&database);
+        let link = database
+            .create_quick_link(CreateQuickLinkInput {
+                task_id: task.id,
+                url: "https://figma.com/file/taskline".into(),
+                title: "Design file".into(),
+                domain: "figma.com".into(),
+                provider: "figma".into(),
+            })
+            .unwrap();
+
+        let edited = database
+            .update_quick_link(UpdateQuickLinkInput {
+                id: link.id,
+                url: "https://docs.google.com/document/d/demo".into(),
+                title: "Decision doc".into(),
+                domain: "docs.google.com".into(),
+                provider: "doc".into(),
+            })
+            .unwrap();
+
+        assert_eq!(edited.title, "Decision doc");
+        assert_eq!(edited.provider, "doc");
     }
 }

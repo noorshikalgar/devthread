@@ -1,4 +1,4 @@
-# Taskline UI/UX Specification
+# DevThread UI/UX Specification
 
 Status: Authoritative product interaction and visual direction  
 Prepared: 2026-06-04  
@@ -6,7 +6,7 @@ Applies to: Desktop V1 and shared web companion UI
 
 ## 1. Defining Interaction
 
-Taskline is a thread-first developer work journal.
+DevThread is a thread-first developer work journal.
 
 The defining interaction is:
 
@@ -23,7 +23,7 @@ The task screen must not resemble an issue-management detail screen. Do not intr
 
 ## 2. Product Feel
 
-Taskline should feel like a serious lightweight editor:
+DevThread should feel like a serious lightweight editor:
 
 - calm
 - immediate
