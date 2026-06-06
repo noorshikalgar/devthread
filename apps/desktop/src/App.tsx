@@ -2015,7 +2015,7 @@ function SummaryTab({
       </DialogHeader>
       <div className="mt-6 grid min-h-0 flex-1 grid-cols-2 gap-4">
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md">
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
               {order.map((key, index) => {
                 const field = SUMMARY_TEMPLATE_FIELDS.find(
@@ -2031,7 +2031,7 @@ function SummaryTab({
                 return (
                   <div
                     className={cn(
-                      "cursor-grab touch-none rounded-md border border-transparent bg-background select-none active:cursor-grabbing",
+                      "cursor-grab touch-none rounded-md border border-transparent select-none active:cursor-grabbing",
                       dropTarget && "border-primary/60 bg-primary/5",
                       isDragging && "opacity-50",
                     )}
@@ -2044,7 +2044,7 @@ function SummaryTab({
                   >
                     <label
                       className={cn(
-                        "flex cursor-pointer items-start gap-2.5 rounded-md border border-border px-2.5 py-2 select-none",
+                        "flex cursor-pointer items-start gap-2.5 rounded-md px-2.5 py-2 select-none",
                         disabled && "cursor-not-allowed opacity-50",
                       )}
                     >
