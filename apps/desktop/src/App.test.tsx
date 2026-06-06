@@ -471,6 +471,20 @@ describe("TaskHeader", () => {
       createdDate: false,
       updatedDate: false,
     });
+
+    const storedOrder = JSON.parse(
+      localStorage.getItem("devthread:summary-template-order") ?? "[]",
+    );
+    expect(storedOrder).toEqual([
+      "title",
+      "status",
+      "estimate",
+      "worklog",
+      "worklogEntries",
+      "quickLinks",
+      "createdDate",
+      "updatedDate",
+    ]);
   });
 
   it("logs task status changes into the timeline", async () => {

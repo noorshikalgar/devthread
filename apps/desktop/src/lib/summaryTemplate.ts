@@ -21,6 +21,20 @@ export const DEFAULT_SUMMARY_TEMPLATE: SummaryTemplate = {
 };
 
 const STORAGE_KEY = "devthread:summary-template";
+const ORDER_STORAGE_KEY = "devthread:summary-template-order";
+
+export type SummaryFieldKey = keyof SummaryTemplate;
+
+export const DEFAULT_SUMMARY_ORDER: ReadonlyArray<SummaryFieldKey> = [
+  "title",
+  "status",
+  "estimate",
+  "worklog",
+  "worklogEntries",
+  "quickLinks",
+  "createdDate",
+  "updatedDate",
+];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -80,6 +94,54 @@ export function loadSummaryTemplate(): SummaryTemplate {
 export function saveSummaryTemplate(template: SummaryTemplate): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(template));
+}
+
+function isSummaryFieldKey(value: unknown): value is SummaryFieldKey {
+  return (
+    typeof value === "string" &&
+    DEFAULT_SUMMARY_ORDER.includes(value as SummaryFieldKey)
+  );
+}
+
+export function loadSummaryOrder(): ReadonlyArray<SummaryFieldKey> {
+  if (typeof localStorage === "undefined") {
+    return [...DEFAULT_SUMMARY_ORDER];
+  }
+  const raw = localStorage.getItem(ORDER_STORAGE_KEY);
+  if (!raw) return [...DEFAULT_SUMMARY_ORDER];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...DEFAULT_SUMMARY_ORDER];
+    const seen = new Set<SummaryFieldKey>();
+    const result: SummaryFieldKey[] = [];
+    for (const value of parsed) {
+      if (isSummaryFieldKey(value) && !seen.has(value)) {
+        seen.add(value);
+        result.push(value);
+      }
+    }
+    for (const key of DEFAULT_SUMMARY_ORDER) {
+      if (!seen.has(key)) result.push(key);
+    }
+    return result;
+  } catch {
+    return [...DEFAULT_SUMMARY_ORDER];
+  }
+}
+
+export function saveSummaryOrder(order: ReadonlyArray<SummaryFieldKey>): void {
+  if (typeof localStorage === "undefined") return;
+  const sanitized = order.filter(isSummaryFieldKey);
+  if (sanitized.length !== order.length) {
+    throw new Error("Summary order contains unknown or duplicate keys");
+  }
+  localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(sanitized));
+}
+
+export function getSummaryFieldOrder(
+  order?: ReadonlyArray<SummaryFieldKey>,
+): ReadonlyArray<SummaryFieldKey> {
+  return order ?? loadSummaryOrder();
 }
 
 export const SUMMARY_TEMPLATE_FIELDS: ReadonlyArray<{

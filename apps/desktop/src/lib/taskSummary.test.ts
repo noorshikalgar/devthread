@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
+  type SummaryFieldKey,
   type SummaryTemplate,
 } from "./summaryTemplate";
 import { formatTaskSection, formatTaskSummary } from "./taskSummary";
@@ -173,6 +174,43 @@ describe("formatTaskSummary", () => {
     expect(out).toContain("**Created:** ");
     expect(out).toContain("**Updated:** ");
     expect(out).not.toContain("2025-01-01T09:00:00Z");
+  });
+
+  it("respects a custom field order", () => {
+    const order: ReadonlyArray<SummaryFieldKey> = [
+      "title",
+      "updatedDate",
+      "status",
+      "estimate",
+      "worklog",
+      "worklogEntries",
+      "quickLinks",
+      "createdDate",
+    ];
+    const out = formatTaskSummary(
+      baseTask,
+      { totalMinutes: 90, quickLinks: [link] },
+      {
+        title: true,
+        status: true,
+        estimate: true,
+        worklog: true,
+        worklogEntries: false,
+        quickLinks: true,
+        createdDate: true,
+        updatedDate: true,
+      },
+      order,
+    );
+    const lines = out.split("\n");
+    expect(lines[0]).toBe("**Title:** Ship the summary template");
+    expect(lines[1]).toMatch(/^\*\*Updated:\*\*/);
+    expect(lines[2]).toBe("**Status:** Active");
+    expect(lines[3]).toBe("**Estimate:** 1d");
+    expect(lines[4]).toBe("**Logged:** 1h 30m");
+    expect(lines[5]).toBe("**Links:**");
+    expect(lines[6]).toBe("- [Header mockup](https://figma.com/file/abc)");
+    expect(lines[7]).toMatch(/^\*\*Created:\*\*/);
   });
 });
 

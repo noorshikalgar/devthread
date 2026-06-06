@@ -1,7 +1,10 @@
 import { formatDuration } from "./duration";
 import {
+  DEFAULT_SUMMARY_ORDER,
   DEFAULT_SUMMARY_TEMPLATE,
+  loadSummaryOrder,
   loadSummaryTemplate,
+  type SummaryFieldKey,
   type SummaryTemplate,
 } from "./summaryTemplate";
 import { STATUS_LABEL } from "./status";
@@ -18,73 +21,109 @@ export interface TaskSummaryContext {
   quickLinks?: TaskQuickLink[];
 }
 
+function buildLines(
+  task: Task,
+  context: TaskSummaryContext,
+  template: SummaryTemplate,
+  order: ReadonlyArray<SummaryFieldKey>,
+): string[] {
+  const lines: string[] = [];
+
+  for (const key of order) {
+    switch (key) {
+      case "title":
+        if (template.title) {
+          lines.push(`**Title:** ${task.title}`);
+        }
+        break;
+      case "status":
+        if (template.status) {
+          lines.push(`**Status:** ${STATUS_LABEL[task.status]}`);
+        }
+        break;
+      case "estimate":
+        if (template.estimate) {
+          lines.push(
+            `**Estimate:** ${
+              task.estimatedMinutes
+                ? formatDuration(task.estimatedMinutes)
+                : "None"
+            }`,
+          );
+        }
+        break;
+      case "worklog":
+        if (template.worklog && context.totalMinutes !== undefined) {
+          lines.push(
+            `**Logged:** ${
+              context.totalMinutes > 0
+                ? formatDuration(context.totalMinutes)
+                : "0m"
+            }`,
+          );
+        }
+        if (
+          template.worklogEntries &&
+          template.worklog &&
+          context.entries?.length
+        ) {
+          for (const entry of context.entries) {
+            const duration = entry.durationMinutes
+              ? `${formatDuration(entry.durationMinutes)} `
+              : "";
+            const content = entry.contentMarkdown.replace(/\s+/g, " ").trim();
+            if (!content) continue;
+            lines.push(`- ${duration}${content}`);
+          }
+        }
+        break;
+      case "worklogEntries":
+        break;
+      case "quickLinks":
+        if (template.quickLinks && context.quickLinks?.length) {
+          lines.push(`**Links:**`);
+          for (const link of context.quickLinks) {
+            lines.push(`- [${link.title}](${link.url})`);
+          }
+        }
+        break;
+      case "createdDate":
+        if (template.createdDate) {
+          lines.push(`**Created:** ${formatDate(task.createdAt)}`);
+        }
+        break;
+      case "updatedDate":
+        if (template.updatedDate) {
+          lines.push(`**Updated:** ${formatDate(task.updatedAt)}`);
+        }
+        break;
+    }
+  }
+
+  return lines;
+}
+
 export function formatTaskSummary(
   task: Task,
   context: TaskSummaryContext = {},
   template: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE,
+  order: ReadonlyArray<SummaryFieldKey> = DEFAULT_SUMMARY_ORDER,
 ) {
-  const lines: string[] = [];
-
-  if (template.title) {
-    lines.push(`**Title:** ${task.title}`);
-  }
-
-  if (template.status) {
-    lines.push(`**Status:** ${STATUS_LABEL[task.status]}`);
-  }
-
-  if (template.estimate) {
-    lines.push(
-      `**Estimate:** ${
-        task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "None"
-      }`,
-    );
-  }
-
-  if (template.worklog) {
-    if (context.totalMinutes !== undefined) {
-      lines.push(
-        `**Logged:** ${
-          context.totalMinutes > 0 ? formatDuration(context.totalMinutes) : "0m"
-        }`,
-      );
-    }
-    if (template.worklogEntries && context.entries?.length) {
-      for (const entry of context.entries) {
-        const duration = entry.durationMinutes
-          ? `${formatDuration(entry.durationMinutes)} `
-          : "";
-        const content = entry.contentMarkdown.replace(/\s+/g, " ").trim();
-        if (!content) continue;
-        lines.push(`- ${duration}${content}`);
-      }
-    }
-  }
-
-  if (template.quickLinks && context.quickLinks?.length) {
-    lines.push(`**Links:**`);
-    for (const link of context.quickLinks) {
-      lines.push(`- [${link.title}](${link.url})`);
-    }
-  }
-
-  if (template.createdDate) {
-    lines.push(`**Created:** ${formatDate(task.createdAt)}`);
-  }
-
-  if (template.updatedDate) {
-    lines.push(`**Updated:** ${formatDate(task.updatedAt)}`);
-  }
-
-  return lines.join("\n");
+  return buildLines(task, context, template, order).join("\n");
 }
 
 export function formatTaskSection(
   task: Task,
   context: TaskSummaryContext = {},
   template: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE,
+  order: ReadonlyArray<SummaryFieldKey> = DEFAULT_SUMMARY_ORDER,
 ) {
-  const body = formatTaskSummary(task, context, { ...template, title: false });
+  const body = formatTaskSummary(
+    task,
+    context,
+    { ...template, title: false },
+    order,
+  );
   const bodyLines = body.length ? body.split("\n") : [];
   return ["## " + task.title, ...bodyLines].join("\n");
 }
@@ -93,9 +132,13 @@ export async function copyTaskSummary(
   task: Task,
   context: TaskSummaryContext = {},
   template?: SummaryTemplate,
+  order?: ReadonlyArray<SummaryFieldKey>,
 ) {
   const effectiveTemplate = template ?? loadSummaryTemplate();
-  await writeClipboard(formatTaskSummary(task, context, effectiveTemplate));
+  const effectiveOrder = order ?? loadSummaryOrder();
+  await writeClipboard(
+    formatTaskSummary(task, context, effectiveTemplate, effectiveOrder),
+  );
 }
 
 function formatDate(iso: string): string {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatFolderCsv, formatTaskCsv } from "./csv";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
+  type SummaryFieldKey,
   type SummaryTemplate,
 } from "./summaryTemplate";
 import type { Folder, Task, TaskQuickLink } from "./types";
@@ -165,5 +166,31 @@ describe("formatFolderCsv", () => {
   it("emits a placeholder row when the folder is empty", () => {
     const out = formatFolderCsv(folder, [], DEFAULT_SUMMARY_TEMPLATE);
     expect(out).toBe("Status,Estimate,Worklog\n(no tasks in Q1 roadmap)");
+  });
+
+  it("builds columns in the supplied order", () => {
+    const order: ReadonlyArray<SummaryFieldKey> = [
+      "title",
+      "updatedDate",
+      "status",
+      "estimate",
+      "worklog",
+      "worklogEntries",
+      "quickLinks",
+      "createdDate",
+    ];
+    const out = formatTaskCsv(
+      baseTask,
+      { totalMinutes: 30 },
+      {
+        ...DEFAULT_SUMMARY_TEMPLATE,
+        title: true,
+        createdDate: true,
+        updatedDate: true,
+      },
+      order,
+    );
+    const header = out.split("\n")[0];
+    expect(header).toBe("Title,Updated,Status,Estimate,Worklog,Created");
   });
 });

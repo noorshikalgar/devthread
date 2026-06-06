@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SUMMARY_TEMPLATE } from "./summaryTemplate";
+import {
+  DEFAULT_SUMMARY_TEMPLATE,
+  type SummaryFieldKey,
+} from "./summaryTemplate";
 import { formatFolderSummary, type FolderSummaryTask } from "./folderSummary";
 import type { Folder, Task } from "./types";
 
@@ -112,5 +115,30 @@ describe("formatFolderSummary", () => {
     );
     expect(out).toContain("## Ship the summary template");
     expect(out).not.toContain("**Title:**");
+  });
+
+  it("respects a custom field order inside each section", () => {
+    const order: ReadonlyArray<SummaryFieldKey> = [
+      "title",
+      "estimate",
+      "status",
+      "worklog",
+      "worklogEntries",
+      "quickLinks",
+      "createdDate",
+      "updatedDate",
+    ];
+    const out = formatFolderSummary(
+      folder,
+      [{ task: baseTask, context: { totalMinutes: 60 } }],
+      DEFAULT_SUMMARY_TEMPLATE,
+      FIXED_NOW,
+      order,
+    );
+    const section = out.split("## Ship the summary template\n")[1];
+    const lines = section.split("\n");
+    expect(lines[0]).toBe("**Estimate:** 1d");
+    expect(lines[1]).toBe("**Status:** Active");
+    expect(lines[2]).toBe("**Logged:** 1h");
   });
 });

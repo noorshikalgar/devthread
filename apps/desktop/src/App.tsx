@@ -8,6 +8,7 @@ import {
   Download,
   ExternalLink,
   Filter,
+  GripVertical,
   Info,
   ListTodo,
   Moon,
@@ -74,10 +75,14 @@ import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { quickLinkDraftFromUrl } from "@/lib/quickLinks";
 import { STATUS_LABEL } from "@/lib/status";
 import {
+  DEFAULT_SUMMARY_ORDER,
   DEFAULT_SUMMARY_TEMPLATE,
+  loadSummaryOrder,
   loadSummaryTemplate,
+  saveSummaryOrder,
   saveSummaryTemplate,
   SUMMARY_TEMPLATE_FIELDS,
+  type SummaryFieldKey,
   type SummaryTemplate,
 } from "@/lib/summaryTemplate";
 import { formatTaskSummary } from "@/lib/taskSummary";
@@ -169,6 +174,9 @@ export default function App() {
   const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>(() =>
     loadSummaryTemplate(),
   );
+  const [summaryOrder, setSummaryOrder] = useState<
+    ReadonlyArray<SummaryFieldKey>
+  >(() => loadSummaryOrder());
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("tasks");
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
@@ -222,6 +230,10 @@ export default function App() {
   useEffect(() => {
     saveSummaryTemplate(summaryTemplate);
   }, [summaryTemplate]);
+
+  useEffect(() => {
+    saveSummaryOrder(summaryOrder);
+  }, [summaryOrder]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -619,6 +631,7 @@ export default function App() {
     folder: Folder,
     format: "markdown" | "csv",
     template = summaryTemplate,
+    order = summaryOrder,
   ) {
     const folderTasks = tasks.filter(
       (candidate) => candidate.folderId === folder.id,
@@ -648,10 +661,10 @@ export default function App() {
     );
     try {
       if (format === "csv") {
-        await copyFolderCsv(folder, summaries, template);
+        await copyFolderCsv(folder, summaries, template, order);
         toast.success(`${folder.name} copied as CSV`);
       } else {
-        await copyFolderSummary(folder, summaries, template);
+        await copyFolderSummary(folder, summaries, template, order);
         toast.success(`${folder.name} copied as Markdown`);
       }
     } catch (cause) {
@@ -968,11 +981,14 @@ export default function App() {
         onOpenChange={setSettingsOpen}
         onRestart={() => relaunch()}
         onSummaryTemplateChange={setSummaryTemplate}
-        onSummaryTemplateReset={() =>
-          setSummaryTemplate({ ...DEFAULT_SUMMARY_TEMPLATE })
-        }
+        onSummaryTemplateReset={() => {
+          setSummaryTemplate({ ...DEFAULT_SUMMARY_TEMPLATE });
+          setSummaryOrder([...DEFAULT_SUMMARY_ORDER]);
+        }}
+        onSummaryOrderChange={setSummaryOrder}
         onThemeChange={setTheme}
         open={settingsOpen}
+        summaryOrder={summaryOrder}
         summaryTemplate={summaryTemplate}
         theme={theme}
         update={update}
@@ -1876,13 +1892,20 @@ const SAMPLE_SUMMARY_LINKS = [
 
 function SummaryTab({
   template,
+  order,
   onChange,
+  onOrderChange,
   onReset,
 }: {
   template: SummaryTemplate;
+  order: ReadonlyArray<SummaryFieldKey>;
   onChange: (template: SummaryTemplate) => void;
+  onOrderChange: (order: ReadonlyArray<SummaryFieldKey>) => void;
   onReset: () => void;
 }) {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+
   const preview = formatTaskSummary(
     SAMPLE_SUMMARY_TASK,
     {
@@ -1891,70 +1914,140 @@ function SummaryTab({
       quickLinks: SAMPLE_SUMMARY_LINKS,
     },
     template,
+    order,
   );
+
+  function moveItem(from: number, to: number) {
+    if (from === to) return;
+    const next = [...order];
+    const [picked] = next.splice(from, 1);
+    next.splice(to, 0, picked);
+    onOrderChange(next);
+  }
+
+  function handleDragStart(index: number) {
+    return (event: React.DragEvent<HTMLDivElement>) => {
+      setDraggedIndex(index);
+      setDropIndex(index);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(
+        "text/plain",
+        SUMMARY_TEMPLATE_FIELDS[index].key,
+      );
+    };
+  }
+
+  function handleDragOver(index: number) {
+    return (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      if (dropIndex !== index) setDropIndex(index);
+    };
+  }
+
+  function handleDrop(index: number) {
+    return (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      if (draggedIndex !== null) {
+        moveItem(draggedIndex, index);
+      }
+      setDraggedIndex(null);
+      setDropIndex(null);
+    };
+  }
+
+  function handleDragEnd() {
+    setDraggedIndex(null);
+    setDropIndex(null);
+  }
 
   return (
     <>
       <DialogHeader>
         <DialogTitle>Summary</DialogTitle>
         <DialogDescription>
-          Choose which fields go into a copied task or folder summary.
+          Choose which fields go into a copied task or folder summary. Drag to
+          reorder — the order is also applied to folder output and CSV columns.
         </DialogDescription>
       </DialogHeader>
-      <div className="mt-6 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
-        <div className="space-y-3">
-          {SUMMARY_TEMPLATE_FIELDS.map((field) => {
-            const checked = template[field.key];
-            const disabled =
-              field.key === "worklogEntries" && !template.worklog;
-            return (
-              <label
-                className={cn(
-                  "flex items-start gap-2.5",
-                  disabled && "opacity-50",
-                )}
-                key={field.key}
-              >
-                <span className="relative mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border bg-background">
-                  <input
-                    aria-label={field.label}
-                    checked={checked}
-                    className="peer absolute inset-0 h-full w-full cursor-pointer appearance-none rounded disabled:cursor-not-allowed"
-                    disabled={disabled}
-                    onChange={(event) =>
-                      onChange({
-                        ...template,
-                        [field.key]: event.target.checked,
-                      })
-                    }
-                    type="checkbox"
-                  />
-                  <Check
-                    aria-hidden
-                    className="pointer-events-none size-3 text-primary opacity-0 peer-checked:opacity-100"
-                    strokeWidth={3}
-                  />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-xs font-medium leading-5">
-                    {field.label}
-                  </span>
-                  <span className="block text-[11px] leading-4 text-muted-foreground">
-                    {field.description}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-          <Button
-            className="mt-2"
-            onClick={onReset}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            Reset to defaults
-          </Button>
+      <div className="mt-6 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
+        <div className="flex min-h-0 flex-col">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            {order.map((key, index) => {
+              const field = SUMMARY_TEMPLATE_FIELDS.find(
+                (candidate) => candidate.key === key,
+              );
+              if (!field) return null;
+              const checked = template[key];
+              const disabled = key === "worklogEntries" && !template.worklog;
+              const isDragging = draggedIndex === index;
+              const isDropTarget =
+                dropIndex === index &&
+                draggedIndex !== null &&
+                draggedIndex !== index;
+              return (
+                <div
+                  className={cn(
+                    "rounded-md border border-transparent",
+                    isDropTarget && "border-primary/60 bg-primary/5",
+                    isDragging && "opacity-50",
+                  )}
+                  draggable
+                  key={key}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver(index)}
+                  onDragStart={handleDragStart(index)}
+                  onDrop={handleDrop(index)}
+                >
+                  <label
+                    className={cn(
+                      "flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-background px-2.5 py-2 select-none",
+                      disabled && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <GripVertical
+                      aria-hidden
+                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    <span className="relative mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border bg-background">
+                      <input
+                        aria-label={field.label}
+                        checked={checked}
+                        className="peer absolute inset-0 h-full w-full cursor-pointer appearance-none rounded disabled:cursor-not-allowed"
+                        disabled={disabled}
+                        onChange={(event) =>
+                          onChange({
+                            ...template,
+                            [key]: event.target.checked,
+                          })
+                        }
+                        onDragStart={(event) => event.preventDefault()}
+                        type="checkbox"
+                      />
+                      <Check
+                        aria-hidden
+                        className="pointer-events-none size-3 text-primary opacity-0 peer-checked:opacity-100"
+                        strokeWidth={3}
+                      />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-medium leading-5">
+                        {field.label}
+                      </span>
+                      <span className="block text-[11px] leading-4 text-muted-foreground">
+                        {field.description}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex justify-end border-t border-border pt-3">
+            <Button onClick={onReset} size="sm" type="button" variant="ghost">
+              Reset to defaults
+            </Button>
+          </div>
         </div>
         <div className="flex flex-col">
           <span className="text-xs font-medium text-muted-foreground">
@@ -1976,6 +2069,7 @@ function SettingsDialog({
   appVersion,
   downloadProgress,
   open,
+  summaryOrder,
   summaryTemplate,
   theme,
   update,
@@ -1985,6 +2079,7 @@ function SettingsDialog({
   onInstallUpdate,
   onOpenChange,
   onRestart,
+  onSummaryOrderChange,
   onSummaryTemplateChange,
   onSummaryTemplateReset,
   onThemeChange,
@@ -1992,6 +2087,7 @@ function SettingsDialog({
   appVersion: string;
   downloadProgress: number;
   open: boolean;
+  summaryOrder: ReadonlyArray<SummaryFieldKey>;
   summaryTemplate: SummaryTemplate;
   theme: AppThemeId;
   update: Update | null;
@@ -2001,6 +2097,7 @@ function SettingsDialog({
   onInstallUpdate: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
   onRestart: () => Promise<void>;
+  onSummaryOrderChange: (order: ReadonlyArray<SummaryFieldKey>) => void;
   onSummaryTemplateChange: (template: SummaryTemplate) => void;
   onSummaryTemplateReset: () => void;
   onThemeChange: (theme: AppThemeId) => void;
@@ -2032,7 +2129,7 @@ function SettingsDialog({
             />
           </div>
         </aside>
-        <section className="min-w-0 p-6">
+        <section className="flex min-h-0 min-w-0 flex-col p-6">
           {tab === "general" ? (
             <>
               <DialogHeader>
@@ -2098,7 +2195,9 @@ function SettingsDialog({
           ) : tab === "summary" ? (
             <SummaryTab
               onChange={onSummaryTemplateChange}
+              onOrderChange={onSummaryOrderChange}
               onReset={onSummaryTemplateReset}
+              order={summaryOrder}
               template={summaryTemplate}
             />
           ) : (

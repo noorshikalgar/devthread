@@ -1,6 +1,9 @@
 import { formatDuration } from "./duration";
 import {
+  DEFAULT_SUMMARY_ORDER,
   DEFAULT_SUMMARY_TEMPLATE,
+  loadSummaryOrder,
+  type SummaryFieldKey,
   type SummaryTemplate,
 } from "./summaryTemplate";
 import type { TaskSummaryContext } from "./taskSummary";
@@ -32,47 +35,73 @@ interface ColumnDef {
   resolve: (task: Task, context: TaskSummaryContext) => string;
 }
 
-function buildColumns(template: SummaryTemplate): ColumnDef[] {
+function buildColumns(
+  template: SummaryTemplate,
+  order: ReadonlyArray<SummaryFieldKey>,
+): ColumnDef[] {
   const columns: ColumnDef[] = [];
-  if (template.title) {
-    columns.push({ key: TITLE_COLUMN, resolve: (task) => task.title });
-  }
-  if (template.status) {
-    columns.push({
-      key: STATUS_COLUMN,
-      resolve: (task) => statusLabel(task.status),
-    });
-  }
-  if (template.estimate) {
-    columns.push({
-      key: ESTIMATE_COLUMN,
-      resolve: (task) =>
-        task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "",
-    });
-  }
-  if (template.worklog) {
-    columns.push({
-      key: WORKLOG_COLUMN,
-      resolve: (_task, context) => formatWorklogCell(context, template),
-    });
-  }
-  if (template.quickLinks) {
-    columns.push({
-      key: QUICK_LINKS_COLUMN,
-      resolve: (_task, context) => formatQuickLinksCell(context.quickLinks),
-    });
-  }
-  if (template.createdDate) {
-    columns.push({
-      key: CREATED_COLUMN,
-      resolve: (task) => formatDate(task.createdAt),
-    });
-  }
-  if (template.updatedDate) {
-    columns.push({
-      key: UPDATED_COLUMN,
-      resolve: (task) => formatDate(task.updatedAt),
-    });
+  for (const key of order) {
+    switch (key) {
+      case "title":
+        if (template.title) {
+          columns.push({ key: TITLE_COLUMN, resolve: (task) => task.title });
+        }
+        break;
+      case "status":
+        if (template.status) {
+          columns.push({
+            key: STATUS_COLUMN,
+            resolve: (task) => statusLabel(task.status),
+          });
+        }
+        break;
+      case "estimate":
+        if (template.estimate) {
+          columns.push({
+            key: ESTIMATE_COLUMN,
+            resolve: (task) =>
+              task.estimatedMinutes
+                ? formatDuration(task.estimatedMinutes)
+                : "",
+          });
+        }
+        break;
+      case "worklog":
+        if (template.worklog) {
+          columns.push({
+            key: WORKLOG_COLUMN,
+            resolve: (_task, context) => formatWorklogCell(context, template),
+          });
+        }
+        break;
+      case "worklogEntries":
+        break;
+      case "quickLinks":
+        if (template.quickLinks) {
+          columns.push({
+            key: QUICK_LINKS_COLUMN,
+            resolve: (_task, context) =>
+              formatQuickLinksCell(context.quickLinks),
+          });
+        }
+        break;
+      case "createdDate":
+        if (template.createdDate) {
+          columns.push({
+            key: CREATED_COLUMN,
+            resolve: (task) => formatDate(task.createdAt),
+          });
+        }
+        break;
+      case "updatedDate":
+        if (template.updatedDate) {
+          columns.push({
+            key: UPDATED_COLUMN,
+            resolve: (task) => formatDate(task.updatedAt),
+          });
+        }
+        break;
+    }
   }
   return columns;
 }
@@ -142,8 +171,9 @@ export function formatTaskCsv(
   task: Task,
   context: TaskSummaryContext = {},
   template: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE,
+  order: ReadonlyArray<SummaryFieldKey> = DEFAULT_SUMMARY_ORDER,
 ): string {
-  const columns = buildColumns(template);
+  const columns = buildColumns(template, order);
   return [
     csvRow(columns.map((col) => col.key)),
     resolveRow(columns, task, context),
@@ -159,8 +189,9 @@ export function formatFolderCsv(
   folder: Folder,
   tasks: FolderSummaryTask[],
   template: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE,
+  order: ReadonlyArray<SummaryFieldKey> = DEFAULT_SUMMARY_ORDER,
 ): string {
-  const columns = buildColumns(template);
+  const columns = buildColumns(template, order);
   const lines: string[] = [csvRow(columns.map((col) => col.key))];
   if (!tasks.length) {
     lines.push(`(no tasks in ${folder.name})`);
@@ -175,20 +206,28 @@ export async function copyTaskCsv(
   task: Task,
   context: TaskSummaryContext = {},
   template?: SummaryTemplate,
+  order?: ReadonlyArray<SummaryFieldKey>,
 ) {
   const { loadSummaryTemplate } = await import("./summaryTemplate");
   const effectiveTemplate = template ?? loadSummaryTemplate();
-  await writeClipboard(formatTaskCsv(task, context, effectiveTemplate));
+  const effectiveOrder = order ?? loadSummaryOrder();
+  await writeClipboard(
+    formatTaskCsv(task, context, effectiveTemplate, effectiveOrder),
+  );
 }
 
 export async function copyFolderCsv(
   folder: Folder,
   tasks: FolderSummaryTask[],
   template?: SummaryTemplate,
+  order?: ReadonlyArray<SummaryFieldKey>,
 ) {
   const { loadSummaryTemplate } = await import("./summaryTemplate");
   const effectiveTemplate = template ?? loadSummaryTemplate();
-  await writeClipboard(formatFolderCsv(folder, tasks, effectiveTemplate));
+  const effectiveOrder = order ?? loadSummaryOrder();
+  await writeClipboard(
+    formatFolderCsv(folder, tasks, effectiveTemplate, effectiveOrder),
+  );
 }
 
 async function writeClipboard(value: string) {
