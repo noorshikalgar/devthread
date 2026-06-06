@@ -12,7 +12,6 @@ import {
   Link,
   ListCollapse,
   ListTree,
-  MoreHorizontal,
   Pause,
   Pencil,
   Play,
@@ -20,7 +19,20 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  cloneElement,
+  FormEvent,
+  isValidElement,
+  KeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { LogTimeDialog, type LogTimeInput } from "@/components/LogTimeDialog";
 import { Button } from "@/components/ui/button";
@@ -287,30 +299,6 @@ export function TaskHeader({
             </TooltipTrigger>
             <TooltipContent>Copy task summary</TooltipContent>
           </Tooltip>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="More task actions"
-                size="icon-sm"
-                variant="ghost"
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Task</DropdownMenuLabel>
-              <DropdownMenuItem
-                disabled={!onCreateQuickLink || quickLinks.length >= 3}
-                onSelect={() => {
-                  setEditingQuickLink(null);
-                  setQuickLinkOpen(true);
-                }}
-              >
-                <Plus className="mr-2 size-3.5" />
-                Add quick link
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
@@ -536,20 +524,17 @@ function QuickLinks({
           />
         ))}
         {onAdd && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="Add quick link"
-                className="h-6 w-6"
-                onClick={onAdd}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Add quick link</TooltipContent>
-          </Tooltip>
+          <HoverTooltip content="Add quick link">
+            <Button
+              aria-label="Add quick link"
+              className="h-6 w-6"
+              onClick={onAdd}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </HoverTooltip>
         )}
       </span>
     </div>
@@ -569,25 +554,9 @@ function QuickLinkButton({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <Tooltip>
-      <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
-        <DropdownMenuTrigger asChild>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label={`Open quick link: ${link.title}`}
-              className={cn(
-                "h-6 w-6 text-muted-foreground hover:text-foreground",
-                quickLinkColor(link.provider),
-              )}
-              onClick={() => setMenuOpen(true)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Icon className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-        </DropdownMenuTrigger>
-        <TooltipContent className="max-w-xs">
+    <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
+      <HoverTooltip
+        content={
           <div className="space-y-1">
             <p className="font-medium text-foreground">{link.title}</p>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -597,37 +566,285 @@ function QuickLinkButton({
               {link.url}
             </p>
           </div>
-        </TooltipContent>
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel className="truncate">
-            {link.title}
-          </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
-            <ExternalLink className="mr-2 size-3.5" />
-            Open link
+        }
+      >
+        <DropdownMenuTrigger asChild>
+          <Button
+            aria-label={`Open quick link: ${link.title}`}
+            className={cn(
+              "h-6 w-6 text-muted-foreground hover:text-foreground",
+              quickLinkColor(link.provider),
+            )}
+            onClick={() => setMenuOpen(true)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Icon className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+      </HoverTooltip>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuLabel className="truncate">{link.title}</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
+          <ExternalLink className="mr-2 size-3.5" />
+          Open link
+        </DropdownMenuItem>
+        {onEdit && (
+          <DropdownMenuItem onSelect={() => onEdit(link)}>
+            <Pencil className="mr-2 size-3.5" />
+            Edit
           </DropdownMenuItem>
-          {onEdit && (
-            <DropdownMenuItem onSelect={() => onEdit(link)}>
-              <Pencil className="mr-2 size-3.5" />
-              Edit
+        )}
+        {onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => void onDelete(link.id)}
+            >
+              <Trash2 className="mr-2 size-3.5" />
+              Remove
             </DropdownMenuItem>
-          )}
-          {onDelete && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => void onDelete(link.id)}
-              >
-                <Trash2 className="mr-2 size-3.5" />
-                Remove
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </Tooltip>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
+}
+
+type Anchor = {
+  cx: number;
+  cy: number;
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+};
+
+type Size = { width: number; height: number };
+
+const TIP_DEFAULT_SIZE: Size = { width: 240, height: 96 };
+
+function measureTip(): Size {
+  return TIP_DEFAULT_SIZE;
+}
+
+function HoverTooltip({
+  content,
+  children,
+}: {
+  content: ReactNode;
+  children: ReactElement<Record<string, unknown>>;
+}) {
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
+  const [tip, setTip] = useState<
+    | {
+        side: "top" | "right" | "bottom" | "left";
+        top: number;
+        left: number;
+      }
+    | null
+  >(null);
+
+  function showTip() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const anchor = anchorFromRect(rect);
+    setTip(chooseTipSide(anchor, measureTip(), 8));
+  }
+
+  function hideTip() {
+    setTip(null);
+  }
+
+  useLayoutEffect(() => {
+    if (!tip || !tipRef.current) return;
+    const { width, height } = tipRef.current.getBoundingClientRect();
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const adjusted = chooseTipSide(anchorFromRect(rect), { width, height }, 8);
+    if (
+      adjusted.side !== tip.side ||
+      adjusted.top !== tip.top ||
+      adjusted.left !== tip.left
+    ) {
+      setTip(adjusted);
+    }
+  }, [tip]);
+
+  if (!isValidElement(children)) return <>{children}</>;
+  const childProps = children.props;
+  const trigger = cloneElement(children, {
+    ref: triggerRef,
+    onMouseEnter: composeHover(
+      childProps.onMouseEnter as ((event: SyntheticEvent) => void) | undefined,
+      showTip,
+    ),
+    onMouseLeave: composeHover(
+      childProps.onMouseLeave as ((event: SyntheticEvent) => void) | undefined,
+      hideTip,
+    ),
+    onFocus: composeHover(
+      childProps.onFocus as ((event: SyntheticEvent) => void) | undefined,
+      showTip,
+    ),
+    onBlur: composeHover(
+      childProps.onBlur as ((event: SyntheticEvent) => void) | undefined,
+      hideTip,
+    ),
+  } as Partial<React.HTMLAttributes<HTMLElement>> & {
+    ref: React.Ref<HTMLElement>;
+  });
+
+  return (
+    <>
+      {trigger}
+      {tip &&
+        createPortal(
+          <div
+            ref={tipRef}
+            aria-hidden
+            className={cn(
+              "pointer-events-none fixed z-50 max-w-xs rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md",
+              tip.side === "top" && "-translate-x-1/2 -translate-y-full",
+              tip.side === "bottom" && "-translate-x-1/2 translate-y-0",
+              tip.side === "right" && "translate-x-0 -translate-y-1/2",
+              tip.side === "left" && "-translate-x-full -translate-y-1/2",
+            )}
+            style={{ top: tip.top, left: tip.left }}
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function anchorFromRect(rect: DOMRect): Anchor {
+  return {
+    cx: rect.left + window.scrollX + rect.width / 2,
+    cy: rect.top + window.scrollY + rect.height / 2,
+    top: rect.top + window.scrollY,
+    bottom: rect.bottom + window.scrollY,
+    left: rect.left + window.scrollX,
+    right: rect.right + window.scrollX,
+  };
+}
+
+function composeHover<E extends SyntheticEvent>(
+  existing: ((event: E) => void) | undefined,
+  next: (event: E) => void,
+): (event: E) => void {
+  return (event) => {
+    existing?.(event);
+    if (!event.defaultPrevented) next(event);
+  };
+}
+
+function chooseTipSide(
+  anchor: Anchor,
+  size: Size,
+  margin: number,
+): { side: "top" | "right" | "bottom" | "left"; top: number; left: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const spaceTop = anchor.top - margin;
+  const spaceBottom = vh - anchor.bottom - margin;
+  const spaceLeft = anchor.left - margin;
+  const spaceRight = vw - anchor.right - margin;
+
+  const fitsTop = spaceTop >= size.height;
+  const fitsBottom = spaceBottom >= size.height;
+  const fitsLeft = spaceLeft >= size.width;
+  const fitsRight = spaceRight >= size.width;
+
+  const preferred: Array<"top" | "bottom" | "right" | "left"> = [
+    "top",
+    "bottom",
+    "right",
+    "left",
+  ];
+  const fits: Record<(typeof preferred)[number], boolean> = {
+    top: fitsTop,
+    bottom: fitsBottom,
+    right: fitsRight,
+    left: fitsLeft,
+  };
+
+  const side =
+    preferred.find((s) => fits[s]) ??
+    pickByLargestSpace({
+      spaceTop,
+      spaceBottom,
+      spaceLeft,
+      spaceRight,
+    });
+
+  if (side === "top") {
+    return {
+      side,
+      top: anchor.top - margin,
+      left: clamp(
+        anchor.cx,
+        margin + size.width / 2,
+        vw - margin - size.width / 2,
+      ),
+    };
+  }
+  if (side === "bottom") {
+    return {
+      side,
+      top: anchor.bottom + margin,
+      left: clamp(
+        anchor.cx,
+        margin + size.width / 2,
+        vw - margin - size.width / 2,
+      ),
+    };
+  }
+  if (side === "right") {
+    return {
+      side,
+      top: clamp(
+        anchor.cy,
+        margin + size.height / 2,
+        vh - margin - size.height / 2,
+      ),
+      left: anchor.right + margin,
+    };
+  }
+  return {
+    side,
+    top: clamp(
+      anchor.cy,
+      margin + size.height / 2,
+      vh - margin - size.height / 2,
+    ),
+    left: anchor.left - margin,
+  };
+}
+
+function pickByLargestSpace(space: {
+  spaceTop: number;
+  spaceBottom: number;
+  spaceLeft: number;
+  spaceRight: number;
+}): "top" | "right" | "bottom" | "left" {
+  const entries: Array<["top" | "right" | "bottom" | "left", number]> = [
+    ["top", space.spaceTop],
+    ["right", space.spaceRight],
+    ["bottom", space.spaceBottom],
+    ["left", space.spaceLeft],
+  ];
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, value));
 }
 
 function QuickLinkDialog({

@@ -14,9 +14,15 @@ import { tmpdir } from "node:os";
 
 const here = dirname(new URL(import.meta.url).pathname);
 const repoRoot = resolve(here, "..", "..", "..");
-const sourceSvg = resolve(repoRoot, "apps/desktop/src/assets/devthread-icon.svg");
+const sourceSvg = resolve(
+  repoRoot,
+  "apps/desktop/src/assets/devthread-icon.svg",
+);
 const sourceBase = sourceSvg.split("/").pop();
-const stagingPng = join(tmpdir(), `${sourceBase.replace(/\.svg$/, "")}-source.png`);
+const stagingPng = join(
+  tmpdir(),
+  `${sourceBase.replace(/\.svg$/, "")}-source.png`,
+);
 const renderedPng = join(tmpdir(), `${sourceBase}.png`);
 
 function run(binary, args, options = {}) {
@@ -54,7 +60,9 @@ function renderIconViaQuickLook(svg, outPng, size = 1024, timeoutMs = 15000) {
           if (Date.now() > deadline) {
             clearInterval(poll);
             killTree(child);
-            rejectRender(new Error(`qlmanage did not produce ${outPng} in ${timeoutMs}ms`));
+            rejectRender(
+              new Error(`qlmanage did not produce ${outPng} in ${timeoutMs}ms`),
+            );
           }
           return;
         }
@@ -74,7 +82,9 @@ function renderIconViaQuickLook(svg, outPng, size = 1024, timeoutMs = 15000) {
         if (Date.now() > deadline) {
           clearInterval(poll);
           killTree(child);
-          rejectRender(new Error(`qlmanage did not finalise ${outPng} in ${timeoutMs}ms`));
+          rejectRender(
+            new Error(`qlmanage did not finalise ${outPng} in ${timeoutMs}ms`),
+          );
         }
       } catch (err) {
         clearInterval(poll);

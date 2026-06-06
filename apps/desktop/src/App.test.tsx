@@ -257,7 +257,7 @@ describe("TaskHeader", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps copy summary as an icon action and edits quick links from their menu", async () => {
+  it("exposes copy summary as an icon button and edits quick links from their menu", async () => {
     const updateQuickLink = vi.fn().mockResolvedValue(undefined);
     render(
       <TaskHeader
@@ -273,9 +273,7 @@ describe("TaskHeader", () => {
       />,
     );
 
-    fireEvent.click(screen.getByLabelText("More task actions"));
-    expect(screen.queryByText("Copy summary")).not.toBeInTheDocument();
-    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByLabelText("Copy task summary")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Open quick link: DevThread flow"));
     fireEvent.click(await screen.findByText("Edit"));
     fireEvent.change(screen.getByLabelText("Link"), {
