@@ -27,6 +27,8 @@ import {
   type Update,
 } from "@tauri-apps/plugin-updater";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
@@ -1927,6 +1929,12 @@ function SummaryTab({
     order,
   );
 
+  // Markdown collapses single newlines into spaces, so for the preview
+  // only we add a blank line after every non-list line. Consecutive
+  // list items are left alone so the worklog / quick-links lists stay
+  // grouped as a single <ul>.
+  const previewBlocks = preview ? preview.replace(/^([^-].*)$/gm, "$1\n") : "";
+
   function moveItem(from: number, to: number) {
     if (from === to || to < 0 || to >= order.length) return;
     const next = [...order];
@@ -2015,7 +2023,10 @@ function SummaryTab({
       </DialogHeader>
       <div className="mt-6 grid min-h-0 flex-1 grid-cols-2 gap-4">
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+            <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+              Toggle which items to include in the copy
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {order.map((key, index) => {
                 const field = SUMMARY_TEMPLATE_FIELDS.find(
@@ -2084,14 +2095,22 @@ function SummaryTab({
         </div>
         <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-card/40">
           <div className="border-b border-border bg-card/60 px-3 py-2 text-xs font-medium text-muted-foreground">
-            Preview
+            Markdown preview
           </div>
-          <pre
+          <div
             aria-label="Summary preview"
-            className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-3 font-mono text-[11px] leading-5 text-foreground"
+            className="markdown min-h-0 flex-1 overflow-auto p-3 text-xs leading-5"
           >
-            {preview}
-          </pre>
+            {previewBlocks ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {previewBlocks}
+              </ReactMarkdown>
+            ) : (
+              <p className="text-muted-foreground">
+                No fields selected — the copy would be empty.
+              </p>
+            )}
+          </div>
         </div>
       </div>
       <div className="mt-4 flex justify-end">
