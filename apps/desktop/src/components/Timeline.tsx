@@ -513,7 +513,7 @@ function TimelineEntry({
           </>
         )}
 
-        {historyOpen && (
+        {canEdit && historyOpen && (
           <Card className="mt-1">
             <CardContent className="space-y-2 p-3">
               <p className="text-xs font-semibold text-foreground">
@@ -565,14 +565,16 @@ function TimelineEntry({
               <Pencil />
             </Button>
           )}
-          <Button
-            aria-label="Revision history"
-            onClick={() => void onHistory(entry.id)}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <History />
-          </Button>
+          {canEdit && (
+            <Button
+              aria-label="Revision history"
+              onClick={() => void onHistory(entry.id)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <History />
+            </Button>
+          )}
           {canTrash && (
             <Button
               aria-label="Move entry to trash"
