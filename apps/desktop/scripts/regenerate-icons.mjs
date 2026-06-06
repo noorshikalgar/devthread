@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 
 const here = dirname(new URL(import.meta.url).pathname);
 const repoRoot = resolve(here, "..", "..");
-const sourceSvg = resolve(repoRoot, "src/assets/taskline-mark.svg");
+const sourceSvg = resolve(repoRoot, "src/assets/taskline-icon.svg");
 const stagingPng = join(tmpdir(), "taskline-icon-source.png");
 const renderedPng = join(tmpdir(), "taskline-mark.svg.png");
 
