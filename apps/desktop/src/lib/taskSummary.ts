@@ -1,34 +1,78 @@
 import { formatDuration } from "./duration";
+import {
+  DEFAULT_SUMMARY_TEMPLATE,
+  loadSummaryTemplate,
+  type SummaryTemplate,
+} from "./summaryTemplate";
 import { STATUS_LABEL } from "./status";
-import type { Task } from "./types";
+import type { Task, TaskQuickLink } from "./types";
+
+export interface TaskSummaryEntry {
+  contentMarkdown: string;
+  durationMinutes: number | null;
+}
 
 export interface TaskSummaryContext {
   entriesLoaded?: number;
   totalMinutes?: number;
+  entries?: TaskSummaryEntry[];
+  quickLinks?: TaskQuickLink[];
 }
 
 export function formatTaskSummary(
   task: Task,
   context: TaskSummaryContext = {},
+  template: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE,
 ) {
-  const lines = [
-    task.title,
-    `Status: ${STATUS_LABEL[task.status]}`,
-    `Estimate: ${
-      task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "None"
-    }`,
-  ];
+  const lines: string[] = [task.title];
 
-  if (context.totalMinutes !== undefined) {
+  if (template.status) {
+    lines.push(`Status: ${STATUS_LABEL[task.status]}`);
+  }
+
+  if (template.estimate) {
     lines.push(
-      `Logged: ${
-        context.totalMinutes > 0 ? formatDuration(context.totalMinutes) : "0m"
+      `Estimate: ${
+        task.estimatedMinutes ? formatDuration(task.estimatedMinutes) : "None"
       }`,
     );
   }
 
-  if (context.entriesLoaded !== undefined) {
-    lines.push(`Updates: ${context.entriesLoaded}`);
+  if (template.worklog) {
+    if (context.totalMinutes !== undefined) {
+      lines.push(
+        `Logged: ${
+          context.totalMinutes > 0 ? formatDuration(context.totalMinutes) : "0m"
+        }`,
+      );
+    }
+    if (context.entriesLoaded !== undefined) {
+      lines.push(`Updates: ${context.entriesLoaded}`);
+    }
+    if (template.worklogEntries && context.entries?.length) {
+      for (const entry of context.entries) {
+        const duration = entry.durationMinutes
+          ? `${formatDuration(entry.durationMinutes)} `
+          : "";
+        const content = entry.contentMarkdown.replace(/\s+/g, " ").trim();
+        if (!content) continue;
+        lines.push(`- ${duration}${content}`);
+      }
+    }
+  }
+
+  if (template.quickLinks && context.quickLinks?.length) {
+    for (const link of context.quickLinks) {
+      lines.push(`- ${link.title}: ${link.url}`);
+    }
+  }
+
+  if (template.createdDate) {
+    lines.push(`Created: ${task.createdAt}`);
+  }
+
+  if (template.updatedDate) {
+    lines.push(`Updated: ${task.updatedAt}`);
   }
 
   return lines.join("\n");
@@ -37,8 +81,10 @@ export function formatTaskSummary(
 export async function copyTaskSummary(
   task: Task,
   context: TaskSummaryContext = {},
+  template?: SummaryTemplate,
 ) {
-  await writeClipboard(formatTaskSummary(task, context));
+  const effectiveTemplate = template ?? loadSummaryTemplate();
+  await writeClipboard(formatTaskSummary(task, context, effectiveTemplate));
 }
 
 async function writeClipboard(value: string) {
