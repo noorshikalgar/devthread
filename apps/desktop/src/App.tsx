@@ -2044,15 +2044,15 @@ function SummaryTab({
                   >
                     <label
                       className={cn(
-                        "flex cursor-pointer items-start gap-2.5 rounded-md px-2.5 py-2 select-none",
+                        "flex cursor-pointer items-center gap-2.5 rounded-md py-2 pr-2.5 select-none",
                         disabled && "cursor-not-allowed opacity-50",
                       )}
                     >
                       <GripVertical
                         aria-hidden
-                        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                        className="size-3.5 shrink-0 text-muted-foreground"
                       />
-                      <span className="relative mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border bg-background">
+                      <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border bg-background">
                         <input
                           aria-label={field.label}
                           checked={checked}
@@ -2072,13 +2072,16 @@ function SummaryTab({
                           strokeWidth={3}
                         />
                       </span>
-                      <span className="min-w-0">
-                        <span className="block text-xs font-medium leading-5">
+                      <span className="min-w-0 truncate text-xs">
+                        <span className="font-medium leading-5">
                           {field.label}
                         </span>
-                        <span className="block text-[11px] leading-4 text-muted-foreground">
-                          {field.description}
-                        </span>
+                        {field.description && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {" "}
+                            ({field.description})
+                          </span>
+                        )}
                       </span>
                     </label>
                   </div>
