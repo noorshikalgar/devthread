@@ -2086,11 +2086,6 @@ function SummaryTab({
               })}
             </div>
           </div>
-          <div className="flex items-center justify-end rounded-md border border-border bg-card/40 px-3 py-2">
-            <Button onClick={onReset} size="sm" type="button" variant="ghost">
-              Reset to defaults
-            </Button>
-          </div>
         </div>
         <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-card/40">
           <div className="border-b border-border bg-card/60 px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -2103,6 +2098,11 @@ function SummaryTab({
             {preview}
           </pre>
         </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button onClick={onReset} size="sm" type="button" variant="ghost">
+          Reset to defaults
+        </Button>
       </div>
     </>
   );
