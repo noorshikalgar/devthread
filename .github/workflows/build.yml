@@ -217,4 +217,4 @@ jobs:
           releaseName: DevThread ${{ github.ref_name }}
           tagName: ${{ github.ref_name }}
           tauriScript: pnpm tauri
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
