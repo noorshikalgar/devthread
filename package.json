@@ -9,6 +9,7 @@
     "dev:web": "pnpm --filter @devthread/desktop dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepare": "git config core.hooksPath .githooks",
     "test": "turbo test",
     "test:rust": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml"
   },
