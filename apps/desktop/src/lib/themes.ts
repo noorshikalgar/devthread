@@ -25,6 +25,30 @@ export const APP_THEMES = [
     dark: true,
   },
   {
+    id: "gruvbox-dark",
+    label: "Gruvbox",
+    family: "Gruvbox",
+    dark: true,
+  },
+  {
+    id: "nord-dark",
+    label: "Nord",
+    family: "Nord",
+    dark: true,
+  },
+  {
+    id: "dracula-dark",
+    label: "Dracula",
+    family: "Dracula",
+    dark: true,
+  },
+  {
+    id: "rose-pine-moon-dark",
+    label: "Rosé Pine Moon",
+    family: "Rosé Pine",
+    dark: true,
+  },
+  {
     id: "default-light",
     label: "Default Light",
     family: "Default",
@@ -40,6 +64,24 @@ export const APP_THEMES = [
     id: "zed-light",
     label: "Zed One Light",
     family: "Zed",
+    dark: false,
+  },
+  {
+    id: "gruvbox-light",
+    label: "Gruvbox Light",
+    family: "Gruvbox",
+    dark: false,
+  },
+  {
+    id: "nord-light",
+    label: "Nord Light",
+    family: "Nord",
+    dark: false,
+  },
+  {
+    id: "rose-pine-dawn-light",
+    label: "Rosé Pine Dawn",
+    family: "Rosé Pine",
     dark: false,
   },
 ] as const satisfies readonly AppTheme[];
