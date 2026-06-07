@@ -35,6 +35,7 @@ if (await checkServer()) {
 } else {
   const vite = spawn("pnpm", ["exec", "vite"], {
     stdio: "inherit",
+    shell: true,
   });
 
   const stop = (signal) => {
