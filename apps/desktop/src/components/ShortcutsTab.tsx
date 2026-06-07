@@ -44,8 +44,14 @@ const GROUPS: Group[] = [
       { keys: joinMod(MOD, "E"), description: "Edit title" },
       { keys: joinMod(MOD, "L"), description: "Open log-time dialog" },
       { keys: joinMod(MOD, "F"), description: "Focus timeline search" },
-      { keys: joinMod(MOD, SHIFT, "C"), description: "Copy task summary (Markdown)" },
-      { keys: joinMod(MOD, SHIFT, "E"), description: "Copy task summary (CSV)" },
+      {
+        keys: joinMod(MOD, SHIFT, "C"),
+        description: "Copy task summary (Markdown)",
+      },
+      {
+        keys: joinMod(MOD, SHIFT, "E"),
+        description: "Copy task summary (CSV)",
+      },
       { keys: joinMod(MOD, "⌫"), description: "Archive / restore" },
       { keys: joinMod(MOD, SHIFT, "⌫"), description: "Delete (with confirm)" },
     ],

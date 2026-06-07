@@ -713,13 +713,12 @@ export default function App() {
     );
   }
 
-  async function deleteFolder(
-    folderId: string,
-    mode: "cascade" | "unassign",
-  ) {
+  async function deleteFolder(folderId: string, mode: "cascade" | "unassign") {
     if (mode === "cascade") {
       await api.deleteFolderCascade(folderId);
-      setTasks((current) => current.filter((task) => task.folderId !== folderId));
+      setTasks((current) =>
+        current.filter((task) => task.folderId !== folderId),
+      );
     } else {
       await api.unassignFolderTasks(folderId);
       await api.deleteFolder(folderId);

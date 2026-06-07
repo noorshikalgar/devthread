@@ -785,7 +785,9 @@ function DeleteFolderDialog({
                 variant="destructive"
               >
                 <Trash2 className="mr-1.5 size-3.5" />
-                {deleting === "cascade" ? "Deleting..." : "Delete folder and tasks"}
+                {deleting === "cascade"
+                  ? "Deleting..."
+                  : "Delete folder and tasks"}
               </Button>
             </>
           )}
