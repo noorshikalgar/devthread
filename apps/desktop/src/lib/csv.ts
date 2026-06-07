@@ -135,11 +135,9 @@ function formatQuickLinksCell(links: TaskQuickLink[] | undefined): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const d = new Date(iso);
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  return `${month} ${d.getUTCDate()} ${d.getUTCFullYear()}`;
 }
 
 function statusLabel(status: Task["status"]): string {

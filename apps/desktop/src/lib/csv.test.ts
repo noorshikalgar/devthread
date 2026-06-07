@@ -128,7 +128,8 @@ describe("formatTaskCsv", () => {
     const [header, row] = out.split("\n");
     expect(header).toBe("Status,Estimate,Worklog,Created,Updated");
     expect(row).not.toContain("2025-01-01T09:00:00Z");
-    expect(row.split(",").length).toBe(5);
+    const fields = row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+    expect(fields.length).toBe(5);
   });
 
   it("quotes and escapes cells containing commas or quotes", () => {
