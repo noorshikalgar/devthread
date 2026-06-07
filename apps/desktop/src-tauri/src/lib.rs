@@ -79,6 +79,22 @@ fn delete_folder(database: tauri::State<'_, Database>, id: String) -> Result<(),
 }
 
 #[tauri::command]
+fn delete_folder_cascade(
+    database: tauri::State<'_, Database>,
+    id: String,
+) -> Result<usize, String> {
+    database.delete_folder_cascade(&id).map_err(to_message)
+}
+
+#[tauri::command]
+fn unassign_folder_tasks(
+    database: tauri::State<'_, Database>,
+    id: String,
+) -> Result<usize, String> {
+    database.unassign_folder_tasks(&id).map_err(to_message)
+}
+
+#[tauri::command]
 fn list_entries(
     database: tauri::State<'_, Database>,
     task_id: String,
@@ -435,6 +451,8 @@ pub fn run() {
             create_folder,
             rename_folder,
             delete_folder,
+            delete_folder_cascade,
+            unassign_folder_tasks,
             list_entries,
             list_worklog_metrics,
             create_entry,

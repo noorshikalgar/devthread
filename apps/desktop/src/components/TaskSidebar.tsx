@@ -4,6 +4,7 @@ import {
   FileSpreadsheet,
   FileText,
   Folder,
+  FolderMinus,
   FolderOpen,
   FolderPlus,
   ListTodo,
@@ -61,6 +62,10 @@ interface Props {
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  onDeleteFolder: (
+    folderId: string,
+    mode: "cascade" | "unassign",
+  ) => Promise<void>;
   newFolderDialogRef?: { current: (() => void) | null };
 }
 
@@ -77,6 +82,7 @@ export function TaskSidebar({
   onRenameFolder,
   onMoveTask,
   onDeleteTask,
+  onDeleteFolder,
   newFolderDialogRef,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -85,6 +91,9 @@ export function TaskSidebar({
     new Set(),
   );
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(
+    null,
+  );
+  const [folderToDelete, setFolderToDelete] = useState<FolderModel | null>(
     null,
   );
 
@@ -310,6 +319,7 @@ export function TaskSidebar({
                 key={folder.id}
                 onCopyFolder={onCopyFolder}
                 onCreate={onCreate}
+                onDeleteFolder={setFolderToDelete}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
                 onRenameFolder={openRenameFolderDialog}
@@ -325,6 +335,7 @@ export function TaskSidebar({
                 folders={folders}
                 onCopyFolder={onCopyFolder}
                 onCreate={onCreate}
+                onDeleteFolder={setFolderToDelete}
                 onMove={handleMove}
                 onDeleteTask={setTaskToDelete}
                 onRenameFolder={openRenameFolderDialog}
@@ -376,6 +387,22 @@ export function TaskSidebar({
         }}
         task={taskToDelete}
       />
+      <DeleteFolderDialog
+        folder={folderToDelete}
+        onConfirm={async (mode) => {
+          if (!folderToDelete) return;
+          await onDeleteFolder(folderToDelete.id, mode);
+          setFolderToDelete(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setFolderToDelete(null);
+        }}
+        taskCount={
+          folderToDelete
+            ? tasks.filter((task) => task.folderId === folderToDelete.id).length
+            : 0
+        }
+      />
     </aside>
   );
 }
@@ -390,6 +417,7 @@ function FolderGroup({
   onCopyFolder,
   onCreate,
   onRenameFolder,
+  onDeleteFolder,
   onToggleFolder,
   onMove,
   onDeleteTask,
@@ -406,6 +434,7 @@ function FolderGroup({
   ) => Promise<void> | void;
   onCreate: (folderId?: string | null) => Promise<void>;
   onRenameFolder: (folder: FolderModel) => void;
+  onDeleteFolder: (folder: FolderModel) => void;
   onToggleFolder: (folderId: string) => void;
   onMove: (taskId: string, folderId: string | null) => Promise<void>;
   onDeleteTask: (task: Task) => void;
@@ -485,6 +514,42 @@ function FolderGroup({
               <Pencil className="size-3.5 text-muted-foreground" />
               Rename folder
             </ContextMenuItem>
+            {tasks.length === 0 ? (
+              <ContextMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => onDeleteFolder(folder)}
+                title="Delete this empty folder"
+              >
+                <Trash2 className="size-3.5" />
+                Delete folder
+              </ContextMenuItem>
+            ) : (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger
+                  title={`Delete folder (${tasks.length} task${tasks.length === 1 ? "" : "s"})`}
+                >
+                  <Trash2 className="size-3.5 text-muted-foreground" />
+                  Delete folder
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-56">
+                  <ContextMenuItem
+                    onSelect={() => onDeleteFolder(folder)}
+                    title="Remove the folder and keep its tasks in the Uncategorized bucket"
+                  >
+                    <FolderMinus className="size-3.5 text-muted-foreground" />
+                    Delete folder only
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => onDeleteFolder(folder)}
+                    title="Permanently delete the folder and all its tasks (and their timelines)"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete folder and tasks
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
           </ContextMenuContent>
         </ContextMenu>
       )}
@@ -637,6 +702,93 @@ function DeleteTaskDialog({
           >
             {deleting ? "Deleting..." : "Delete task"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteFolderDialog({
+  folder,
+  taskCount,
+  onOpenChange,
+  onConfirm,
+}: {
+  folder: FolderModel | null;
+  taskCount: number;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (mode: "cascade" | "unassign") => Promise<void>;
+}) {
+  const [deleting, setDeleting] = useState<"cascade" | "unassign" | null>(null);
+
+  useEffect(() => {
+    if (!folder) setDeleting(null);
+  }, [folder]);
+
+  if (!folder) return null;
+
+  const busy = deleting !== null;
+  const run = (mode: "cascade" | "unassign") => {
+    setDeleting(mode);
+    void onConfirm(mode).finally(() => setDeleting(null));
+  };
+
+  const isEmpty = taskCount === 0;
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete folder?</DialogTitle>
+          <DialogDescription>
+            {isEmpty
+              ? "This folder is empty and can be safely removed."
+              : `This folder contains ${taskCount} task${taskCount === 1 ? "" : "s"}. Choose what should happen to them.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+          {folder.name}
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="ghost"
+          >
+            Cancel
+          </Button>
+          {isEmpty ? (
+            <Button
+              disabled={busy}
+              onClick={() => run("cascade")}
+              type="button"
+              variant="destructive"
+            >
+              <Trash2 className="mr-1.5 size-3.5" />
+              {deleting === "cascade" ? "Deleting..." : "Delete folder"}
+            </Button>
+          ) : (
+            <>
+              <Button
+                disabled={busy}
+                onClick={() => run("unassign")}
+                type="button"
+                variant="outline"
+              >
+                <FolderMinus className="mr-1.5 size-3.5" />
+                {deleting === "unassign" ? "Removing..." : "Delete folder only"}
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => run("cascade")}
+                type="button"
+                variant="destructive"
+              >
+                <Trash2 className="mr-1.5 size-3.5" />
+                {deleting === "cascade" ? "Deleting..." : "Delete folder and tasks"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

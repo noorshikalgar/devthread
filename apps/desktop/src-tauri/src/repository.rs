@@ -570,6 +570,52 @@ impl Database {
         Ok(())
     }
 
+    pub fn delete_folder_cascade(&self, folder_id: &str) -> Result<usize> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        let stamp = now();
+
+        let entries_changed = transaction.execute(
+            "UPDATE work_log_entries SET deleted_at = ?2, updated_at = ?2
+             WHERE deleted_at IS NULL AND task_id IN (
+                SELECT id FROM tasks WHERE folder_id = ?1 AND deleted_at IS NULL
+             )",
+            params![folder_id, stamp],
+        )?;
+
+        let tasks_changed = transaction.execute(
+            "UPDATE tasks SET deleted_at = ?2, updated_at = ?2
+             WHERE folder_id = ?1 AND deleted_at IS NULL",
+            params![folder_id, stamp],
+        )?;
+
+        let folder_changed = transaction.execute(
+            "UPDATE folders SET deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![folder_id, stamp],
+        )?;
+        if folder_changed == 0 {
+            return Err(RepositoryError::NotFound("Folder"));
+        }
+
+        transaction.commit()?;
+        let _ = entries_changed;
+        Ok(tasks_changed)
+    }
+
+    pub fn unassign_folder_tasks(&self, folder_id: &str) -> Result<usize> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        let stamp = now();
+        let changed = transaction.execute(
+            "UPDATE tasks SET folder_id = NULL, updated_at = ?2
+             WHERE folder_id = ?1 AND deleted_at IS NULL",
+            params![folder_id, stamp],
+        )?;
+        transaction.commit()?;
+        Ok(changed)
+    }
+
     pub fn list_entries(
         &self,
         task_id: &str,

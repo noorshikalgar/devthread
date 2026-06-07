@@ -34,6 +34,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -56,6 +57,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={createFolder}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -102,6 +104,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -142,6 +145,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={select}
@@ -193,6 +197,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={renameFolder}
         onSelect={() => undefined}
@@ -231,6 +236,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -259,6 +265,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={vi.fn()}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}
@@ -305,6 +312,7 @@ describe("TaskSidebar", () => {
         onCreateFolder={vi.fn()}
         onCopyFolder={onCopyFolder}
         onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
         onMoveTask={vi.fn()}
         onRenameFolder={vi.fn()}
         onSelect={() => undefined}

@@ -40,6 +40,10 @@ export const api = {
   renameFolder: (id: string, name: string) =>
     invoke<Folder>("rename_folder", { input: { id, name } }),
   deleteFolder: (id: string) => invoke<void>("delete_folder", { id }),
+  deleteFolderCascade: (id: string) =>
+    invoke<number>("delete_folder_cascade", { id }),
+  unassignFolderTasks: (id: string) =>
+    invoke<number>("unassign_folder_tasks", { id }),
   listEntries: (taskId: string, limit = 100, offset = 0) =>
     invoke<WorkLogEntry[]>("list_entries", { taskId, limit, offset }),
   listWorklogMetrics: (startAt: string, endAt: string) =>

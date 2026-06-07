@@ -682,6 +682,31 @@ export default function App() {
     );
   }
 
+  async function deleteFolder(
+    folderId: string,
+    mode: "cascade" | "unassign",
+  ) {
+    if (mode === "cascade") {
+      await api.deleteFolderCascade(folderId);
+      setTasks((current) => current.filter((task) => task.folderId !== folderId));
+    } else {
+      await api.unassignFolderTasks(folderId);
+      await api.deleteFolder(folderId);
+      setTasks((current) =>
+        current.map((task) =>
+          task.folderId === folderId ? { ...task, folderId: null } : task,
+        ),
+      );
+    }
+    setFolders((current) => current.filter((folder) => folder.id !== folderId));
+    if (selectedId) {
+      const remaining = tasks.find((task) => task.id === selectedId);
+      if (!remaining || remaining.folderId === folderId) {
+        setSelectedId(null);
+      }
+    }
+  }
+
   async function copyFolder(
     folder: Folder,
     format: "markdown" | "csv",
@@ -966,6 +991,7 @@ export default function App() {
               onCopyFolder={copyFolder}
               onCreate={createTask}
               onCreateFolder={createFolder}
+              onDeleteFolder={deleteFolder}
               onDeleteTask={deleteTask}
               onMoveTask={moveTask}
               onRenameFolder={renameFolder}
