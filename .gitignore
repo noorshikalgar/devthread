@@ -9,3 +9,7 @@ apps/desktop/src-tauri/gen/
 vite.config.d.ts
 .DS_Store
 *.log
+
+# Tauri updater signing keys (keep OUT of the repo)
+apps/desktop/devthread.key
+apps/desktop/devthread.pub
