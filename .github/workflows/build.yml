@@ -99,15 +99,15 @@ jobs:
           - os: macos-14
             label: macos-arm64
             target: aarch64-apple-darwin
-            binary: devthread
+            binary: DevThread
           - os: windows-latest
             label: windows-x64
             target: x86_64-pc-windows-msvc
-            binary: devthread.exe
+            binary: DevThread.exe
           - os: ubuntu-latest
             label: linux-x64
             target: x86_64-unknown-linux-gnu
-            binary: devthread
+            binary: DevThread
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
