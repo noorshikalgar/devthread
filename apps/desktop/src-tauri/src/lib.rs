@@ -6,6 +6,8 @@ use repository::{
     UpdateQuickLinkInput, UpdateTaskInput,
 };
 use serde::Serialize;
+use std::sync::OnceLock;
+use std::time::Duration;
 use tauri::Manager;
 
 #[derive(Debug, Serialize)]
@@ -204,6 +206,47 @@ fn delete_quick_link(database: tauri::State<'_, Database>, id: String) -> Result
     database.delete_quick_link(&id).map_err(to_message)
 }
 
+const PREVIEW_BODY_LIMIT: usize = 256 * 1024;
+const PREVIEW_TIMEOUT: Duration = Duration::from_secs(5);
+const PREVIEW_USER_AGENT: &str =
+    "Mozilla/5.0 (compatible; DevThread/0.1; +https://devthread.local) link-preview";
+
+fn preview_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(PREVIEW_TIMEOUT)
+            .connect_timeout(Duration::from_secs(3))
+            .user_agent(PREVIEW_USER_AGENT)
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
+async fn read_bounded_body(response: reqwest::Response) -> Result<String, String> {
+    use futures_util::StreamExt;
+
+    let mut stream = response.bytes_stream();
+    let mut buffer: Vec<u8> = Vec::with_capacity(PREVIEW_BODY_LIMIT);
+    let mut truncated = false;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| "Could not read link preview.".to_owned())?;
+        let remaining = PREVIEW_BODY_LIMIT.saturating_sub(buffer.len());
+        if chunk.len() >= remaining {
+            buffer.extend_from_slice(&chunk[..remaining]);
+            truncated = true;
+            break;
+        } else {
+            buffer.extend_from_slice(&chunk);
+        }
+    }
+    if truncated {
+        log::debug!("link preview body truncated at {} bytes", PREVIEW_BODY_LIMIT);
+    }
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
+}
+
 #[tauri::command]
 async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid preview URL.".to_owned())?;
@@ -211,12 +254,8 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
         return Err("Only web links can be previewed.".into());
     }
 
-    let response = reqwest::Client::new()
+    let response = preview_client()
         .get(parsed.clone())
-        .header(
-            reqwest::header::USER_AGENT,
-            "DevThread/0.1 link preview (+https://devthread.local)",
-        )
         .send()
         .await
         .map_err(|_| "Could not load link preview.".to_owned())?;
@@ -226,10 +265,7 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     }
 
     let final_url = response.url().clone();
-    let html = response
-        .text()
-        .await
-        .map_err(|_| "Could not read link preview.".to_owned())?;
+    let html = read_bounded_body(response).await?;
 
     let title = meta_content(&html, "property", "og:title")
         .or_else(|| meta_content(&html, "name", "twitter:title"))

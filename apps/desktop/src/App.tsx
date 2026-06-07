@@ -154,6 +154,10 @@ export default function App() {
   const [entries, setEntries] = useState<WorkLogEntry[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [quickLinks, setQuickLinks] = useState<TaskQuickLink[]>([]);
+  const quickLinksRef = useRef<TaskQuickLink[]>([]);
+  useEffect(() => {
+    quickLinksRef.current = quickLinks;
+  }, [quickLinks]);
 
   const totalMinutes = useMemo(
     () =>
@@ -507,50 +511,77 @@ export default function App() {
     }
   }
 
-  async function resolveQuickLinkDraft(url: string) {
-    const normalized = quickLinkDraftFromUrl(url);
-    if (!normalized) {
-      throw new Error("Paste a valid web URL.");
-    }
-
-    let draft = normalized;
+  async function enrichQuickLinkInBackground(
+    taskId: string,
+    linkId: string,
+    url: string,
+  ) {
     try {
-      const metadata = await api.fetchLinkPreview(normalized.url);
-      draft = quickLinkDraftFromUrl(normalized.url, metadata) ?? normalized;
-    } catch {
-      draft = normalized;
+      const metadata = await api.fetchLinkPreview(url);
+      const enriched = quickLinkDraftFromUrl(url, metadata);
+      if (!enriched) return;
+      const current = quickLinksRef.current.find((link) => link.id === linkId);
+      if (!current) return;
+      if (
+        current.title === enriched.title &&
+        current.domain === enriched.domain &&
+        current.provider === enriched.provider
+      ) {
+        return;
+      }
+      const saved = await api.updateQuickLink(
+        linkId,
+        enriched.url,
+        enriched.title,
+        enriched.domain,
+        enriched.provider,
+      );
+      if (selectedId !== taskId) return;
+      setQuickLinks((existing) =>
+        existing.map((link) => (link.id === saved.id ? saved : link)),
+      );
+    } catch (cause) {
+      console.warn("quick link preview enrichment failed", cause);
     }
-    return draft;
   }
 
   async function createQuickLink(url: string) {
     if (!selectedId) return;
-    const draft = await resolveQuickLinkDraft(url);
+    const normalized = quickLinkDraftFromUrl(url);
+    if (!normalized) {
+      throw new Error("Paste a valid web URL.");
+    }
     const saved = await api.createQuickLink(
       selectedId,
-      draft.url,
-      draft.title,
-      draft.domain,
-      draft.provider,
+      normalized.url,
+      normalized.title,
+      normalized.domain,
+      normalized.provider,
     );
     setQuickLinks((current) => {
       const withoutDuplicate = current.filter((link) => link.id !== saved.id);
       return [...withoutDuplicate, saved].slice(0, 3);
     });
+    void enrichQuickLinkInBackground(selectedId, saved.id, saved.url);
   }
 
   async function updateQuickLink(id: string, url: string) {
-    const draft = await resolveQuickLinkDraft(url);
+    const normalized = quickLinkDraftFromUrl(url);
+    if (!normalized) {
+      throw new Error("Paste a valid web URL.");
+    }
     const saved = await api.updateQuickLink(
       id,
-      draft.url,
-      draft.title,
-      draft.domain,
-      draft.provider,
+      normalized.url,
+      normalized.title,
+      normalized.domain,
+      normalized.provider,
     );
     setQuickLinks((current) =>
       current.map((link) => (link.id === saved.id ? saved : link)),
     );
+    const taskId = saved.taskId;
+    void enrichQuickLinkInBackground(taskId, saved.id, saved.url);
   }
 
   async function deleteQuickLink(id: string) {
