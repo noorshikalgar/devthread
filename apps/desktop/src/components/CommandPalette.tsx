@@ -175,6 +175,10 @@ export function CommandPalette({
           <Search className="size-3.5 text-muted-foreground" />
           <Input
             aria-label="Search tasks, folders, or updates"
+            autoCapitalize="off"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
             onChange={(event) => {
               setQuery(event.target.value);

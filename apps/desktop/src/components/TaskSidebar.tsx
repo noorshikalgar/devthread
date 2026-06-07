@@ -61,6 +61,7 @@ interface Props {
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  newFolderDialogRef?: { current: (() => void) | null };
 }
 
 const UNCATEGORIZED = "__ungrouped__";
@@ -76,6 +77,7 @@ export function TaskSidebar({
   onRenameFolder,
   onMoveTask,
   onDeleteTask,
+  newFolderDialogRef,
 }: Props) {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
@@ -85,6 +87,15 @@ export function TaskSidebar({
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(
     null,
   );
+
+  useEffect(() => {
+    if (!newFolderDialogRef) return;
+    newFolderDialogRef.current = openCreateFolderDialog;
+    return () => {
+      newFolderDialogRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newFolderDialogRef]);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [openActiveTasks, setOpenActiveTasks] = useState(true);
 
@@ -674,7 +685,7 @@ function TaskRow({
           />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden">
             <EllipsisTooltip
-              className="w-full truncate text-[13px] font-medium text-foreground"
+              className="w-full truncate text-[13px] font-medium text-foreground select-text"
               text={task.title}
             />
             <span className="flex min-w-0 items-center text-[10px] text-muted-foreground">

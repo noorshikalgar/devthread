@@ -14,6 +14,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -58,6 +59,7 @@ interface Props {
     visibility: Visibility,
     images: PendingImage[],
   ) => Promise<void>;
+  visibilityToggleRef?: { current: (() => void) | null };
 }
 
 interface MentionOption {
@@ -120,12 +122,21 @@ function optionMatchesQuery(option: MentionOption, query: string): boolean {
   return option.aliases.some((alias) => alias.startsWith(normalized));
 }
 
-export function Composer({ taskId, onSubmit }: Props) {
+export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
   const [content, setContent] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("note");
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!visibilityToggleRef) return;
+    visibilityToggleRef.current = () =>
+      setVisibility((v) => (v === "private" ? "report" : "private"));
+    return () => {
+      visibilityToggleRef.current = null;
+    };
+  }, [visibilityToggleRef]);
   const [images, setImages] = useState<PendingImage[]>([]);
   const [focused, setFocused] = useState(false);
   const [mention, setMention] = useState({
@@ -134,6 +145,10 @@ export function Composer({ taskId, onSubmit }: Props) {
     anchor: 0,
   });
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionPos, setMentionPos] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const mentionList = useRef<HTMLDivElement>(null);
@@ -147,11 +162,66 @@ export function Composer({ taskId, onSubmit }: Props) {
     [mention.query],
   );
 
+  useLayoutEffect(() => {
+    if (!mention.active || !textarea.current) {
+      setMentionPos(null);
+      return;
+    }
+    const ta = textarea.current;
+    const taRect = ta.getBoundingClientRect();
+    const div = document.createElement("div");
+    const style = window.getComputedStyle(ta);
+    for (const prop of [
+      "boxSizing",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "fontStyle",
+      "fontVariant",
+      "fontWeight",
+      "fontStretch",
+      "fontSize",
+      "lineHeight",
+      "fontFamily",
+      "textAlign",
+      "letterSpacing",
+      "wordSpacing",
+      "tabSize",
+    ] as const) {
+      div.style[prop] = style[prop];
+    }
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.whiteSpace = "pre-wrap";
+    div.style.wordWrap = "break-word";
+    div.style.overflowWrap = "break-word";
+    div.style.width = `${ta.clientWidth}px`;
+    div.style.top = `${taRect.top}px`;
+    div.style.left = `${taRect.left}px`;
+    div.textContent = ta.value.substring(0, mention.anchor);
+    const marker = document.createElement("span");
+    marker.textContent = "@";
+    div.appendChild(marker);
+    document.body.appendChild(div);
+    const markerRect = marker.getBoundingClientRect();
+    document.body.removeChild(div);
+    let lineHeight = parseFloat(style.lineHeight);
+    if (!lineHeight) {
+      lineHeight = parseFloat(style.fontSize) * 1.5;
+    }
+    setMentionPos({
+      left: markerRect.left - taRect.left,
+      top: markerRect.top - taRect.top + lineHeight - ta.scrollTop,
+    });
+  }, [mention.active, mention.anchor, content]);
+
   useEffect(() => {
     setContent(localStorage.getItem(draftKey(taskId)) ?? "");
     setImages([]);
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
+    requestAnimationFrame(() => textarea.current?.focus());
   }, [taskId]);
 
   useEffect(() => {
@@ -327,12 +397,13 @@ export function Composer({ taskId, onSubmit }: Props) {
               rows={3}
               value={content}
             />
-            {mention.active && filteredOptions.length > 0 && (
+            {mention.active && filteredOptions.length > 0 && mentionPos && (
               <div
                 aria-label="Entry type suggestions"
-                className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+                className="absolute z-20 mt-1 w-64 max-h-44 overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
                 ref={mentionList}
                 role="listbox"
+                style={{ left: mentionPos.left, top: mentionPos.top }}
               >
                 {filteredOptions.map((option, index) => {
                   const active = index === mentionIndex;
@@ -341,7 +412,7 @@ export function Composer({ taskId, onSubmit }: Props) {
                     <button
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-xs",
+                        "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-xs",
                         active
                           ? "bg-accent text-accent-foreground"
                           : "hover:bg-accent/60",
@@ -356,16 +427,11 @@ export function Composer({ taskId, onSubmit }: Props) {
                       role="option"
                       type="button"
                     >
-                      <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="font-medium text-foreground">
-                          {option.label}
-                        </span>
-                        <span className="truncate text-[10px] text-muted-foreground">
-                          {option.hint}
-                        </span>
+                      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {option.label}
                       </span>
-                      <span className="font-mono text-[10px] text-muted-foreground">
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                         @{option.aliases[0]}
                       </span>
                     </button>

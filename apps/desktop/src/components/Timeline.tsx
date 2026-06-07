@@ -420,7 +420,7 @@ function TimelineEntry({
           <>
             <div
               className={cn(
-                "markdown",
+                "markdown select-text",
                 long && !expanded && "markdown--collapsed",
               )}
             >

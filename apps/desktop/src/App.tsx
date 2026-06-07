@@ -27,6 +27,7 @@ import {
   type Update,
 } from "@tauri-apps/plugin-updater";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -87,9 +88,9 @@ import {
   type SummaryFieldKey,
   type SummaryTemplate,
 } from "@/lib/summaryTemplate";
-import { formatTaskSummary } from "@/lib/taskSummary";
+import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary, type FolderSummaryTask } from "@/lib/folderSummary";
-import { copyFolderCsv } from "@/lib/csv";
+import { copyFolderCsv, copyTaskCsv } from "@/lib/csv";
 import {
   type Attachment,
   type EntryType,
@@ -173,6 +174,11 @@ export default function App() {
   const [timelineRegex, setTimelineRegex] = useState(false);
   const [timelineCompact, setTimelineCompact] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [taskStatusOpen, setTaskStatusOpen] = useState(false);
+  const [taskLogTimeOpen, setTaskLogTimeOpen] = useState(false);
+  const composerVisibilityToggleRef = useRef<(() => void) | null>(null);
+  const newFolderDialogRef = useRef<(() => void) | null>(null);
+  const timelineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>(() =>
     loadSummaryTemplate(),
   );
@@ -191,6 +197,7 @@ export default function App() {
     [],
   );
   const [worklogLoading, setWorklogLoading] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
   );
@@ -284,6 +291,12 @@ export default function App() {
       window.removeEventListener("scroll", close, true);
     };
   }, []);
+
+  useEffect(() => {
+    setTimelineSearch("");
+    setTimelineRegex(false);
+    setEntryTypeFilter("all");
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -812,8 +825,63 @@ export default function App() {
     [tasks],
   );
 
+  useShortcuts({
+    isTaskOpen: !!selectedTask,
+    onTogglePalette: () => setPaletteOpen((o) => !o),
+    onToggleSettings: () => setSettingsOpen((o) => !o),
+    onNewTask: () => void createTask(),
+    onNewFolder: () => newFolderDialogRef.current?.(),
+    onToggleSidebar: () => setSidebarOpen((o) => !o),
+    onToggleArchive: () =>
+      setWorkspaceMode((m) => (m === "archive" ? "tasks" : "archive")),
+    onOpenWorklog: () => setWorkspaceMode("worklog"),
+    onEditTitle: () => {
+      if (selectedTask) setPendingTitleEdit(true);
+    },
+    onOpenLogTime: () => {
+      if (selectedTask) setTaskLogTimeOpen(true);
+    },
+    onCopyMarkdown: () => {
+      if (selectedTask) void copyTaskSummary(selectedTask, { totalMinutes });
+    },
+    onCopyCsv: () => {
+      if (selectedTask) void copyTaskCsv(selectedTask, { totalMinutes });
+    },
+    onArchiveToggle: () => {
+      if (!selectedTask) return;
+      const next = selectedTask.status === "archived" ? "planned" : "archived";
+      void updateTaskStatus(selectedTask, next);
+    },
+    onDeleteTask: () => {
+      if (selectedTask) setTaskToDelete(selectedTask);
+    },
+    onToggleComposerVisibility: () => composerVisibilityToggleRef.current?.(),
+    onFocusSearch: () => {
+      timelineSearchInputRef.current?.focus();
+      timelineSearchInputRef.current?.select();
+    },
+    onNextTask: () => {
+      const list = workspaceMode === "archive" ? archivedTasks : sidebarTasks;
+      if (!list.length) return;
+      const currentIndex = selectedId
+        ? list.findIndex((t) => t.id === selectedId)
+        : -1;
+      const next = list[(currentIndex + 1) % list.length];
+      setSelectedId(next.id);
+    },
+    onPrevTask: () => {
+      const list = workspaceMode === "archive" ? archivedTasks : sidebarTasks;
+      if (!list.length) return;
+      const currentIndex = selectedId
+        ? list.findIndex((t) => t.id === selectedId)
+        : -1;
+      const prev = list[(currentIndex - 1 + list.length) % list.length];
+      setSelectedId(prev.id);
+    },
+  });
+
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
+    <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground select-none">
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
@@ -848,9 +916,10 @@ export default function App() {
             width: workspaceMode === "tasks" && sidebarOpen ? sidebarWidth : 0,
           }}
         >
-          <div className="h-full" style={{ width: sidebarWidth }}>
+          <div className="h-full select-none" style={{ width: sidebarWidth }}>
             <TaskSidebar
               folders={folders}
+              newFolderDialogRef={newFolderDialogRef}
               onCopyFolder={copyFolder}
               onCreate={createTask}
               onCreateFolder={createFolder}
@@ -879,7 +948,7 @@ export default function App() {
           )}
         </div>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className="flex min-h-0 min-w-0 flex-1 select-none flex-col">
           {error && (
             <Alert
               className="m-4 flex items-start gap-3 border-destructive/30 bg-destructive/5"
@@ -914,9 +983,11 @@ export default function App() {
               <TaskHeader
                 key={selectedTask.id}
                 compactTimeline={timelineCompact}
+                logTimeOpen={taskLogTimeOpen}
                 onCreateQuickLink={createQuickLink}
                 onDelete={deleteTask}
                 onDeleteQuickLink={deleteQuickLink}
+                onLogTimeOpenChange={setTaskLogTimeOpen}
                 onUpdateQuickLink={updateQuickLink}
                 onCompactTimelineChange={setTimelineCompact}
                 onLogTime={logTime}
@@ -927,9 +998,11 @@ export default function App() {
                 onStatusChange={(status) =>
                   updateTaskStatus(selectedTask, status)
                 }
+                onStatusOpenChange={setTaskStatusOpen}
                 onUpdate={updateTask}
                 pendingTitleEdit={pendingTitleEdit}
                 quickLinks={quickLinks}
+                statusOpen={taskStatusOpen}
                 task={selectedTask}
                 totalMinutes={totalMinutes}
               />
@@ -941,8 +1014,13 @@ export default function App() {
                   onSearchChange={setTimelineSearch}
                   regex={timelineRegex}
                   search={timelineSearch}
+                  searchInputRef={timelineSearchInputRef}
                 >
-                  <Composer onSubmit={createEntry} taskId={selectedTask.id} />
+                  <Composer
+                    onSubmit={createEntry}
+                    taskId={selectedTask.id}
+                    visibilityToggleRef={composerVisibilityToggleRef}
+                  />
                   <Timeline
                     attachments={attachments}
                     compact={timelineCompact}
@@ -1026,7 +1104,7 @@ function AppRail({
   worklogActive: boolean;
 }) {
   return (
-    <aside className="flex h-full w-12 shrink-0 flex-col items-center border-r border-border bg-card py-3 text-card-foreground">
+    <aside className="flex h-full w-12 shrink-0 select-none flex-col items-center border-r border-border bg-card py-3 text-card-foreground">
       <RailButton
         active={tasksActive}
         icon={ListTodo}
@@ -1842,7 +1920,7 @@ function StatusBar({
   selectedTask: Task | null;
 }) {
   return (
-    <footer className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-card px-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <footer className="flex h-6 shrink-0 select-none items-center justify-between border-t border-border bg-card px-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
       <div className="flex min-w-0 items-center gap-3">
         <span className="text-foreground/80">Local-first</span>
         <span>v0.1.0</span>
@@ -2452,6 +2530,7 @@ function ThreadColumn({
   onRegexChange,
   entryTypeFilter,
   onEntryTypeFilterChange,
+  searchInputRef,
 }: {
   children: React.ReactNode;
   search: string;
@@ -2460,6 +2539,7 @@ function ThreadColumn({
   onRegexChange: (value: boolean) => void;
   entryTypeFilter: EntryType | "all";
   onEntryTypeFilterChange: (value: EntryType | "all") => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
@@ -2486,6 +2566,10 @@ function ThreadColumn({
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search timeline"
+            autoCapitalize="off"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             aria-invalid={regexInvalid}
             className={cn(
               "h-8 rounded-md pl-7 text-xs",
@@ -2495,6 +2579,7 @@ function ThreadColumn({
             )}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search timeline…"
+            ref={searchInputRef}
             value={search}
           />
           <Button

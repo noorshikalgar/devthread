@@ -78,6 +78,10 @@ interface Props {
   quickLinks?: TaskQuickLink[];
   compactTimeline?: boolean;
   pendingTitleEdit?: boolean;
+  statusOpen?: boolean;
+  onStatusOpenChange?: (open: boolean) => void;
+  logTimeOpen?: boolean;
+  onLogTimeOpenChange?: (open: boolean) => void;
   onLogTime: (input: LogTimeInput) => Promise<void>;
   onCompactTimelineChange?: (compact: boolean) => void;
   onCreateQuickLink?: (url: string) => Promise<void>;
@@ -98,6 +102,10 @@ export function TaskHeader({
   quickLinks = [],
   compactTimeline = false,
   pendingTitleEdit,
+  statusOpen: statusOpenProp,
+  onStatusOpenChange,
+  logTimeOpen: logTimeOpenProp,
+  onLogTimeOpenChange,
   onLogTime,
   onCompactTimelineChange,
   onCreateQuickLink,
@@ -113,8 +121,12 @@ export function TaskHeader({
   const [titleState, setTitleState] = useState<"idle" | "saving" | "error">(
     "idle",
   );
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [logTimeOpen, setLogTimeOpen] = useState(false);
+  const [statusOpenInternal, setStatusOpenInternal] = useState(false);
+  const [logTimeOpenInternal, setLogTimeOpenInternal] = useState(false);
+  const statusOpen = statusOpenProp ?? statusOpenInternal;
+  const logTimeOpen = logTimeOpenProp ?? logTimeOpenInternal;
+  const setStatusOpen = onStatusOpenChange ?? setStatusOpenInternal;
+  const setLogTimeOpen = onLogTimeOpenChange ?? setLogTimeOpenInternal;
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -122,16 +134,17 @@ export function TaskHeader({
     useState<TaskQuickLink | null>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const titleInputMounted = useRef(false);
+  const consumePendingTitleEditRef = useRef(onPendingTitleEditConsumed);
+  consumePendingTitleEditRef.current = onPendingTitleEditConsumed;
 
   useEffect(() => {
     if (pendingTitleEdit) {
       setTitleDraft(task.title);
-      onPendingTitleEditConsumed?.();
     } else {
       setTitleDraft(null);
     }
     setTitleState("idle");
-  }, [task.id, pendingTitleEdit, onPendingTitleEditConsumed, task.title]);
+  }, [task.id, pendingTitleEdit, task.title]);
 
   useEffect(() => {
     if (titleDraft === null) {
@@ -148,6 +161,7 @@ export function TaskHeader({
     if (titleDraft === null) return;
     const normalized = titleDraft.trim();
     setTitleDraft(null);
+    consumePendingTitleEditRef.current?.();
     if (!normalized || normalized === task.title) return;
     setTitleState("saving");
     try {
@@ -160,6 +174,7 @@ export function TaskHeader({
 
   function cancelTitle() {
     setTitleDraft(null);
+    consumePendingTitleEditRef.current?.();
   }
 
   function titleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
