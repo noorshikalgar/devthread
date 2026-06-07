@@ -45,7 +45,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgQjNCMTI2RDU2ODk1NTcxRgpSV1FmVjVWbzFTYXhzMGRWcGxESlY3Zk1JbmJnTFc3aXkvTVE4SVcxTGYvNzN1OUJxTnpJQ0d1Lwo=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgQUNCMkVFM0Q3QTFDMDk2NwpSV1JuQ1J4NlBlNnlyS1ZXdEdiRVQrK3VFMzhWTll5UDZRMnNJb2tpdmEwSENnUEdCaHZydFJPeAo=",
       "endpoints": [
         "https://github.com/noorshikalgar/devthread/releases/latest/download/latest.json"
       ],
