@@ -110,8 +110,16 @@ import { cn } from "@/lib/utils";
 const SELECTED_TASK_KEY = "devthread:selected-task";
 const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
 const THEME_KEY = "devthread:theme";
+const UPDATE_AUTO_CHECK_KEY = "devthread:update-auto-check";
+const UPDATE_CHECK_INTERVAL_KEY = "devthread:update-check-interval";
+const UPDATE_LAST_CHECK_KEY = "devthread:update-last-check";
 const DEFAULT_TASK_TITLE = "Untitled task";
 const PAGE_SIZE = 100;
+const UPDATE_INTERVAL_OPTIONS = [
+  { value: "12h", label: "Every 12 hours", ms: 12 * 60 * 60 * 1000 },
+  { value: "24h", label: "Every 24 hours", ms: 24 * 60 * 60 * 1000 },
+] as const;
+type UpdateInterval = (typeof UPDATE_INTERVAL_OPTIONS)[number]["value"];
 const DEFAULT_SIDEBAR_WIDTH = 280;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
@@ -193,6 +201,17 @@ export default function App() {
     "Check GitHub Releases when you want. Updates never run automatically.",
   );
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [updateAutoCheck, setUpdateAutoCheck] = useState<boolean>(
+    () => localStorage.getItem(UPDATE_AUTO_CHECK_KEY) === "true",
+  );
+  const [updateInterval, setUpdateInterval] = useState<UpdateInterval>(() => {
+    const stored = localStorage.getItem(UPDATE_CHECK_INTERVAL_KEY);
+    return stored === "12h" ? "12h" : "24h";
+  });
+  const [updateLastCheck, setUpdateLastCheck] = useState<number | null>(() => {
+    const stored = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
+    return stored ? Number(stored) : null;
+  });
   const [worklogRange, setWorklogRange] = useState<WorklogRange>("12w");
   const [worklogMetrics, setWorklogMetrics] = useState<WorklogMetricEntry[]>(
     [],
@@ -218,8 +237,28 @@ export default function App() {
   useEffect(() => {
     void loadTasks();
     void loadFolders();
-    void checkForUpdates({ quiet: true });
   }, []);
+
+  useEffect(() => {
+    if (!updateAutoCheck) return;
+    const intervalMs =
+      UPDATE_INTERVAL_OPTIONS.find((option) => option.value === updateInterval)
+        ?.ms ?? 24 * 60 * 60 * 1000;
+    const lastCheck = updateLastCheck ?? 0;
+    if (Date.now() - lastCheck < intervalMs) return;
+    void checkForUpdates({ quiet: true });
+    // Intentionally run only on mount — next scheduled check is on the
+    // next app launch (or triggered manually from Settings).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(UPDATE_AUTO_CHECK_KEY, String(updateAutoCheck));
+  }, [updateAutoCheck]);
+
+  useEffect(() => {
+    localStorage.setItem(UPDATE_CHECK_INTERVAL_KEY, updateInterval);
+  }, [updateInterval]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -712,6 +751,9 @@ export default function App() {
     setDownloadProgress(0);
     try {
       const next = await check({ timeout: 30_000 });
+      const now = Date.now();
+      setUpdateLastCheck(now);
+      localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(now));
       if (!next) {
         setUpdate(null);
         setUpdateState("none");
@@ -1068,11 +1110,16 @@ export default function App() {
         }}
         onSummaryOrderChange={setSummaryOrder}
         onThemeChange={setTheme}
+        onUpdateAutoCheckChange={setUpdateAutoCheck}
+        onUpdateIntervalChange={setUpdateInterval}
         open={settingsOpen}
         summaryOrder={summaryOrder}
         summaryTemplate={summaryTemplate}
         theme={theme}
         update={update}
+        updateAutoCheck={updateAutoCheck}
+        updateInterval={updateInterval}
+        updateLastCheck={updateLastCheck}
         updateMessage={updateMessage}
         updateState={updateState}
       />
@@ -2222,6 +2269,9 @@ function SettingsDialog({
   summaryTemplate,
   theme,
   update,
+  updateAutoCheck,
+  updateInterval,
+  updateLastCheck,
   updateMessage,
   updateState,
   onCheckForUpdates,
@@ -2232,6 +2282,8 @@ function SettingsDialog({
   onSummaryTemplateChange,
   onSummaryTemplateReset,
   onThemeChange,
+  onUpdateAutoCheckChange,
+  onUpdateIntervalChange,
 }: {
   appVersion: string;
   downloadProgress: number;
@@ -2240,6 +2292,9 @@ function SettingsDialog({
   summaryTemplate: SummaryTemplate;
   theme: AppThemeId;
   update: Update | null;
+  updateAutoCheck: boolean;
+  updateInterval: UpdateInterval;
+  updateLastCheck: number | null;
   updateMessage: string;
   updateState: UpdateState;
   onCheckForUpdates: () => Promise<void>;
@@ -2250,10 +2305,12 @@ function SettingsDialog({
   onSummaryTemplateChange: (template: SummaryTemplate) => void;
   onSummaryTemplateReset: () => void;
   onThemeChange: (theme: AppThemeId) => void;
+  onUpdateAutoCheckChange: (enabled: boolean) => void;
+  onUpdateIntervalChange: (interval: UpdateInterval) => void;
 }) {
-  const [tab, setTab] = useState<"general" | "summary" | "shortcuts" | "about">(
-    "general",
-  );
+  const [tab, setTab] = useState<
+    "general" | "summary" | "shortcuts" | "updates" | "about"
+  >("general");
   const busy = updateState === "checking" || updateState === "downloading";
 
   return (
@@ -2278,9 +2335,14 @@ function SettingsDialog({
               onClick={() => setTab("shortcuts")}
             />
             <SettingsTabButton
+              active={tab === "updates"}
+              label="Updates"
+              marker={updateState === "available"}
+              onClick={() => setTab("updates")}
+            />
+            <SettingsTabButton
               active={tab === "about"}
               label="About"
-              marker={updateState === "available"}
               onClick={() => setTab("about")}
             />
           </div>
@@ -2358,6 +2420,123 @@ function SettingsDialog({
             />
           ) : tab === "shortcuts" ? (
             <ShortcutsTab />
+          ) : tab === "updates" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Updates</DialogTitle>
+                <DialogDescription>
+                  Optional signed releases from GitHub. You decide when to
+                  install and restart.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-6 space-y-4">
+                <div className="rounded-md border border-border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <h3 className="text-sm font-medium">Automatic checks</h3>
+                      <p className="max-w-md text-xs leading-5 text-muted-foreground">
+                        Periodically contact GitHub for a new release. Nothing
+                        downloads or installs without your approval.
+                      </p>
+                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-xs">
+                      <input
+                        checked={updateAutoCheck}
+                        onChange={(event) =>
+                          onUpdateAutoCheckChange(event.target.checked)
+                        }
+                        type="checkbox"
+                      />
+                      <span>{updateAutoCheck ? "Enabled" : "Disabled"}</span>
+                    </label>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>Check every</span>
+                    <Select
+                      disabled={!updateAutoCheck}
+                      onValueChange={(value) => {
+                        if (value === "12h" || value === "24h") {
+                          onUpdateIntervalChange(value);
+                        }
+                      }}
+                      value={updateInterval}
+                    >
+                      <SelectTrigger className="h-7 w-[140px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {UPDATE_INTERVAL_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                      {formatLastCheck(updateLastCheck)}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-card p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <h3 className="text-sm font-medium">Current status</h3>
+                      <p
+                        className={cn(
+                          "max-w-md text-xs leading-5",
+                          updateState === "error"
+                            ? "text-destructive"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {updateMessage}
+                      </p>
+                    </div>
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        if (updateState === "available") {
+                          void onInstallUpdate();
+                        } else if (updateState === "installed") {
+                          void onRestart();
+                        } else {
+                          void onCheckForUpdates();
+                        }
+                      }}
+                      size="sm"
+                      type="button"
+                      variant={
+                        updateState === "available" ? "default" : "outline"
+                      }
+                    >
+                      {updateState === "checking" && (
+                        <RefreshCw className="size-3.5 animate-spin" />
+                      )}
+                      {updateState === "available" && (
+                        <Download className="size-3.5" />
+                      )}
+                      {updateState === "installed" && (
+                        <RotateCcw className="size-3.5" />
+                      )}
+                      {updateActionLabel(updateState, update?.version)}
+                    </Button>
+                  </div>
+                  {update?.body && updateState === "available" && (
+                    <p className="mt-4 line-clamp-6 whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground">
+                      {update.body}
+                    </p>
+                  )}
+                  {updateState === "downloading" && (
+                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${downloadProgress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
           ) : (
             <>
               <DialogHeader>
@@ -2383,61 +2562,6 @@ function SettingsDialog({
                     workspace data.
                   </p>
                 </div>
-              </div>
-              <div className="mt-8 rounded-md border border-border bg-card p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <h3 className="text-sm font-medium">Updates</h3>
-                    <p className="max-w-md text-xs leading-5 text-muted-foreground">
-                      Optional signed releases from GitHub. You decide when to
-                      install and restart.
-                    </p>
-                  </div>
-                  <Button
-                    disabled={busy}
-                    onClick={() => {
-                      if (updateState === "available") {
-                        void onInstallUpdate();
-                      } else if (updateState === "installed") {
-                        void onRestart();
-                      } else {
-                        void onCheckForUpdates();
-                      }
-                    }}
-                    size="sm"
-                    type="button"
-                    variant={
-                      updateState === "available" ? "default" : "outline"
-                    }
-                  >
-                    {updateState === "checking" && (
-                      <RefreshCw className="size-3.5 animate-spin" />
-                    )}
-                    {updateState === "available" && (
-                      <Download className="size-3.5" />
-                    )}
-                    {updateState === "installed" && (
-                      <RotateCcw className="size-3.5" />
-                    )}
-                    {updateActionLabel(updateState, update?.version)}
-                  </Button>
-                </div>
-                <p className="mt-4 text-xs leading-5 text-muted-foreground">
-                  {updateMessage}
-                </p>
-                {update?.body && updateState === "available" && (
-                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground">
-                    {update.body}
-                  </p>
-                )}
-                {updateState === "downloading" && (
-                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width]"
-                      style={{ width: `${downloadProgress}%` }}
-                    />
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -2485,6 +2609,19 @@ function updateActionLabel(state: UpdateState, version?: string) {
   if (state === "installed") return "Restart DevThread";
   if (state === "error") return "Check again";
   return "Check for updates";
+}
+
+function formatLastCheck(timestamp: number | null): string {
+  if (timestamp === null) return "Never checked";
+  const date = new Date(timestamp);
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "Checked just now";
+  if (minutes < 60) return `Checked ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Checked ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `Checked ${days}d ago`;
 }
 
 function estimateChangeMessage(previous: number | null, next: number | null) {
