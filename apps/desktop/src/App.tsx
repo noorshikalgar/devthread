@@ -36,6 +36,7 @@ import { Composer } from "@/components/Composer";
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline } from "@/components/Timeline";
+import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -2250,7 +2251,9 @@ function SettingsDialog({
   onSummaryTemplateReset: () => void;
   onThemeChange: (theme: AppThemeId) => void;
 }) {
-  const [tab, setTab] = useState<"general" | "summary" | "about">("general");
+  const [tab, setTab] = useState<"general" | "summary" | "shortcuts" | "about">(
+    "general",
+  );
   const busy = updateState === "checking" || updateState === "downloading";
 
   return (
@@ -2268,6 +2271,11 @@ function SettingsDialog({
               active={tab === "summary"}
               label="Summary"
               onClick={() => setTab("summary")}
+            />
+            <SettingsTabButton
+              active={tab === "shortcuts"}
+              label="Shortcuts"
+              onClick={() => setTab("shortcuts")}
             />
             <SettingsTabButton
               active={tab === "about"}
@@ -2348,6 +2356,8 @@ function SettingsDialog({
               order={summaryOrder}
               template={summaryTemplate}
             />
+          ) : tab === "shortcuts" ? (
+            <ShortcutsTab />
           ) : (
             <>
               <DialogHeader>
