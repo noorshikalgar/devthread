@@ -8,6 +8,7 @@ import { APP_THEMES } from "./themes";
 
 const PROJECT_ROOT = join(__dirname, "..", "..");
 const DIST_DIR = join(PROJECT_ROOT, "dist");
+const VITE_BIN = join(PROJECT_ROOT, "node_modules", "vite", "bin", "vite.js");
 const SCAN_PATTERN = /\.theme-[a-z-]+/g;
 
 describe("theme CSS pipeline", () => {
@@ -21,7 +22,7 @@ describe("theme CSS pipeline", () => {
     "emits a CSS rule for every registered theme id",
     { timeout: 20_000 },
     () => {
-      execFileSync("pnpm", ["exec", "vite", "build", "--logLevel", "error"], {
+      execFileSync("node", [VITE_BIN, "build", "--logLevel", "error"], {
         cwd: PROJECT_ROOT,
         stdio: "pipe",
       });
