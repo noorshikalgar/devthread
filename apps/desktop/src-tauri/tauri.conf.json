@@ -43,15 +43,8 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRCMEJBM0Y3QTFDQThFREYKUldUZmpzcWg5Nk1MUzd4OUxUSEt2ejlWZ0pmMGYrdUJ0bE84MmRMV1Y2NzRnaUVDcE9UMkxFVDEK",
-      "endpoints": [
-        "https://github.com/noorshikalgar/devthread/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
+  "plugins": {}
+}
     }
   }
 }

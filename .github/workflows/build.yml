@@ -145,9 +145,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter @devthread/desktop tauri build --target ${{ matrix.target }}
 
       - name: Upload raw binary
@@ -218,12 +215,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build and publish signed release assets
+      - name: Build and publish release assets
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
           generateReleaseNotes: true
@@ -232,4 +227,3 @@ jobs:
           releaseName: DevThread ${{ github.ref_name }}
           tagName: ${{ github.ref_name }}
           tauriScript: pnpm tauri
-          uploadUpdaterJson: true
