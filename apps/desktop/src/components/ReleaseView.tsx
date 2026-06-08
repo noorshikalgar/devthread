@@ -1172,10 +1172,6 @@ export function ReleaseView({
                             spellCheck={false}
                             value={templateDraft}
                           />
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            Markdown with placeholders. Use the help icon for
-                            the full template syntax.
-                          </p>
                         </div>
                       )}
 
