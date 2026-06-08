@@ -54,12 +54,13 @@ describe("WorklogHeatmap", () => {
     );
   });
 
-  it("renders visibly different alpha for cells of different intensities", () => {
-    // Regression test: an earlier ladder had 0.85 / 1.0 alphas
-    // for the 2h and 4h+ buckets — a 15% gap that was visually
-    // identical on saturated dark-theme accents. The new ladder
-    // is 0.7 / 0.9 / 1.0, with a 1.5px vs 2.5px vs 1px hatch
-    // difference too.
+  it("routes 2h and 6h into different intensity buckets (different hatch stripe widths)", () => {
+    // Regression test: an earlier ladder routed both 2h and 6h
+    // to the >= 240 bucket, so the cells looked identical. The
+    // new ladder uses 5 buckets with visibly different stripe
+    // widths (8 / 4 / 2.5 / 1.5 / 1px) — measurable even when
+    // getComputedStyle returns null in the jsdom environment
+    // (so the colour fall back is the same for both cells).
     render(
       <WorklogHeatmap
         days={[
@@ -72,23 +73,31 @@ describe("WorklogHeatmap", () => {
       />,
     );
     const cells = screen.getAllByTestId("heatmap-cell") as HTMLButtonElement[];
-    // 2h should NOT contain "opacity: 1" — it's the alpha-0.9 bucket
-    // (or 0.7 in the next ladder), not the top one. This catches
-    // the bug where 2h and 6h were both routed to the >=240
-    // bucket.
-    expect(cells[0]!.getAttribute("style") ?? "").not.toMatch(
-      /opacity:\s*1(?:\.0+)?\b/,
+    const style2h = cells[0]!.getAttribute("style") ?? "";
+    const style6h = cells[1]!.getAttribute("style") ?? "";
+    // The hatch stripe width is a stable literal the component
+    // bakes into the style attribute, so we can assert on it
+    // without depending on getComputedStyle.
+    const stripe2h = /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(
+      style2h,
     );
-    // 6h is the heaviest bucket, so it can have opacity 1.
-    expect(cells[1]!.getAttribute("style") ?? "").toMatch(
-      /opacity:\s*1(?:\.0+)?\b/,
+    const stripe6h = /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(
+      style6h,
     );
+    expect(stripe2h).not.toBeNull();
+    expect(stripe6h).not.toBeNull();
+    // 2h → bucket index 2 → 2.5px stripe. 6h → bucket index 4 →
+    // 1px stripe. They must differ.
+    expect(stripe2h![1]).not.toBe(stripe6h![1]);
   });
 
-  it("paints the streak pill using the theme accent (not a hard-coded emerald)", () => {
+  it("paints the streak pill using the theme background + accent text (theme-aware)", () => {
     // Regression test: the previous className set 'text-foreground'
-    // which fought the inline colour style and made the pill
-    // invisible on amber-heavy themes.
+    // (and even 'boxShadow' over a same-colour background), which
+    // made the pill invisible on amber-heavy themes. The new pill
+    // uses --background as its canvas and --chart-1 for the text
+    // colour, so the contrast comes from "light accent on dark
+    // card" rather than "amber on amber".
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -99,12 +108,14 @@ describe("WorklogHeatmap", () => {
     );
     const pill = screen.getByTestId("worklog-streak-pill");
     const style = pill.getAttribute("style") ?? "";
-    expect(style).toMatch(/background-color/);
+    // The pill paints its own background from --background so the
+    // accent text always contrasts with it.
+    expect(style).toMatch(/background-color:\s*var\(--background\)/);
     expect(style).toMatch(/color:/);
     // The pill should NOT carry a hard-coded emerald background.
     expect(pill.className).not.toMatch(/bg-emerald/);
-    // The label colour comes from the inline style, not the class
-    // list (which was the original bug).
+    // The label colour cascades from the inline style, not the
+    // class list (which was the original bug).
     expect(pill.className).not.toMatch(/text-foreground/);
   });
 
@@ -160,9 +171,6 @@ describe("WorklogHeatmap", () => {
   });
 
   it("renders rectangular cells (not squares)", () => {
-    // Bigger boxes — the spec called for a "chart-like" cell,
-    // not a GitHub dot. We assert the cell has a fixed height
-    // class which keeps the row count short and the chart tall.
     render(
       <WorklogHeatmap
         days={DAYS}

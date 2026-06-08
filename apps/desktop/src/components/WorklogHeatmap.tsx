@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Flame } from "lucide-react";
 import { computeStreaks } from "@/lib/worklogStreaks";
-import { readChartColor } from "@/lib/chartColors";
+import { chartAccentBlend, readChartColor } from "@/lib/chartColors";
 import type { WorklogDay } from "@/lib/worklog";
 import { cn } from "@/lib/utils";
 
@@ -13,46 +13,30 @@ export interface WorklogHeatmapProps {
 }
 
 /**
- * Five intensity buckets, cut on absolute minutes per day so the
- * same daily total always lands on the same shade. Each bucket
- * gets:
- *   - a fill alpha for the theme's --chart-1 accent, and
- *   - a diagonal hatch density that gets tighter as the bucket
- *     climbs, so the difference between "1h" and "9h" is visible
- *     even at a glance.
+ * Five intensity buckets, cut on absolute minutes per day. Each
+ * bucket maps to a ratio between the theme's --muted colour (the
+ * "empty cell" tone) and the theme's --chart-1 accent (the
+ * "busiest day" colour). We interpolate lightness (and a little
+ * saturation) on that axis so adjacent buckets are clearly
+ * different even on saturated dark-theme accents.
  *
- * The alpha and stripe gaps are deliberately large (0.30 / 0.25
- * / 0.25 / 0.20, 8px / 4px / 2.5px / 1.5px) so adjacent buckets
- * read as visibly different even when the underlying hue is a
- * saturated colour like Gruvbox amber. The previous ladder had
- * 0.85 vs 1.0 — a 15% gap that was too small to see on dark
- * themes.
+ * The previous ladder used pure alpha opacity against a single
+ * colour, which collapsed to a single shade on Gruvbox amber
+ * (a 0.7 -> 1.0 amber against a 12% card looks the same). The
+ * 5-step lightness ladder instead steps 20% of the way from
+ * --muted to --chart-1 at every bucket, so a 2h cell and a 6h
+ * cell are visibly different regardless of the theme.
  */
-type Bucket = {
-  /** Cell background alpha (0 = transparent muted, 1 = solid accent). */
-  alpha: number;
-  /** Diagonal stripe width in pixels. Smaller = denser hatch. */
-  stripe: number;
-  /** Stripe colour (theme accent at the matching alpha). */
-  stripeAlpha: number;
-};
+const BUCKET_RATIOS = [0.2, 0.4, 0.6, 0.8, 1] as const;
+const BUCKET_STRIPES = [8, 4, 2.5, 1.5, 1] as const;
 
-function bucketFor(minutes: number): Bucket | null {
-  if (minutes <= 0) return null;
-  if (minutes < 30) return { alpha: 0.2, stripe: 8, stripeAlpha: 0.15 };
-  if (minutes < 60) return { alpha: 0.45, stripe: 4, stripeAlpha: 0.3 };
-  if (minutes < 120) return { alpha: 0.7, stripe: 2.5, stripeAlpha: 0.5 };
-  if (minutes < 240) return { alpha: 0.9, stripe: 1.5, stripeAlpha: 0.65 };
-  return { alpha: 1, stripe: 1, stripeAlpha: 0.8 };
+function bucketIndex(minutes: number): number {
+  if (minutes < 30) return 0;
+  if (minutes < 60) return 1;
+  if (minutes < 120) return 2;
+  if (minutes < 240) return 3;
+  return 4;
 }
-
-const BUCKET_SWATCHES: ReadonlyArray<Bucket> = [
-  { alpha: 0.2, stripe: 8, stripeAlpha: 0.15 },
-  { alpha: 0.45, stripe: 4, stripeAlpha: 0.3 },
-  { alpha: 0.7, stripe: 2.5, stripeAlpha: 0.5 },
-  { alpha: 0.9, stripe: 1.5, stripeAlpha: 0.65 },
-  { alpha: 1, stripe: 1, stripeAlpha: 0.8 },
-];
 
 function streakLabel(value: number): string {
   if (value === 0) return "No streak";
@@ -66,12 +50,6 @@ export function WorklogHeatmap({
   onSelectDay,
 }: WorklogHeatmapProps) {
   const streaks = useMemo(() => computeStreaks(days), [days]);
-  // The accent follows the active theme's --chart-1, so a
-  // Gruvbox / Zed user sees amber cells, Tokyo Night sees blue,
-  // Rosé Pine sees purple, etc. The hatched texture on top is
-  // always the same accent at a denser stripe, so the visual
-  // signature stays the same across themes.
-  const accent = readChartColor("--chart-1");
 
   return (
     <div
@@ -86,21 +64,22 @@ export function WorklogHeatmap({
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
               streaks.current > 0
-                ? ""
+                ? "bg-background"
                 : "bg-muted text-muted-foreground",
             )}
             data-testid="worklog-streak-pill"
             style={
               streaks.current > 0
                 ? {
-                    // Slightly more opaque than the cells so the
-                    // pill reads as a stronger accent against the
-                    // card background. The colour cascades from
-                    // --chart-1 too, so it follows Gruvbox amber,
-                    // Tokyo Night blue, etc.
-                    backgroundColor: accent,
-                    color: accent,
-                    boxShadow: `inset 0 0 0 1px ${accent}`,
+                    // A solid pill: the theme's --background is the
+                    // canvas, the accent paints the text + 1px ring.
+                    // That way the pill reads as "accent on dark" on
+                    // dark themes and "accent on light" on light
+                    // themes, with the text always contrasted against
+                    // its own background.
+                    backgroundColor: "var(--background)",
+                    color: readChartColor("--chart-1"),
+                    boxShadow: `inset 0 0 0 1px ${readChartColor("--chart-1")}`,
                   }
                 : undefined
             }
@@ -125,16 +104,18 @@ export function WorklogHeatmap({
           className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"
         >
           <span className="mr-1">Less</span>
-          {BUCKET_SWATCHES.map((bucket, i) => (
+          {BUCKET_RATIOS.map((ratio, i) => (
             <span
               aria-hidden
               className="inline-block h-3 w-3 rounded-sm border border-border/40"
               key={i}
               style={{
-                backgroundColor: accent,
-                opacity: bucket.alpha,
-                backgroundImage: `repeating-linear-gradient(45deg, ${accent} ${bucket.stripe}px, transparent ${bucket.stripe}px, transparent ${bucket.stripe * 2}px)`,
-                backgroundBlendMode: bucket.alpha < 1 ? "overlay" : undefined,
+                backgroundColor: chartAccentBlend(ratio),
+                backgroundImage: `repeating-linear-gradient(45deg, ${readChartColor(
+                  "--chart-1",
+                )} ${BUCKET_STRIPES[i]!}px, transparent ${
+                  BUCKET_STRIPES[i]!
+                }px, transparent ${BUCKET_STRIPES[i]! * 2}px)`,
               }}
             />
           ))}
@@ -149,14 +130,17 @@ export function WorklogHeatmap({
       >
         {days.map((day) => {
           const isSelected = selectedDay === day.key;
-          const bucket = bucketFor(day.minutes);
+          const hasTime = day.minutes > 0;
+          const bucket = hasTime ? bucketIndex(day.minutes) : -1;
+          const ratio = bucket >= 0 ? BUCKET_RATIOS[bucket]! : 0;
+          const stripe = bucket >= 0 ? BUCKET_STRIPES[bucket]! : 0;
           return (
             <button
               aria-label={`${day.key} ${formatHM(day.minutes)}`}
               className={cn(
                 "group relative h-7 w-full min-w-0 overflow-hidden rounded-[3px] border border-border/40 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 range !== "12m" && "w-[18px]",
-                !bucket && "bg-muted/40",
+                !hasTime && "bg-muted/40",
                 isSelected && "ring-2 ring-primary",
               )}
               data-testid="heatmap-cell"
@@ -165,16 +149,20 @@ export function WorklogHeatmap({
                 onSelectDay(isSelected ? null : day.key)
               }
               style={
-                bucket
+                hasTime
                   ? {
-                      backgroundColor: accent,
-                      opacity: bucket.alpha,
+                      backgroundColor: chartAccentBlend(ratio),
                       // The diagonal hatch on top of the fill gives
-                      // the cell a textured, chart-like quality.
-                      // The stripe is half transparent so it sits
-                      // on top of the base fill without overwhelming
-                      // it.
-                      backgroundImage: `repeating-linear-gradient(45deg, ${accent} ${bucket.stripe}px, transparent ${bucket.stripe}px, transparent ${bucket.stripe * 2}px)`,
+                      // the cell a textured, chart-like quality. The
+                      // stripe is at the same lightness as the cell
+                      // so the eye reads the hatch as a darker
+                      // shading on top of the hue, not as a totally
+                      // different colour.
+                      backgroundImage: `repeating-linear-gradient(45deg, ${readChartColor(
+                        "--chart-1",
+                      )} ${stripe}px, transparent ${stripe}px, transparent ${
+                        stripe * 2
+                      }px)`,
                     }
                   : undefined
               }
