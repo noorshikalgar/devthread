@@ -6,8 +6,10 @@ import {
   Copy,
   FileText,
   Info,
+  ListChecks,
   Pencil,
   Plus,
+  Regex,
   RotateCcw,
   Save,
   Search,
@@ -115,6 +117,54 @@ function HelpSection({ title, entries }: HelpSectionProps) {
   );
 }
 
+interface TasksTabRowProps {
+  folderName: string;
+  onOpen: () => void;
+  onToggle: () => void;
+  selected: boolean;
+  task: Task;
+}
+
+function TasksTabRow({
+  folderName,
+  onOpen,
+  onToggle,
+  selected,
+  task,
+}: TasksTabRowProps) {
+  return (
+    <label
+      className={cn(
+        "group flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-transparent px-3 py-1.5 hover:bg-accent/60",
+        selected && "bg-accent/40",
+      )}
+    >
+      <input
+        aria-label={selected ? "Remove from release" : "Add to release"}
+        checked={selected}
+        className="size-3.5 shrink-0 accent-primary"
+        onChange={onToggle}
+        type="checkbox"
+      />
+      <span
+        className="mt-0.5 size-1.5 shrink-0 rounded-full"
+        aria-hidden
+        style={{ backgroundColor: STATUS_DOT[task.status] }}
+      />
+      <button
+        className="min-w-0 flex-1 truncate text-left"
+        onClick={onOpen}
+        type="button"
+      >
+        <span className="truncate text-xs font-medium">{task.title}</span>
+        <span className="ml-1.5 text-[10px] text-muted-foreground">
+          {folderName} · {task.status}
+        </span>
+      </button>
+    </label>
+  );
+}
+
 interface ReleaseViewProps {
   folders: Folder[];
   onReleasesChanged: () => Promise<void>;
@@ -151,9 +201,17 @@ export function ReleaseView({
   >("preview");
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
+  const [tasksSearch, setTasksSearch] = useState("");
+  const [tasksUseRegex, setTasksUseRegex] = useState(false);
+  const [tasksSearchInvalid, setTasksSearchInvalid] = useState(false);
+  const [notesPane, setNotesPane] = useState<"editor" | "preview">("editor");
+  const [isWideLayout, setIsWideLayout] = useState(true);
+  const tabBarRef = useRef<HTMLDivElement>(null);
   const templateEditorRef = useRef<HTMLTextAreaElement>(null);
   const newVersionRef = useRef<HTMLInputElement>(null);
   const newNameRef = useRef<HTMLInputElement>(null);
+  const tasksSearchInputRef = useRef<HTMLInputElement>(null);
 
   async function reloadReleases() {
     try {
@@ -191,6 +249,53 @@ export function ReleaseView({
     setTemplateDirty(false);
   }, [selectedRelease?.name]);
 
+  // Restore the last-used tab so the user lands where they left off.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(
+      "devthread:release-active-tab",
+    );
+    if (stored === "tasks" || stored === "notes") {
+      setActiveTab(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("devthread:release-active-tab", activeTab);
+  }, [activeTab]);
+
+  // Watch the tab bar (or the right panel as a fallback) to decide whether
+  // the notes tab has enough horizontal room to render editor + preview
+  // side-by-side. Below ~720px the preview/editor become a toggle.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof ResizeObserver === "undefined")
+      return;
+    const target = tabBarRef.current;
+    if (!target) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWideLayout(width >= 720);
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  // Validate regex input as the user types so we can show an error chip and
+  // keep the available/selected lists unfiltered (rather than blanking out).
+  useEffect(() => {
+    if (!tasksUseRegex || !tasksSearch.trim()) {
+      setTasksSearchInvalid(false);
+      return;
+    }
+    try {
+      new RegExp(tasksSearch, "i");
+      setTasksSearchInvalid(false);
+    } catch {
+      setTasksSearchInvalid(true);
+    }
+  }, [tasksSearch, tasksUseRegex]);
+
   const folderNames = useMemo(
     () => new Map(folders.map((f) => [f.id, f.name])),
     [folders],
@@ -209,6 +314,41 @@ export function ReleaseView({
   const currentlyTaggedIds = useMemo(
     () => new Set(taggedTasks.map((t) => t.id)),
     [taggedTasks],
+  );
+
+  // Tasks tab: candidate set is every non-archived task, with a search/regex
+  // filter on title + folder. The filter is applied to BOTH selected and
+  // available sections so a search acts like "show me only matches here".
+  const candidateTasks = useMemo(
+    () => tasks.filter((t) => t.status !== "archived"),
+    [tasks],
+  );
+
+  const tasksMatcher = useMemo(() => {
+    const term = tasksSearch.trim();
+    if (!term) return (_title: string) => true;
+    if (tasksUseRegex) {
+      try {
+        const expr = new RegExp(term, "i");
+        return (title: string) => expr.test(title);
+      } catch {
+        return (_title: string) => true;
+      }
+    }
+    const lower = term.toLowerCase();
+    return (title: string) => title.toLowerCase().includes(lower);
+  }, [tasksSearch, tasksUseRegex]);
+
+  const filteredSelectedTasks = useMemo(
+    () => taggedTasks.filter((t) => tasksMatcher(t.title)),
+    [taggedTasks, tasksMatcher],
+  );
+  const filteredAvailableTasks = useMemo(
+    () =>
+      candidateTasks
+        .filter((t) => !currentlyTaggedIds.has(t.id))
+        .filter((t) => tasksMatcher(t.title)),
+    [candidateTasks, currentlyTaggedIds, tasksMatcher],
   );
 
   const filteredDialogTasks = useMemo(() => {
@@ -553,321 +693,530 @@ export function ReleaseView({
               </div>
             </div>
 
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-4 px-6 py-4 pb-8">
-                {/* Editor */}
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Notes
-                    </h3>
-                    <Popover onOpenChange={setHelpOpen} open={helpOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          aria-label="Template help"
-                          size="icon-sm"
-                          title="Template help"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Info className="size-3.5" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-[420px] p-0"
-                        sideOffset={4}
-                      >
-                        <div className="border-b border-border px-3 py-2">
-                          <p className="text-xs font-semibold">Template syntax</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Hover over the editor for tooltips. Insert via the
-                            {" "}
-                            <span className="inline-flex items-center gap-0.5 align-middle">
-                              <Braces className="size-3" />
-                            </span>{" "}
-                            button.
-                          </p>
-                        </div>
-                        <ScrollArea className="h-[420px]">
-                          <div className="space-y-3 p-3 pr-1">
-                            <HelpSection
-                              entries={RELEASE_TEMPLATE_VARIABLES}
-                              title="Release variables"
-                            />
-                            <HelpSection
-                              entries={RELEASE_TEMPLATE_BLOCKS}
-                              title="Blocks"
-                            />
-                            <HelpSection
-                              entries={RELEASE_TEMPLATE_FILTERS}
-                              title="Filters"
-                            />
-                            <HelpSection
-                              entries={RELEASE_TEMPLATE_TASK_VARIABLES}
-                              title="Per-task variables (use inside #each)"
-                            />
-                            <div>
-                              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Examples
-                              </p>
-                              <div className="space-y-2">
-                                {RELEASE_TEMPLATE_EXAMPLES.map((ex) => (
-                                  <div
-                                    className="rounded border border-border bg-muted/30 p-2"
-                                    key={ex.title}
-                                  >
-                                    <p className="mb-1 text-[11px] font-medium">
-                                      {ex.title}
-                                    </p>
-                                    <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-foreground/90">
-                                      {ex.template}
-                                    </pre>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </ScrollArea>
-                      </PopoverContent>
-                    </Popover>
-                    <Popover
-                      onOpenChange={setPlaceholderOpen}
-                      open={placeholderOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          size="icon-sm"
-                          title="Insert placeholder"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Braces className="size-3.5" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-80 p-1"
-                        sideOffset={4}
-                      >
-                        <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Insert placeholder
-                        </p>
-                        <ScrollArea className="h-80">
-                          <div className="space-y-2 pr-1">
-                            <div>
-                              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Release
-                              </p>
-                              <div className="space-y-0.5">
-                                {RELEASE_TEMPLATE_PLACEHOLDERS.map((p) => (
-                                  <PlaceholderButton
-                                    description={p.description}
-                                    key={p.snippet}
-                                    onClick={() => {
-                                      insertPlaceholder(p.snippet);
-                                      setPlaceholderOpen(false);
-                                    }}
-                                    snippet={p.snippet}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Per-task field
-                              </p>
-                              <p className="px-2 pb-1 text-[10px] text-muted-foreground/80">
-                                Use inside <span className="font-mono">{"{{#each taskList}}"}</span>
-                              </p>
-                              <div className="space-y-0.5">
-                                {RELEASE_TASK_FIELDS.map((p) => (
-                                  <PlaceholderButton
-                                    description={p.description}
-                                    key={p.snippet}
-                                    onClick={() => {
-                                      insertPlaceholder(p.snippet);
-                                      setPlaceholderOpen(false);
-                                    }}
-                                    snippet={p.snippet}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </ScrollArea>
-                        <div className="mt-1 flex items-center justify-between border-t border-border pt-1">
-                          <span className="px-2 text-[10px] text-muted-foreground">
-                            {RELEASE_TEMPLATE_PLACEHOLDERS.length +
-                              RELEASE_TASK_FIELDS.length}{" "}
-                            placeholders
-                          </span>
-                          <Button
-                            onClick={() => {
-                              setTemplateDraft(defaultReleaseTemplate());
-                              setTemplateDirty(true);
-                              setPlaceholderOpen(false);
-                            }}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <RotateCcw className="size-3" />
-                            Reset
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <div className="ml-auto flex items-center gap-1">
-                      {!selectedRelease.releasedAt && (
-                        <Button
-                          onClick={() => void handleMarkReleased()}
-                          size="icon-sm"
-                          title="Mark as released"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Check className="size-3.5 text-green-500" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <textarea
-                    aria-label="Release notes template"
-                    className="mb-2 flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    onChange={(e) => {
-                      setTemplateDraft(e.target.value);
-                      setTemplateDirty(true);
-                    }}
-                    placeholder={defaultReleaseTemplate()}
-                    ref={templateEditorRef}
-                    spellCheck={false}
-                    value={templateDraft}
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-muted-foreground">
-                      Markdown with placeholders
-                    </span>
-                    {templateDirty && (
-                      <Button
-                        disabled={savingTemplate}
-                        onClick={() => void saveTemplate()}
-                        size="sm"
-                        type="button"
-                        variant="default"
-                      >
-                        {savingTemplate ? (
-                          "Saving…"
-                        ) : (
-                          <>
-                            <Save className="size-3.5" />
-                            Save template
-                          </>
-                        )}
-                      </Button>
+            {/* Tab bar + tab content */}
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div
+                className="flex shrink-0 items-center gap-2 border-b border-border bg-card/30 px-6 py-1.5"
+                ref={tabBarRef}
+              >
+                <div className="inline-flex h-7 items-center rounded-md border border-border bg-background/60 p-0.5 text-[11px]">
+                  <button
+                    aria-pressed={activeTab === "tasks"}
+                    className={cn(
+                      "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                      activeTab === "tasks"
+                        ? "bg-accent text-accent-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
-                  </div>
+                    onClick={() => setActiveTab("tasks")}
+                    type="button"
+                  >
+                    <ListChecks className="size-3.5" />
+                    Tasks
+                    {taggedTasks.length > 0 && (
+                      <span className="rounded bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
+                        {taggedTasks.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    aria-pressed={activeTab === "notes"}
+                    className={cn(
+                      "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                      activeTab === "notes"
+                        ? "bg-accent text-accent-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => setActiveTab("notes")}
+                    type="button"
+                  >
+                    <FileText className="size-3.5" />
+                    Release notes
+                  </button>
                 </div>
+                <div className="ml-auto flex items-center gap-2">
+                  {templateDirty && activeTab !== "notes" && (
+                    <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                      Unsaved changes
+                    </span>
+                  )}
+                  <Button
+                    aria-label="Save release notes template"
+                    className="h-7 px-2.5 text-[11px]"
+                    data-testid="save-template-button"
+                    disabled={!templateDirty || savingTemplate}
+                    onClick={() => void saveTemplate()}
+                    size="sm"
+                    type="button"
+                    variant={templateDirty ? "default" : "outline"}
+                  >
+                    <Save className="size-3.5" />
+                    {savingTemplate ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              </div>
 
-                {/* Preview */}
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Preview
-                    </h3>
-                    <div className="inline-flex h-6 items-center rounded-md border border-border bg-card/40 p-0.5 text-[10px]">
-                      <button
-                        aria-pressed={previewTab === "preview"}
-                        className={cn(
-                          "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
-                          previewTab === "preview"
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                        onClick={() => setPreviewTab("preview")}
-                        type="button"
-                      >
-                        <FileText className="size-3" />
-                        Preview
-                      </button>
-                      <button
-                        aria-pressed={previewTab === "source"}
-                        className={cn(
-                          "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
-                          previewTab === "source"
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                        onClick={() => setPreviewTab("source")}
-                        type="button"
-                      >
-                        <Code className="size-3" />
-                        Source
-                      </button>
-                    </div>
-                  </div>
-                  {previewTab === "preview" ? (
-                    <div className="markdown max-h-[420px] overflow-auto rounded-md border border-border bg-card/40 p-4">
-                      {fullSummaryMd.trim() ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {fullSummaryMd}
-                        </ReactMarkdown>
-                      ) : (
-                        <p className="text-muted-foreground">
-                          Empty release notes.
+              <ScrollArea className="min-h-0 flex-1">
+                {/* Tasks tab */}
+                {activeTab === "tasks" && (
+                  <div className="space-y-4 px-6 py-4 pb-8">
+                    <div>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          aria-label="Search tasks"
+                          aria-invalid={tasksSearchInvalid || undefined}
+                          className="h-8 pl-7 pr-9 text-xs"
+                          onChange={(e) => setTasksSearch(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape" && tasksSearch) {
+                              e.preventDefault();
+                              setTasksSearch("");
+                            }
+                          }}
+                          placeholder={
+                            tasksUseRegex
+                              ? "Regex pattern (case-insensitive)"
+                              : "Search by title…"
+                          }
+                          ref={tasksSearchInputRef}
+                          value={tasksSearch}
+                        />
+                        <button
+                          aria-label={
+                            tasksUseRegex
+                              ? "Disable regex search"
+                              : "Enable regex search"
+                          }
+                          aria-pressed={tasksUseRegex}
+                          className={cn(
+                            "absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                            tasksUseRegex &&
+                              "bg-primary/15 text-primary hover:bg-primary/20",
+                            tasksSearchInvalid && "text-destructive",
+                          )}
+                          onClick={() => setTasksUseRegex((v) => !v)}
+                          title={
+                            tasksUseRegex
+                              ? "Disable regex search"
+                              : "Enable regex search"
+                          }
+                          type="button"
+                        >
+                          <Regex className="size-3.5" />
+                        </button>
+                      </div>
+                      {tasksSearchInvalid && (
+                        <p className="mt-1 text-[10px] text-destructive">
+                          Invalid regex pattern.
                         </p>
                       )}
                     </div>
-                  ) : (
-                    <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-card/40 p-4 font-mono text-xs leading-relaxed text-foreground/90">
-                      {fullSummaryMd || "_Empty release notes._"}
-                    </pre>
-                  )}
-                </div>
 
-                {/* Tagged tasks list */}
-                {taggedTasks.length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Tagged tasks ({taggedTasks.length})
-                    </h3>
-                    <div className="space-y-1">
-                      {taggedTasks.map((task) => (
-                        <div
-                          className="group flex min-w-0 items-center gap-2 rounded-md border border-transparent px-3 py-2 hover:border-border hover:bg-accent/60"
-                          key={task.id}
-                        >
-                          <button
-                            className="min-w-0 flex-1 text-left"
-                            onClick={() => onSelectTask(task.id)}
-                            type="button"
-                          >
-                            <span className="block truncate text-sm font-medium">
-                              {task.title}
-                            </span>
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {folderNames.get(task.folderId ?? "") ?? "No folder"}
-                              {" · "}
-                              {task.status}
-                            </span>
-                          </button>
-                          <Button
-                            className="shrink-0 opacity-0 group-hover:opacity-100"
-                            onClick={() => void handleRemoveTag(task.id)}
-                            size="icon-sm"
-                            title="Remove release tag"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <X className="size-3" />
-                          </Button>
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Selected for this release
+                        </h3>
+                        <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {filteredSelectedTasks.length}/{taggedTasks.length}
+                        </span>
+                      </div>
+                      {filteredSelectedTasks.length > 0 ? (
+                        <div className="space-y-1">
+                          {filteredSelectedTasks.map((task) => (
+                            <TasksTabRow
+                              folderName={
+                                folderNames.get(task.folderId ?? "") ??
+                                "No folder"
+                              }
+                              key={task.id}
+                              onOpen={() => onSelectTask(task.id)}
+                              onToggle={() => void handleRemoveTag(task.id)}
+                              selected
+                              task={task}
+                            />
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
+                          {taggedTasks.length === 0
+                            ? "No tasks tagged yet. Use the checkboxes below or the Add tasks button."
+                            : "No selected tasks match the search."}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Other tasks
+                        </h3>
+                        <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {filteredAvailableTasks.length}/
+                          {candidateTasks.length - taggedTasks.length}
+                        </span>
+                      </div>
+                      {filteredAvailableTasks.length > 0 ? (
+                        <ScrollArea className="max-h-[420px]">
+                          <div className="space-y-1 pr-2">
+                            {filteredAvailableTasks.map((task) => (
+                              <TasksTabRow
+                                folderName={
+                                  folderNames.get(task.folderId ?? "") ??
+                                  "No folder"
+                                }
+                                key={task.id}
+                                onOpen={() => onSelectTask(task.id)}
+                                onToggle={() => void onTagTask(task.id, selectedRelease.name)}
+                                selected={false}
+                                task={task}
+                              />
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
+                          {tasksSearch.trim() || tasksUseRegex
+                            ? "No tasks match the search."
+                            : "Every task is already in this release."}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
-              </div>
-            </ScrollArea>
+
+                {/* Notes tab */}
+                {activeTab === "notes" && (
+                  <div className="flex min-h-0 flex-col gap-3 px-6 py-4 pb-6">
+                    {/* Editor / preview toggle for narrow layouts */}
+                    {!isWideLayout && (
+                      <div className="inline-flex h-7 w-fit items-center rounded-md border border-border bg-card/40 p-0.5 text-[11px]">
+                        <button
+                          aria-pressed={notesPane === "editor"}
+                          className={cn(
+                            "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                            notesPane === "editor"
+                              ? "bg-background text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                          onClick={() => setNotesPane("editor")}
+                          type="button"
+                        >
+                          <Pencil className="size-3" />
+                          Editor
+                        </button>
+                        <button
+                          aria-pressed={notesPane === "preview"}
+                          className={cn(
+                            "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                            notesPane === "preview"
+                              ? "bg-background text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                          onClick={() => setNotesPane("preview")}
+                          type="button"
+                        >
+                          <FileText className="size-3" />
+                          Preview
+                        </button>
+                      </div>
+                    )}
+
+                    <div
+                      className={cn(
+                        "flex min-h-0 gap-3",
+                        isWideLayout ? "flex-row" : "flex-col",
+                      )}
+                    >
+                      {/* Editor pane */}
+                      {(isWideLayout || notesPane === "editor") && (
+                        <div
+                          className={cn(
+                            "flex min-w-0 flex-col",
+                            isWideLayout ? "flex-1" : "w-full",
+                          )}
+                        >
+                          <div className="mb-1.5 flex items-center gap-1">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Editor
+                            </h3>
+                            <Popover
+                              onOpenChange={setHelpOpen}
+                              open={helpOpen}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  aria-label="Template help"
+                                  size="icon-sm"
+                                  title="Template help"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <Info className="size-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                className="w-[420px] p-0"
+                                sideOffset={4}
+                              >
+                                <div className="border-b border-border px-3 py-2">
+                                  <p className="text-xs font-semibold">
+                                    Template syntax
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Hover over the editor for tooltips. Insert
+                                    via the {" "}
+                                    <span className="inline-flex items-center gap-0.5 align-middle">
+                                      <Braces className="size-3" />
+                                    </span>{" "}
+                                    button.
+                                  </p>
+                                </div>
+                                <ScrollArea className="h-[420px]">
+                                  <div className="space-y-3 p-3 pr-1">
+                                    <HelpSection
+                                      entries={RELEASE_TEMPLATE_VARIABLES}
+                                      title="Release variables"
+                                    />
+                                    <HelpSection
+                                      entries={RELEASE_TEMPLATE_BLOCKS}
+                                      title="Blocks"
+                                    />
+                                    <HelpSection
+                                      entries={RELEASE_TEMPLATE_FILTERS}
+                                      title="Filters"
+                                    />
+                                    <HelpSection
+                                      entries={RELEASE_TEMPLATE_TASK_VARIABLES}
+                                      title="Per-task variables (use inside #each)"
+                                    />
+                                    <div>
+                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Examples
+                                      </p>
+                                      <div className="space-y-2">
+                                        {RELEASE_TEMPLATE_EXAMPLES.map((ex) => (
+                                          <div
+                                            className="rounded border border-border bg-muted/30 p-2"
+                                            key={ex.title}
+                                          >
+                                            <p className="mb-1 text-[11px] font-medium">
+                                              {ex.title}
+                                            </p>
+                                            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-foreground/90">
+                                              {ex.template}
+                                            </pre>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </ScrollArea>
+                              </PopoverContent>
+                            </Popover>
+                            <Popover
+                              onOpenChange={setPlaceholderOpen}
+                              open={placeholderOpen}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  size="icon-sm"
+                                  title="Insert placeholder"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <Braces className="size-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                className="w-80 p-1"
+                                sideOffset={4}
+                              >
+                                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Insert placeholder
+                                </p>
+                                <ScrollArea className="h-80">
+                                  <div className="space-y-2 pr-1">
+                                    <div>
+                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Release
+                                      </p>
+                                      <div className="space-y-0.5">
+                                        {RELEASE_TEMPLATE_PLACEHOLDERS.map(
+                                          (p) => (
+                                            <PlaceholderButton
+                                              description={p.description}
+                                              key={p.snippet}
+                                              onClick={() => {
+                                                insertPlaceholder(p.snippet);
+                                                setPlaceholderOpen(false);
+                                              }}
+                                              snippet={p.snippet}
+                                            />
+                                          ),
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Per-task field
+                                      </p>
+                                      <p className="px-2 pb-1 text-[10px] text-muted-foreground/80">
+                                        Use inside{" "}
+                                        <span className="font-mono">
+                                          {"{{#each taskList}}"}
+                                        </span>
+                                      </p>
+                                      <div className="space-y-0.5">
+                                        {RELEASE_TASK_FIELDS.map((p) => (
+                                          <PlaceholderButton
+                                            description={p.description}
+                                            key={p.snippet}
+                                            onClick={() => {
+                                              insertPlaceholder(p.snippet);
+                                              setPlaceholderOpen(false);
+                                            }}
+                                            snippet={p.snippet}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </ScrollArea>
+                                <div className="mt-1 flex items-center justify-between border-t border-border pt-1">
+                                  <span className="px-2 text-[10px] text-muted-foreground">
+                                    {RELEASE_TEMPLATE_PLACEHOLDERS.length +
+                                      RELEASE_TASK_FIELDS.length}{" "}
+                                    placeholders
+                                  </span>
+                                  <Button
+                                    onClick={() => {
+                                      setTemplateDraft(
+                                        defaultReleaseTemplate(),
+                                      );
+                                      setTemplateDirty(true);
+                                      setPlaceholderOpen(false);
+                                    }}
+                                    size="sm"
+                                    type="button"
+                                    variant="ghost"
+                                  >
+                                    <RotateCcw className="size-3" />
+                                    Reset
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                            <div className="ml-auto flex items-center gap-1">
+                              {!selectedRelease.releasedAt && (
+                                <Button
+                                  onClick={() => void handleMarkReleased()}
+                                  size="icon-sm"
+                                  title="Mark as released"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <Check className="size-3.5 text-green-500" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <textarea
+                            aria-label="Release notes template"
+                            className="min-h-[260px] w-full flex-1 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            onChange={(e) => {
+                              setTemplateDraft(e.target.value);
+                              setTemplateDirty(true);
+                            }}
+                            placeholder={defaultReleaseTemplate()}
+                            ref={templateEditorRef}
+                            spellCheck={false}
+                            value={templateDraft}
+                          />
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Markdown with placeholders. Use the help icon for
+                            the full template syntax.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Preview pane */}
+                      {(isWideLayout || notesPane === "preview") && (
+                        <div
+                          className={cn(
+                            "flex min-w-0 flex-col",
+                            isWideLayout ? "flex-1" : "w-full",
+                          )}
+                        >
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Preview
+                            </h3>
+                            <div className="inline-flex h-6 items-center rounded-md border border-border bg-card/40 p-0.5 text-[10px]">
+                              <button
+                                aria-pressed={previewTab === "preview"}
+                                className={cn(
+                                  "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
+                                  previewTab === "preview"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                                onClick={() => setPreviewTab("preview")}
+                                type="button"
+                              >
+                                <FileText className="size-3" />
+                                Rendered
+                              </button>
+                              <button
+                                aria-pressed={previewTab === "source"}
+                                className={cn(
+                                  "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
+                                  previewTab === "source"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                                onClick={() => setPreviewTab("source")}
+                                type="button"
+                              >
+                                <Code className="size-3" />
+                                Source
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className={cn(
+                              "min-h-[260px] flex-1 overflow-auto rounded-md border border-border bg-card/40",
+                              previewTab === "preview" ? "p-4" : "p-0",
+                            )}
+                          >
+                            {previewTab === "preview" ? (
+                              fullSummaryMd.trim() ? (
+                                <div className="markdown">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {fullSummaryMd}
+                                  </ReactMarkdown>
+                                </div>
+                              ) : (
+                                <p className="text-muted-foreground">
+                                  Empty release notes.
+                                </p>
+                              )
+                            ) : (
+                              <pre className="h-full whitespace-pre-wrap p-4 font-mono text-xs leading-relaxed text-foreground/90">
+                                {fullSummaryMd || "_Empty release notes._"}
+                              </pre>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
