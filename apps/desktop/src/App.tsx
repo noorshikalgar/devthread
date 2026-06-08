@@ -39,6 +39,7 @@ import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline } from "@/components/Timeline";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
+import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,6 +102,7 @@ import {
   saveWorklogSettings,
   type WorklogSettings,
 } from "@/lib/worklogSettings";
+import type { WorklogDay } from "@/lib/worklog";
 import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
@@ -1171,6 +1173,7 @@ export default function App() {
               loading={worklogLoading}
               onRangeChange={setWorklogRange}
               range={worklogRange}
+              worklogSettings={worklogSettings}
             />
           ) : workspaceMode === "releases" ? (
             <ReleaseView
@@ -1770,11 +1773,13 @@ function WorklogMetricsView({
   entries,
   loading,
   range,
+  worklogSettings,
   onRangeChange,
 }: {
   entries: WorklogMetricEntry[];
   loading: boolean;
   range: WorklogRange;
+  worklogSettings: WorklogSettings;
   onRangeChange: (range: WorklogRange) => void;
 }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(
@@ -1849,6 +1854,8 @@ function WorklogMetricsView({
             />
             <MetricCard label="Logged days" value={String(loggedDays.length)} />
           </div>
+
+          <WorklogHoursChart days={days} settings={worklogSettings} />
 
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -2004,12 +2011,6 @@ const WORKLOG_RANGES: { value: WorklogRange; label: string; days: number }[] = [
   { value: "12w", label: "12W", days: 84 },
   { value: "12m", label: "12M", days: 365 },
 ];
-
-interface WorklogDay {
-  key: string;
-  date: string;
-  minutes: number;
-}
 
 function worklogRangeBounds(range: WorklogRange) {
   const now = new Date();

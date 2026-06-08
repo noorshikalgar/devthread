@@ -57,4 +57,48 @@ describe("theme CSS pipeline", () => {
       ).toBe(true);
     }
   });
+
+  it("defines chart palette variables for every theme", () => {
+    const css = readFileSync(join(PROJECT_ROOT, "src", "styles.css"), "utf8");
+    const chartVars = [
+      "--chart-1",
+      "--chart-2",
+      "--chart-3",
+      "--chart-4",
+      "--chart-grid",
+    ];
+    // The :root and .dark fallbacks also need the chart vars.
+    for (const scope of [":root", ".dark"]) {
+      const start = css.indexOf(`${scope} {`);
+      expect(start, `styles.css is missing the ${scope} block`).toBeGreaterThan(
+        -1,
+      );
+      const end = css.indexOf("}", start);
+      const block = css.slice(start, end);
+      for (const variable of chartVars) {
+        expect(
+          block.includes(variable),
+          `${scope} block is missing ${variable} — every theme needs ` +
+            `the chart palette so Recharts can read CSS variables.`,
+        ).toBe(true);
+      }
+    }
+    for (const theme of APP_THEMES) {
+      const selector = `.theme-${theme.id} {`;
+      const start = css.indexOf(selector);
+      expect(
+        start,
+        `styles.css is missing a rule for ${selector}.`,
+      ).toBeGreaterThan(-1);
+      const end = css.indexOf("}", start);
+      const block = css.slice(start, end);
+      for (const variable of chartVars) {
+        expect(
+          block.includes(variable),
+          `${selector} block is missing ${variable} — every theme needs ` +
+            `the chart palette so Recharts can read CSS variables.`,
+        ).toBe(true);
+      }
+    }
+  });
 });
