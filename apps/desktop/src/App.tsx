@@ -123,7 +123,7 @@ type UpdateInterval = (typeof UPDATE_INTERVAL_OPTIONS)[number]["value"];
 const DEFAULT_SIDEBAR_WIDTH = 280;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
-const APP_VERSION = "0.1.0";
+const APP_VERSION = __APP_VERSION__;
 
 type UpdateState =
   | "idle"
@@ -1141,7 +1141,7 @@ export default function App() {
           )}
         </main>
       </div>
-      <StatusBar counts={statusCounts} selectedTask={selectedTask} />
+      <StatusBar appVersion={APP_VERSION} counts={statusCounts} selectedTask={selectedTask} />
       <CommandPalette
         entries={entries}
         folders={folders}
@@ -2017,9 +2017,11 @@ function RailButton({
 }
 
 function StatusBar({
+  appVersion,
   counts,
   selectedTask,
 }: {
+  appVersion: string;
   counts: { active: number; planned: number; done: number };
   selectedTask: Task | null;
 }) {
@@ -2027,7 +2029,7 @@ function StatusBar({
     <footer className="flex h-6 shrink-0 select-none items-center justify-between border-t border-border bg-card px-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
       <div className="flex min-w-0 items-center gap-3">
         <span className="text-foreground/80">Local-first</span>
-        <span>v0.1.0</span>
+        <span>v{appVersion}</span>
         {selectedTask && (
           <span className="hidden min-w-0 truncate sm:inline">
             {selectedTask.title}
