@@ -74,20 +74,20 @@ describe("WorklogHoursChart", () => {
   it("counts days that exceeded the goal", () => {
     render(<WorklogHoursChart days={DAYS} settings={SETTINGS} />);
     // DAYS has 9h (over), 4h, 0h, 7h against an 8h goal. Only the 9h
-    // day is over.
-    expect(screen.getByText(/1 day over goal/i)).toBeInTheDocument();
+    // day is above the goal.
+    expect(screen.getByText(/1 day above goal/i)).toBeInTheDocument();
   });
 
-  it("passes the series name through to the tooltip (does not collapse 'Logged' and 'Over goal' into one row)", () => {
+  it("passes the series name through to the tooltip (does not collapse 'Logged' and 'Above goal' into one row)", () => {
     // Regression test: an earlier version hard-coded the second
-    // formatter arg to "Logged", so the Over-goal series in the
+    // formatter arg to "Logged", so the Above-goal series in the
     // tooltip was also labelled "Logged" and the two stacked rows
     // read identically. The chart must use this exact function so
     // both series keep their own label.
     expect(tooltipValueFormatter(15, "Logged")).toEqual(["15h", "Logged"]);
-    expect(tooltipValueFormatter(15, "Over goal")).toEqual([
+    expect(tooltipValueFormatter(15, "Above goal")).toEqual([
       "15h",
-      "Over goal",
+      "Above goal",
     ]);
   });
 });

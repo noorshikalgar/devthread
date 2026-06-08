@@ -31,7 +31,7 @@ interface ChartDatum {
   date: string;
   dateLabel: string;
   hours: number;
-  isOverGoal: boolean;
+  isAboveGoal: boolean;
 }
 
 function formatHoursTick(value: number): string {
@@ -50,7 +50,7 @@ function formatHoursTooltip(value: number): string {
  * Tooltip formatter passed to Recharts. The first tuple element is the
  * rendered cell, the second is the series label. Recharts passes the
  * series's `name` as the second arg, so we forward it rather than
- * hardcoding "Logged" — otherwise the Over-goal series would also be
+ * hardcoding "Logged" — otherwise the Above-goal series would also be
  * labelled "Logged" and the two rows in the tooltip would read
  * identically.
  */
@@ -71,7 +71,7 @@ function buildChartData(
       date: day.date,
       dateLabel: formatShortDate(day.date),
       hours,
-      isOverGoal: hours > goalHours,
+      isAboveGoal: hours > goalHours,
     };
   });
 }
@@ -85,7 +85,7 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   // the user changes theme while the chart is on screen.
   const [palette, setPalette] = useState(() => ({
     primary: readChartColor("--chart-1"),
-    overGoal: readChartColor("--chart-2"),
+    aboveGoal: readChartColor("--chart-2"),
     goalLine: readChartColor("--chart-4"),
     grid: readChartColor("--chart-grid"),
     text: readChartColor("--chart-4"),
@@ -94,14 +94,14 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   useEffect(() => {
     setPalette({
       primary: readChartColor("--chart-1"),
-      overGoal: readChartColor("--chart-2"),
+      aboveGoal: readChartColor("--chart-2"),
       goalLine: readChartColor("--chart-4"),
       grid: readChartColor("--chart-grid"),
       text: readChartColor("--chart-4"),
     });
   }, [settings.dailyHours, settings.breakMinutes]);
 
-  const overDays = data.filter((d) => d.isOverGoal).length;
+  const aboveDays = data.filter((d) => d.isAboveGoal).length;
   const maxHours = data.reduce((max, d) => Math.max(max, d.hours), goalHours);
   const yMax = Math.max(8, Math.ceil((maxHours + 1) * 2) / 2);
 
@@ -137,7 +137,7 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
           </p>
         </div>
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {overDays} day{overDays === 1 ? "" : "s"} over goal
+          {aboveDays} day{aboveDays === 1 ? "" : "s"} above goal
         </p>
       </div>
       <div className="h-[260px] w-full">
@@ -151,9 +151,9 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
                 <stop offset="0%" stopColor={palette.primary} stopOpacity={0.45} />
                 <stop offset="100%" stopColor={palette.primary} stopOpacity={0.05} />
               </linearGradient>
-              <linearGradient id="worklog-over-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={palette.overGoal} stopOpacity={0.55} />
-                <stop offset="100%" stopColor={palette.overGoal} stopOpacity={0.1} />
+              <linearGradient id="worklog-above-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={palette.aboveGoal} stopOpacity={0.55} />
+                <stop offset="100%" stopColor={palette.aboveGoal} stopOpacity={0.1} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" vertical={false} />
@@ -215,11 +215,11 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
               type="monotone"
             />
             <Line
-              dataKey={(d: ChartDatum) => (d.isOverGoal ? d.hours : null)}
+              dataKey={(d: ChartDatum) => (d.isAboveGoal ? d.hours : null)}
               dot={false}
               isAnimationActive={false}
-              name="Over goal"
-              stroke={palette.overGoal}
+              name="Above goal"
+              stroke={palette.aboveGoal}
               strokeWidth={2}
               type="monotone"
             />
