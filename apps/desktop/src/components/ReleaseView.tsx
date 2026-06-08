@@ -14,9 +14,7 @@ import {
   RotateCcw,
   Save,
   Search,
-  Tag,
   Trash2,
-  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -134,46 +132,47 @@ function TasksTabRow({
   task,
 }: TasksTabRowProps) {
   return (
-    <div
+    <label
       className={cn(
-        "group flex min-w-0 items-center gap-2 rounded-md border border-transparent px-3 py-1.5 hover:bg-accent/60",
+        "group flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-transparent px-3 py-1.5 hover:bg-accent/60",
         selected && "bg-accent/40",
       )}
     >
-      <label
+      <input
         aria-label={selected ? "Remove from release" : "Add to release"}
-        className="flex shrink-0 cursor-pointer items-center"
-      >
-        <input
-          checked={selected}
-          className="size-3.5 accent-primary"
-          onChange={onToggle}
-          type="checkbox"
-        />
-      </label>
+        checked={selected}
+        className="size-3.5 shrink-0 accent-primary"
+        onChange={onToggle}
+        type="checkbox"
+      />
       <span
         className="mt-0.5 size-1.5 shrink-0 rounded-full"
         aria-hidden
         style={{ backgroundColor: STATUS_DOT[task.status] }}
       />
-      <div className="min-w-0 flex-1 truncate">
+      <span className="min-w-0 flex-1 truncate">
         <span className="truncate text-xs font-medium">{task.title}</span>
         <span className="ml-1.5 text-[10px] text-muted-foreground">
           {folderName} · {task.status}
         </span>
-      </div>
+      </span>
       <button
         aria-label={`Open task: ${task.title}`}
         className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
         data-testid="open-task-link"
-        onClick={onOpen}
+        onClick={(e) => {
+          // Don't let the surrounding <label> also fire its onChange.
+          e.preventDefault();
+          e.stopPropagation();
+          onOpen();
+        }}
         title="Open this task"
         type="button"
       >
         <ExternalLink className="size-3" />
         Open
       </button>
-    </div>
+    </label>
   );
 }
 
@@ -201,9 +200,6 @@ export function ReleaseView({
   const [editVersionDialogOpen, setEditVersionDialogOpen] = useState(false);
   const [editVersion, setEditVersion] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [tagDialogOpen, setTagDialogOpen] = useState(false);
-  const [tagSearch, setTagSearch] = useState("");
-  const [tagSelected, setTagSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [templateDraft, setTemplateDraft] = useState("");
   const [templateDirty, setTemplateDirty] = useState(false);
@@ -318,11 +314,6 @@ export function ReleaseView({
     [tasks, selectedName],
   );
 
-  const dialogTasks = useMemo(
-    () => tasks.filter((t) => t.status !== "archived"),
-    [tasks],
-  );
-
   const currentlyTaggedIds = useMemo(
     () => new Set(taggedTasks.map((t) => t.id)),
     [taggedTasks],
@@ -362,19 +353,6 @@ export function ReleaseView({
         .filter((t) => tasksMatcher(t.title)),
     [candidateTasks, currentlyTaggedIds, tasksMatcher],
   );
-
-  const filteredDialogTasks = useMemo(() => {
-    const term = tagSearch.trim().toLowerCase();
-    if (!term) return dialogTasks;
-    return dialogTasks.filter((t) => {
-      const folderName = t.folderId
-        ? folderNames.get(t.folderId)?.toLowerCase() ?? ""
-        : "";
-      return (
-        t.title.toLowerCase().includes(term) || folderName.includes(term)
-      );
-    });
-  }, [dialogTasks, tagSearch, folderNames]);
 
   const tableRows = useMemo<TaskTableRow[]>(
     () => taggedTasks.map((task) => ({ task })),
@@ -519,53 +497,12 @@ export function ReleaseView({
     }
   }
 
-  async function handleAddTagged() {
-    if (!selectedRelease || busy) return;
-    setBusy(true);
-    try {
-      const toTag: string[] = [];
-      const toUntag: string[] = [];
-      for (const taskId of tagSelected) {
-        if (!currentlyTaggedIds.has(taskId)) toTag.push(taskId);
-      }
-      for (const taskId of currentlyTaggedIds) {
-        if (!tagSelected.has(taskId)) toUntag.push(taskId);
-      }
-      if (!toTag.length && !toUntag.length) {
-        setTagDialogOpen(false);
-        setTagSelected(new Set());
-        setTagSearch("");
-        return;
-      }
-      await Promise.all([
-        ...toTag.map((taskId) => onTagTask(taskId, selectedRelease.name)),
-        ...toUntag.map((taskId) => onRemoveTaskTag(taskId)),
-      ]);
-      setTagDialogOpen(false);
-      setTagSelected(new Set());
-      setTagSearch("");
-    } catch (cause) {
-      toast.error(String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleRemoveTag(taskId: string) {
     try {
       await onRemoveTaskTag(taskId);
     } catch (cause) {
       toast.error(String(cause));
     }
-  }
-
-  function toggleTagSelected(taskId: string) {
-    setTagSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
   }
 
   const releasesSorted = useMemo(
@@ -673,15 +610,6 @@ export function ReleaseView({
                   Copy
                 </Button>
                 <Button
-                  onClick={() => setTagDialogOpen(true)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <Tag className="size-3.5" />
-                  Add tasks
-                </Button>
-                <Button
                   onClick={() => {
                     setEditVersion(selectedRelease.version);
                     setEditVersionDialogOpen(true);
@@ -695,12 +623,12 @@ export function ReleaseView({
                 </Button>
                 <Button
                   onClick={() => setDeleteDialogOpen(true)}
-                  size="icon-sm"
-                  title="Delete release"
+                  size="sm"
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                 >
                   <Trash2 className="size-3.5" />
+                  Delete
                 </Button>
               </div>
             </div>
@@ -876,7 +804,7 @@ export function ReleaseView({
                       ) : (
                         <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
                           {taggedTasks.length === 0
-                            ? "No tasks tagged yet. Use the checkboxes below or the Add tasks button."
+                            ? "No tasks tagged yet. Use the checkboxes below to add some."
                             : "No selected tasks match the search."}
                         </p>
                       )}
@@ -1389,149 +1317,6 @@ export function ReleaseView({
             >
               Delete
             </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add tasks to release dialog */}
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setTagDialogOpen(false);
-            setTagSelected(new Set());
-            setTagSearch("");
-          } else {
-            // Pre-select tasks already tagged with this release
-            setTagSelected(new Set(currentlyTaggedIds));
-          }
-        }}
-        open={tagDialogOpen}
-      >
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {currentlyTaggedIds.size > 0
-                ? `Manage tasks in ${selectedRelease?.name}`
-                : `Add tasks to ${selectedRelease?.name}`}
-            </DialogTitle>
-            <DialogDescription>
-              {currentlyTaggedIds.size > 0
-                ? "Select or deselect tasks to update this release's tagging."
-                : "Select tasks to tag for this release."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search tasks"
-              className="h-8 pl-7 text-xs"
-              onChange={(e) => setTagSearch(e.target.value)}
-              placeholder="Search tasks by title or folder"
-              value={tagSearch}
-            />
-          </div>
-          <ScrollArea className="h-80">
-            <div className="space-y-0.5 pr-2">
-              {filteredDialogTasks.map((task) => {
-                const folderName = task.folderId
-                  ? folderNames.get(task.folderId)
-                  : null;
-                const alreadyTagged = currentlyTaggedIds.has(task.id);
-                return (
-                  <label
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 hover:bg-accent/60",
-                      tagSelected.has(task.id) && "border-border bg-accent",
-                      alreadyTagged && "ring-1 ring-primary/30",
-                    )}
-                    key={task.id}
-                  >
-                    <input
-                      checked={tagSelected.has(task.id)}
-                      className="size-3.5 shrink-0 accent-primary"
-                      onChange={() => toggleTagSelected(task.id)}
-                      type="checkbox"
-                    />
-                    <span
-                      className="mt-0.5 size-1.5 shrink-0 rounded-full"
-                      aria-hidden
-                      style={{
-                        backgroundColor: STATUS_DOT[task.status],
-                      }}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-xs">
-                      {task.title}
-                    </span>
-                    {folderName && (
-                      <span className="hidden max-w-[120px] truncate text-[11px] text-muted-foreground sm:inline">
-                        {folderName}
-                      </span>
-                    )}
-                    <span className="shrink-0 rounded border border-border bg-muted/50 px-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {task.status}
-                    </span>
-                    {alreadyTagged && (
-                      <span className="shrink-0 rounded border border-primary/40 bg-primary/10 px-1.5 text-[10px] uppercase tracking-wider text-primary">
-                        tagged
-                      </span>
-                    )}
-                  </label>
-                );
-              })}
-              {!filteredDialogTasks.length && (
-                <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                  {tagSearch.trim()
-                    ? "No tasks match this search."
-                    : "No tasks yet. Create some in the Tasks view."}
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">
-              {tagSelected.size} of {filteredDialogTasks.length} task
-              {filteredDialogTasks.length === 1 ? "" : "s"} selected
-            </span>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  setTagDialogOpen(false);
-                  setTagSelected(new Set());
-                  setTagSearch("");
-                }}
-                type="button"
-                variant="ghost"
-              >
-                Cancel
-              </Button>
-              {(() => {
-                const toTagCount = Array.from(tagSelected).filter(
-                  (id) => !currentlyTaggedIds.has(id),
-                ).length;
-                const toUntagCount = Array.from(currentlyTaggedIds).filter(
-                  (id) => !tagSelected.has(id),
-                ).length;
-                const noChanges =
-                  toTagCount === 0 && toUntagCount === 0;
-                const label = noChanges
-                  ? "Save"
-                  : toUntagCount > 0 && toTagCount > 0
-                    ? "Update"
-                    : toUntagCount > 0
-                      ? `Remove (${toUntagCount})`
-                      : `Add (${toTagCount})`;
-                return (
-                  <Button
-                    disabled={busy || noChanges}
-                    onClick={() => void handleAddTagged()}
-                    type="button"
-                    variant="default"
-                  >
-                    {label}
-                  </Button>
-                );
-              })()}
-            </div>
           </div>
         </DialogContent>
       </Dialog>

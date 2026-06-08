@@ -241,6 +241,28 @@ describe("ReleaseView tasks tab", () => {
     );
   });
 
+  it("toggles selection when the row body or title text is clicked", async () => {
+    const onTagTask = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={onTagTask}
+        releases={[release]}
+        tasks={[task, availableTask]}
+      />,
+    );
+
+    // Clicking the title text of an untagged row should tag it (the whole
+    // row is a <label> that wraps the checkbox).
+    fireEvent.click(screen.getByText("Polish sidebar"));
+    await waitFor(() =>
+      expect(onTagTask).toHaveBeenCalledWith("task-b", "v0.3"),
+    );
+  });
+
   it("shows an error chip when the regex pattern is invalid", () => {
     render(
       <ReleaseView
