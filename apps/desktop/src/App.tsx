@@ -1916,17 +1916,19 @@ function WorklogMetricsView({
                   className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[120px_minmax(0,1fr)_auto]"
                   key={entry.id}
                 >
-                  <time className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <time className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
                     {formatShortDate(entry.occurredAt)}
                   </time>
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{entry.taskTitle}</p>
+                    <p className="truncate text-sm font-medium">
+                      {entry.taskTitle}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {entry.folderName ?? "No folder"} ·{" "}
                       {stripOneLine(entry.contentMarkdown)}
                     </p>
                   </div>
-                  <span className="font-mono text-xs text-foreground">
+                  <span className="font-mono text-sm text-foreground">
                     {formatDuration(entry.durationMinutes)}
                   </span>
                 </div>
