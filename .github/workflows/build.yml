@@ -32,9 +32,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Prettier
         run: pnpm format:check
@@ -64,13 +64,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri -> target
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
@@ -88,7 +83,12 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Clean Rust build artifacts
+        run: cargo clean
+        working-directory: apps/desktop/src-tauri
 
       - name: Vitest
         run: pnpm test
@@ -135,15 +135,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri -> target
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
@@ -161,7 +156,12 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Clean Rust build artifacts
+        run: cargo clean
+        working-directory: apps/desktop/src-tauri
 
       - name: Publish Tauri Release
         uses: tauri-apps/tauri-action@v0
