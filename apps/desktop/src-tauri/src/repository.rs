@@ -252,6 +252,7 @@ pub struct UpdateQuickLinkInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Release {
     pub name: String,
     pub version: Option<String>,
@@ -263,6 +264,7 @@ pub struct Release {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateReleaseInput {
     pub name: String,
     pub version: Option<String>,
@@ -271,6 +273,7 @@ pub struct CreateReleaseInput {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateReleaseInput {
     pub name: String,
     pub version: Option<String>,
@@ -1616,6 +1619,7 @@ fn now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn task(database: &Database) -> Task {
         database
@@ -2007,5 +2011,48 @@ mod tests {
 
         assert_eq!(edited.title, "Decision doc");
         assert_eq!(edited.provider, "doc");
+    }
+
+    #[test]
+    fn release_uses_camel_case_for_frontend_ipc() {
+        // The frontend TypeScript types declare `descriptionMarkdown` /
+        // `releasedAt` / `folderId` etc. in camelCase. Tauri 2 serializes
+        // command args as-is (no automatic case conversion), so the Rust
+        // struct must opt into camelCase or the frontend reads `undefined`
+        // for every field and the release template always appears empty.
+        let json = serde_json::to_value(Release {
+            name: "v0.3".into(),
+            version: Some("0.3.0".into()),
+            description_markdown: "## Saved template".into(),
+            released_at: None,
+            folder_id: None,
+            created_at: "2026-06-05T00:00:00Z".into(),
+            updated_at: "2026-06-05T00:00:00Z".into(),
+        })
+        .unwrap();
+        assert_eq!(json["name"], "v0.3");
+        assert_eq!(json["descriptionMarkdown"], "## Saved template");
+        assert_eq!(json["releasedAt"], serde_json::Value::Null);
+        assert!(
+            json.get("description_markdown").is_none(),
+            "Release must not leak snake_case keys to the frontend",
+        );
+
+        // The frontend sends `descriptionMarkdown` in update calls. Without
+        // `rename_all = "camelCase"`, this JSON would fail to deserialize
+        // and the save would silently error out (or persist nothing).
+        let input: UpdateReleaseInput = serde_json::from_value(json!({
+            "name": "v0.3",
+            "descriptionMarkdown": "## Updated template",
+        }))
+        .unwrap();
+        assert_eq!(input.description_markdown.as_deref(), Some("## Updated template"));
+
+        let created: CreateReleaseInput = serde_json::from_value(json!({
+            "name": "v0.4",
+            "descriptionMarkdown": "## New release",
+        }))
+        .unwrap();
+        assert_eq!(created.description_markdown.as_deref(), Some("## New release"));
     }
 }
