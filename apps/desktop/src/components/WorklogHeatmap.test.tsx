@@ -29,7 +29,7 @@ describe("WorklogHeatmap", () => {
     expect(screen.getAllByTestId("heatmap-cell")).toHaveLength(3);
   });
 
-  it("uses a single emerald intensity gradient (GitHub-style)", () => {
+  it("paints each cell using the theme accent and a hatch pattern", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -38,18 +38,23 @@ describe("WorklogHeatmap", () => {
         selectedDay={null}
       />,
     );
-    const cells = screen.getAllByTestId("heatmap-cell");
-    // Day with 9h (the busiest) should be the brightest — solid
-    // emerald-500 with no alpha suffix.
-    expect(cells[1]?.className).toMatch(/bg-emerald-500(?!\/)/);
-    // Day with 2h should be visibly lighter than the 9h day but
-    // darker than the muted empty cells.
-    expect(cells[2]?.className).toMatch(/bg-emerald-500\/(25|45|65|85)/);
+    const cells = screen.getAllByTestId("heatmap-cell") as HTMLButtonElement[];
+    // The 9h day (cell #2) is the brightest. It should declare an
+    // accent fill AND a diagonal-hatch backgroundImage, with no
+    // fixed emerald-500 class.
+    const busy = cells[1]!;
+    const style = busy.getAttribute("style") ?? "";
+    expect(style).toMatch(/background-color/);
+    expect(style).toMatch(/repeating-linear-gradient\(45deg/);
+    // The 2h day (cell #3) should also have the hatch but a
+    // different (looser) stripe.
+    const light = cells[2]!;
+    expect(light.getAttribute("style") ?? "").toMatch(
+      /repeating-linear-gradient\(45deg/,
+    );
   });
 
   it("renders the current streak in the header pill", () => {
-    // Three consecutive days at >= 1h each — the 1h threshold makes
-    // 2h, 6h, 9h all qualify. Streak = 3.
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -79,8 +84,6 @@ describe("WorklogHeatmap", () => {
   });
 
   it("surfaces the longest streak in the range alongside the current", () => {
-    // Long run of 4 days earlier, current 1 day — pill should
-    // read "1d / best 4d".
     const days: WorklogDay[] = [
       { key: "2026-06-01", date: "2026-06-01", minutes: 4 * 60 },
       { key: "2026-06-02", date: "2026-06-02", minutes: 4 * 60 },
@@ -100,6 +103,24 @@ describe("WorklogHeatmap", () => {
     const pill = screen.getByTestId("worklog-streak-pill");
     expect(pill).toHaveTextContent(/1d/);
     expect(pill).toHaveTextContent(/best 4d/);
+  });
+
+  it("renders rectangular cells (not squares)", () => {
+    // Bigger boxes — the spec called for a "chart-like" cell,
+    // not a GitHub dot. We assert the cell has a fixed height
+    // class which keeps the row count short and the chart tall.
+    render(
+      <WorklogHeatmap
+        days={DAYS}
+        onSelectDay={vi.fn()}
+        range="12w"
+        selectedDay={null}
+      />,
+    );
+    const cells = screen.getAllByTestId("heatmap-cell");
+    cells.forEach((cell) => {
+      expect(cell.className).toMatch(/\bh-7\b/);
+    });
   });
 
   it("does not render any amber goal overlays", () => {
