@@ -91,6 +91,16 @@ import {
   type SummaryFieldKey,
   type SummaryTemplate,
 } from "@/lib/summaryTemplate";
+import {
+  BREAK_MINUTES_MAX,
+  BREAK_MINUTES_MIN,
+  DAILY_HOURS_MAX,
+  DAILY_HOURS_MIN,
+  effectiveDailyGoalMinutes,
+  loadWorklogSettings,
+  saveWorklogSettings,
+  type WorklogSettings,
+} from "@/lib/worklogSettings";
 import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
@@ -201,6 +211,9 @@ export default function App() {
   const [summaryOrder, setSummaryOrder] = useState<
     ReadonlyArray<SummaryFieldKey>
   >(() => loadSummaryOrder());
+  const [worklogSettings, setWorklogSettings] = useState<WorklogSettings>(() =>
+    loadWorklogSettings(),
+  );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("tasks");
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
@@ -268,6 +281,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(UPDATE_CHECK_INTERVAL_KEY, updateInterval);
   }, [updateInterval]);
+
+  useEffect(() => {
+    saveWorklogSettings(worklogSettings);
+  }, [worklogSettings]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1267,6 +1284,7 @@ export default function App() {
         onThemeChange={setTheme}
         onUpdateAutoCheckChange={setUpdateAutoCheck}
         onUpdateIntervalChange={setUpdateInterval}
+        onWorklogSettingsChange={setWorklogSettings}
         open={settingsOpen}
         summaryOrder={summaryOrder}
         summaryTemplate={summaryTemplate}
@@ -1277,6 +1295,7 @@ export default function App() {
         updateLastCheck={updateLastCheck}
         updateMessage={updateMessage}
         updateState={updateState}
+        worklogSettings={worklogSettings}
       />
       <AppContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
@@ -2451,6 +2470,7 @@ function SettingsDialog({
   updateLastCheck,
   updateMessage,
   updateState,
+  worklogSettings,
   onCheckForUpdates,
   onInstallUpdate,
   onOpenChange,
@@ -2461,6 +2481,7 @@ function SettingsDialog({
   onThemeChange,
   onUpdateAutoCheckChange,
   onUpdateIntervalChange,
+  onWorklogSettingsChange,
 }: {
   appVersion: string;
   downloadProgress: number;
@@ -2474,6 +2495,7 @@ function SettingsDialog({
   updateLastCheck: number | null;
   updateMessage: string;
   updateState: UpdateState;
+  worklogSettings: WorklogSettings;
   onCheckForUpdates: () => Promise<void>;
   onInstallUpdate: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
@@ -2484,6 +2506,7 @@ function SettingsDialog({
   onThemeChange: (theme: AppThemeId) => void;
   onUpdateAutoCheckChange: (enabled: boolean) => void;
   onUpdateIntervalChange: (interval: UpdateInterval) => void;
+  onWorklogSettingsChange: (settings: WorklogSettings) => void;
 }) {
   const [tab, setTab] = useState<
     "general" | "summary" | "shortcuts" | "updates" | "about"
@@ -2585,6 +2608,75 @@ function SettingsDialog({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="mt-8 max-w-sm space-y-2 border-t border-border pt-6">
+                <h3 className="text-sm font-medium">Worklog</h3>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Used by the worklog charts. Set your target hours per
+                  workday and subtract any non-billable break time.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-xs font-medium text-muted-foreground"
+                      htmlFor="worklog-daily-hours"
+                    >
+                      Hours per day
+                    </label>
+                    <Input
+                      aria-label="Hours per day"
+                      className="h-8 text-xs"
+                      id="worklog-daily-hours"
+                      max={DAILY_HOURS_MAX}
+                      min={DAILY_HOURS_MIN}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isFinite(next)) {
+                          onWorklogSettingsChange({
+                            ...worklogSettings,
+                            dailyHours: next,
+                          });
+                        }
+                      }}
+                      step="0.5"
+                      type="number"
+                      value={worklogSettings.dailyHours}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-xs font-medium text-muted-foreground"
+                      htmlFor="worklog-break-minutes"
+                    >
+                      Break (minutes)
+                    </label>
+                    <Input
+                      aria-label="Break minutes"
+                      className="h-8 text-xs"
+                      id="worklog-break-minutes"
+                      max={BREAK_MINUTES_MAX}
+                      min={BREAK_MINUTES_MIN}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isFinite(next)) {
+                          onWorklogSettingsChange({
+                            ...worklogSettings,
+                            breakMinutes: next,
+                          });
+                        }
+                      }}
+                      step="5"
+                      type="number"
+                      value={worklogSettings.breakMinutes}
+                    />
+                  </div>
+                </div>
+                <p className="pt-1 font-mono text-[10px] text-muted-foreground">
+                  Effective goal: {formatDuration(
+                    effectiveDailyGoalMinutes(worklogSettings),
+                  )} / day
+                </p>
               </div>
             </>
           ) : tab === "summary" ? (

@@ -488,6 +488,36 @@ describe("TaskHeader", () => {
     ]);
   });
 
+  it("edits per-day work hours and break minutes in Settings → General", async () => {
+    mockAppApi();
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText("Open settings"));
+
+    const hours = screen.getByLabelText(
+      "Hours per day",
+    ) as HTMLInputElement;
+    const breakMinutes = screen.getByLabelText(
+      "Break minutes",
+    ) as HTMLInputElement;
+
+    expect(hours.value).toBe("8");
+    expect(breakMinutes.value).toBe("0");
+
+    fireEvent.change(hours, { target: { value: "7.5" } });
+    fireEvent.change(breakMinutes, { target: { value: "30" } });
+
+    await waitFor(() => {
+      const stored = JSON.parse(
+        localStorage.getItem("devthread:worklog-settings") ?? "{}",
+      );
+      expect(stored).toMatchObject({
+        dailyHours: 7.5,
+        breakMinutes: 30,
+      });
+    });
+  });
+
   it("logs task status changes into the timeline", async () => {
     mockAppApi();
     vi.mocked(api.updateTask).mockResolvedValue({ ...task, status: "done" });
