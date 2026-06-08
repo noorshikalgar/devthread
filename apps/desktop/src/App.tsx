@@ -106,10 +106,7 @@ import {
   type WorklogSettings,
 } from "@/lib/worklogSettings";
 import type { WorklogDay } from "@/lib/worklog";
-import {
-  aggregateWithSegments,
-  averageFraction,
-} from "@/lib/worklogAggregates";
+import { aggregateByBucket } from "@/lib/worklogAggregates";
 import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
@@ -1829,24 +1826,12 @@ function WorklogMetricsView({
     safeLogPage * LOG_PAGE_SIZE,
   );
 
-  // Weekly and monthly bars, with per-task stacked segments so each
-  // bar shows what ate the time. The average line in the monthly
-  // view sits at the mean over the visible range.
-  const weekly = aggregateWithSegments(
-    entries,
-    "week",
-    weekLabel,
-    (entry) => entry.taskTitle,
-    3,
-  );
-  const monthly = aggregateWithSegments(
-    entries,
-    "month",
-    monthLabel,
-    (entry) => entry.folderName ?? "No folder",
-    4,
-  );
-  const monthlyAverageFraction = averageFraction(monthly);
+  // Weekly and monthly bars, one row per bucket with the total
+  // minutes logged in that bucket. Segments and an average line
+  // were tried in an earlier iteration and felt busy for the cards
+  // at this density, so they're out.
+  const weekly = aggregateByBucket(entries, weekLabel);
+  const monthly = aggregateByBucket(entries, monthLabel);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
@@ -1902,27 +1887,14 @@ function WorklogMetricsView({
 
           <WorklogHeatmap
             days={days}
+            onSelectDay={setSelectedDay}
             range={range}
             selectedDay={selectedDay}
-            settings={worklogSettings}
-            onSelectDay={setSelectedDay}
           />
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <WorklogBars
-              items={weekly}
-              showAverage={false}
-              title="Weekly totals"
-              unitLabel="week"
-            />
-            <WorklogBars
-              averageFraction={monthlyAverageFraction}
-              averageLabel="Average"
-              headerRight={`${monthly.length} months`}
-              items={monthly}
-              title="Monthly totals"
-              unitLabel="month"
-            />
+            <WorklogBars items={weekly} title="Weekly totals" />
+            <WorklogBars items={monthly} title="Monthly totals" />
           </div>
 
           <div className="rounded-lg border border-border bg-card">

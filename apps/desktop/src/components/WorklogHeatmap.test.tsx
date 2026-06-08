@@ -5,9 +5,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorklogHeatmap } from "./WorklogHeatmap";
 import type { WorklogDay } from "@/lib/worklog";
-import type { WorklogSettings } from "@/lib/worklogSettings";
-
-const SETTINGS: WorklogSettings = { dailyHours: 8, breakMinutes: 0 };
 
 const DAYS: WorklogDay[] = [
   { key: "2026-06-01", date: "2026-06-01", minutes: 6 * 60 },
@@ -27,27 +24,27 @@ describe("WorklogHeatmap", () => {
         onSelectDay={vi.fn()}
         range="12w"
         selectedDay={null}
-        settings={SETTINGS}
       />,
     );
     expect(screen.getAllByTestId("heatmap-cell")).toHaveLength(3);
   });
 
-  it("marks days above the goal with data-above-goal", () => {
+  it("uses a single emerald intensity gradient (GitHub-style)", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
         onSelectDay={vi.fn()}
         range="12w"
         selectedDay={null}
-        settings={SETTINGS}
       />,
     );
     const cells = screen.getAllByTestId("heatmap-cell");
-    // 6h (below), 9h (above), 2h (below)
-    expect(cells[0]?.getAttribute("data-above-goal")).toBeNull();
-    expect(cells[1]?.getAttribute("data-above-goal")).not.toBeNull();
-    expect(cells[2]?.getAttribute("data-above-goal")).toBeNull();
+    // Day with 9h (the busiest) should be the brightest — solid
+    // emerald-500 with no alpha suffix.
+    expect(cells[1]?.className).toMatch(/bg-emerald-500(?!\/)/);
+    // Day with 2h should be visibly lighter than the 9h day but
+    // darker than the muted empty cells.
+    expect(cells[2]?.className).toMatch(/bg-emerald-500\/(25|45|65|85)/);
   });
 
   it("renders the current streak in the header pill", () => {
@@ -59,7 +56,6 @@ describe("WorklogHeatmap", () => {
         onSelectDay={vi.fn()}
         range="12w"
         selectedDay={null}
-        settings={SETTINGS}
       />,
     );
     const pill = screen.getByTestId("worklog-streak-pill");
@@ -77,7 +73,6 @@ describe("WorklogHeatmap", () => {
         onSelectDay={vi.fn()}
         range="12w"
         selectedDay={null}
-        settings={SETTINGS}
       />,
     );
     expect(screen.getByTestId("worklog-streak-pill")).toHaveTextContent("0d");
@@ -100,11 +95,22 @@ describe("WorklogHeatmap", () => {
         onSelectDay={vi.fn()}
         range="12w"
         selectedDay={null}
-        settings={SETTINGS}
       />,
     );
     const pill = screen.getByTestId("worklog-streak-pill");
     expect(pill).toHaveTextContent(/1d/);
     expect(pill).toHaveTextContent(/best 4d/);
+  });
+
+  it("does not render any amber goal overlays", () => {
+    const { container } = render(
+      <WorklogHeatmap
+        days={DAYS}
+        onSelectDay={vi.fn()}
+        range="12w"
+        selectedDay={null}
+      />,
+    );
+    expect(container.querySelector(".bg-amber-300")).toBeNull();
   });
 });

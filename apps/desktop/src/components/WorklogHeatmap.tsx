@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { Flame } from "lucide-react";
 import { computeStreaks } from "@/lib/worklogStreaks";
-import { effectiveDailyGoalMinutes } from "@/lib/worklogSettings";
-import type { WorklogSettings } from "@/lib/worklogSettings";
 import type { WorklogDay } from "@/lib/worklog";
 import { cn } from "@/lib/utils";
 
@@ -11,17 +9,22 @@ export interface WorklogHeatmapProps {
   range: "7d" | "4w" | "12w" | "12m";
   selectedDay: string | null;
   onSelectDay: (key: string | null) => void;
-  settings: WorklogSettings;
 }
 
-function heatClass(minutes: number, max: number): string {
+/**
+ * GitHub-style intensity ladder for a single day. Five buckets from
+ * "nothing logged" (muted) to "heavy day" (solid emerald), cut on
+ * absolute minutes so the same value always lands on the same shade
+ * — the user shouldn't lose a green cell because they had an
+ * unusually productive day in the range.
+ */
+function heatClass(minutes: number): string {
   if (minutes <= 0) return "bg-muted/40";
-  if (max <= 0) return "bg-muted/40";
-  const ratio = minutes / max;
-  if (ratio > 0.75) return "bg-emerald-500";
-  if (ratio > 0.45) return "bg-emerald-500/70";
-  if (ratio > 0.2) return "bg-emerald-500/45";
-  return "bg-emerald-500/20";
+  if (minutes < 30) return "bg-emerald-500/25";
+  if (minutes < 60) return "bg-emerald-500/45";
+  if (minutes < 120) return "bg-emerald-500/65";
+  if (minutes < 240) return "bg-emerald-500/85";
+  return "bg-emerald-500";
 }
 
 function streakLabel(value: number): string {
@@ -34,19 +37,9 @@ export function WorklogHeatmap({
   range,
   selectedDay,
   onSelectDay,
-  settings,
 }: WorklogHeatmapProps) {
-  const max = useMemo(
-    () => Math.max(1, ...days.map((day) => day.minutes)),
-    [days],
-  );
   const streaks = useMemo(() => computeStreaks(days), [days]);
-  const goalMinutes = effectiveDailyGoalMinutes(settings);
 
-  // For the goal overlay we render a thin horizontal mark inside the
-  // cell when the day is below the goal. The mark's vertical position
-  // represents the goal fraction of the cell height; days above the
-  // goal show a small "above goal" tick in the top-right.
   return (
     <div
       className="rounded-lg border border-border bg-card p-4"
@@ -80,11 +73,11 @@ export function WorklogHeatmap({
             )}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          <span>Below goal</span>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span>Less</span>
           <span
             aria-hidden
-            className="inline-block h-2 w-12 rounded-full bg-gradient-to-r from-emerald-500/20 via-emerald-500/60 to-emerald-500"
+            className="inline-block h-2 w-16 rounded-full bg-gradient-to-r from-muted/40 via-emerald-500/45 via-emerald-500/85 to-emerald-500"
           />
           <span>More</span>
         </div>
@@ -97,40 +90,23 @@ export function WorklogHeatmap({
       >
         {days.map((day) => {
           const isSelected = selectedDay === day.key;
-          const reachedGoal = day.minutes >= goalMinutes && goalMinutes > 0;
           return (
             <button
               aria-label={`${day.key} ${formatHM(day.minutes)}`}
               className={cn(
                 "group relative aspect-square w-full min-w-0 overflow-hidden rounded-[3px] border border-border/50 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 range !== "12m" && "size-4",
-                heatClass(day.minutes, max),
+                heatClass(day.minutes),
                 isSelected && "ring-2 ring-primary",
               )}
-              data-above-goal={reachedGoal || undefined}
               data-testid="heatmap-cell"
               key={day.key}
               onClick={() =>
                 onSelectDay(isSelected ? null : day.key)
               }
-              title={`${day.key} · ${formatHM(day.minutes)}${
-                reachedGoal ? " · above goal" : ""
-              }`}
+              title={`${day.key} · ${formatHM(day.minutes)}`}
               type="button"
-            >
-              {reachedGoal && (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute right-0.5 top-0.5 size-1 rounded-full bg-amber-300 shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
-                />
-              )}
-              {day.minutes > 0 && !reachedGoal && goalMinutes > 0 && (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-[2px] w-full bg-amber-300/70"
-                />
-              )}
-            </button>
+            />
           );
         })}
       </div>
