@@ -2,8 +2,8 @@ mod repository;
 
 use repository::{
     CreateAttachmentInput, CreateEntryInput, CreateFolderInput, CreateQuickLinkInput,
-    CreateTaskInput, Database, MoveTaskInput, RenameFolderInput, UpdateEntryInput,
-    UpdateQuickLinkInput, UpdateTaskInput,
+    CreateReleaseInput, CreateTaskInput, Database, MoveTaskInput, RenameFolderInput,
+    UpdateEntryInput, UpdateQuickLinkInput, UpdateReleaseInput, UpdateTaskInput,
 };
 use serde::Serialize;
 use std::sync::OnceLock;
@@ -289,6 +289,66 @@ async fn fetch_link_preview(url: String) -> Result<LinkMetadata, String> {
     })
 }
 
+#[tauri::command]
+fn list_releases(database: tauri::State<'_, Database>) -> Result<Vec<repository::Release>, String> {
+    database.list_releases().map_err(to_message)
+}
+
+#[tauri::command]
+fn create_release(
+    database: tauri::State<'_, Database>,
+    input: repository::CreateReleaseInput,
+) -> Result<repository::Release, String> {
+    database.create_release(input).map_err(to_message)
+}
+
+#[tauri::command]
+fn update_release(
+    database: tauri::State<'_, Database>,
+    input: repository::UpdateReleaseInput,
+) -> Result<repository::Release, String> {
+    database.update_release(input).map_err(to_message)
+}
+
+#[tauri::command]
+fn delete_release(database: tauri::State<'_, Database>, version: String) -> Result<(), String> {
+    database.delete_release(&version).map_err(to_message)
+}
+
+#[tauri::command]
+fn tag_task_release(
+    database: tauri::State<'_, Database>,
+    task_id: String,
+    version: String,
+) -> Result<(), String> {
+    database.tag_task_release(&task_id, &version).map_err(to_message)
+}
+
+#[tauri::command]
+fn remove_task_release(
+    database: tauri::State<'_, Database>,
+    task_id: String,
+) -> Result<(), String> {
+    database.remove_task_release(&task_id).map_err(to_message)
+}
+
+#[tauri::command]
+fn tag_folder_release(
+    database: tauri::State<'_, Database>,
+    folder_id: String,
+    version: String,
+) -> Result<(), String> {
+    database.tag_folder_release(&folder_id, &version).map_err(to_message)
+}
+
+#[tauri::command]
+fn remove_folder_release(
+    database: tauri::State<'_, Database>,
+    folder_id: String,
+) -> Result<(), String> {
+    database.remove_folder_release(&folder_id).map_err(to_message)
+}
+
 fn to_message(error: repository::RepositoryError) -> String {
     log::error!("database operation failed: {}", error.redacted());
     error.to_string()
@@ -503,7 +563,15 @@ pub fn run() {
             create_quick_link,
             update_quick_link,
             delete_quick_link,
-            fetch_link_preview
+            fetch_link_preview,
+            list_releases,
+            create_release,
+            update_release,
+            delete_release,
+            tag_task_release,
+            remove_task_release,
+            tag_folder_release,
+            remove_folder_release
         ])
         .run(tauri::generate_context!())
         .expect("failed to run DevThread");

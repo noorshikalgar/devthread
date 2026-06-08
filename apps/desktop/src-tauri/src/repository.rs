@@ -18,6 +18,7 @@ const STATUS_ENTRY_TYPE_MIGRATION: &str = include_str!("../migrations/005_status
 const ESTIMATE_ENTRY_TYPE_MIGRATION: &str =
     include_str!("../migrations/006_estimate_entry_type.sql");
 const QUICK_LINK_MIGRATION: &str = include_str!("../migrations/007_quick_links.sql");
+const RELEASE_MIGRATION: &str = include_str!("../migrations/008_releases.sql");
 const MAX_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
 const MAX_QUICK_LINKS_PER_TASK: i64 = 3;
 const TASK_STATUSES: &[&str] = &["planned", "active", "blocked", "paused", "done", "archived"];
@@ -250,6 +251,34 @@ pub struct UpdateQuickLinkInput {
     pub provider: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Release {
+    pub version: String,
+    pub name: String,
+    pub description_markdown: String,
+    pub released_at: Option<String>,
+    pub folder_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateReleaseInput {
+    pub version: String,
+    pub name: String,
+    pub description_markdown: Option<String>,
+    pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateReleaseInput {
+    pub version: String,
+    pub name: Option<String>,
+    pub description_markdown: Option<String>,
+    pub released_at: Option<Option<String>>,
+    pub folder_id: Option<Option<String>>,
+}
+
 pub struct Database {
     connection: Mutex<Connection>,
     attachments_dir: PathBuf,
@@ -299,6 +328,9 @@ impl Database {
         Self::ensure_estimate_entry_type(connection)?;
         connection.execute_batch(FOLDER_MIGRATION)?;
         connection.execute_batch(QUICK_LINK_MIGRATION)?;
+        connection.execute_batch(RELEASE_MIGRATION)?;
+        Self::ensure_tasks_release_column(connection)?;
+        Self::ensure_folders_release_column(connection)?;
         Ok(())
     }
 
@@ -408,6 +440,38 @@ impl Database {
         connection.execute_batch(WORKLOG_ENTRY_TYPE_MIGRATION)?;
         connection.execute(
             "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('worklog_entry_type_applied', '1')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_tasks_release_column(connection: &Connection) -> Result<()> {
+        let mut pragma_columns = connection.prepare("PRAGMA table_info(tasks)")?;
+        let names: Vec<String> = pragma_columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .map(|entry| entry.map_err(RepositoryError::Database))
+            .collect::<Result<Vec<_>>>()?;
+        if names.iter().any(|name| name == "release_version") {
+            return Ok(());
+        }
+        connection.execute(
+            "ALTER TABLE tasks ADD COLUMN release_version TEXT REFERENCES releases(version)",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_folders_release_column(connection: &Connection) -> Result<()> {
+        let mut pragma_columns = connection.prepare("PRAGMA table_info(folders)")?;
+        let names: Vec<String> = pragma_columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .map(|entry| entry.map_err(RepositoryError::Database))
+            .collect::<Result<Vec<_>>>()?;
+        if names.iter().any(|name| name == "release_version") {
+            return Ok(());
+        }
+        connection.execute(
+            "ALTER TABLE folders ADD COLUMN release_version TEXT REFERENCES releases(version)",
             [],
         )?;
         Ok(())
@@ -614,6 +678,169 @@ impl Database {
         )?;
         transaction.commit()?;
         Ok(changed)
+    }
+
+    pub fn list_releases(&self) -> Result<Vec<Release>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT version, name, description_markdown, released_at, folder_id, created_at, updated_at
+             FROM releases ORDER BY released_at DESC NULLS LAST, created_at DESC",
+        )?;
+        let releases = statement
+            .query_map([], |row| {
+                Ok(Release {
+                    version: row.get(0)?,
+                    name: row.get(1)?,
+                    description_markdown: row.get(2)?,
+                    released_at: row.get(3)?,
+                    folder_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })?
+            .map(|entry| entry.map_err(RepositoryError::Database))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(releases)
+    }
+
+    pub fn create_release(&self, input: CreateReleaseInput) -> Result<Release> {
+        let connection = self.connection()?;
+        let description_markdown = input.description_markdown.unwrap_or_default();
+        let stamp = now();
+        connection.execute(
+            "INSERT INTO releases (version, name, description_markdown, folder_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            params![
+                input.version,
+                input.name,
+                description_markdown,
+                input.folder_id,
+                stamp,
+            ],
+        )?;
+        Ok(Release {
+            version: input.version,
+            name: input.name,
+            description_markdown,
+            released_at: None,
+            folder_id: input.folder_id,
+            created_at: stamp.clone(),
+            updated_at: stamp,
+        })
+    }
+
+    pub fn update_release(&self, input: UpdateReleaseInput) -> Result<Release> {
+        let connection = self.connection()?;
+        let existing = connection
+            .query_row(
+                "SELECT version, name, description_markdown, released_at, folder_id, created_at, updated_at
+                 FROM releases WHERE version = ?1",
+                [&input.version],
+                |row| {
+                    Ok(Release {
+                        version: row.get(0)?,
+                        name: row.get(1)?,
+                        description_markdown: row.get(2)?,
+                        released_at: row.get(3)?,
+                        folder_id: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| RepositoryError::NotFound("Release"))?;
+
+        let stamp = now();
+        let name = input.name.unwrap_or(existing.name);
+        let description_markdown = input.description_markdown.unwrap_or(existing.description_markdown);
+        let released_at = input.released_at.unwrap_or(existing.released_at);
+        connection.execute(
+            "UPDATE releases SET name = ?1, description_markdown = ?2, released_at = ?3, updated_at = ?4
+             WHERE version = ?5",
+            params![name, description_markdown, released_at, stamp, input.version],
+        )?;
+        Ok(Release {
+            version: input.version,
+            name,
+            description_markdown,
+            released_at,
+            folder_id: existing.folder_id,
+            created_at: existing.created_at,
+            updated_at: stamp,
+        })
+    }
+
+    pub fn delete_release(&self, version: &str) -> Result<()> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "UPDATE tasks SET release_version = NULL WHERE release_version = ?1",
+            params![version],
+        )?;
+        transaction.execute(
+            "UPDATE folders SET release_version = NULL WHERE release_version = ?1",
+            params![version],
+        )?;
+        transaction.execute("DELETE FROM releases WHERE version = ?1", params![version])?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn tag_task_release(&self, task_id: &str, version: &str) -> Result<()> {
+        let connection = self.connection()?;
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE tasks SET release_version = ?1, updated_at = ?2
+             WHERE id = ?3 AND deleted_at IS NULL",
+            params![version, stamp, task_id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Task"));
+        }
+        Ok(())
+    }
+
+    pub fn remove_task_release(&self, task_id: &str) -> Result<()> {
+        let connection = self.connection()?;
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE tasks SET release_version = NULL, updated_at = ?1
+             WHERE id = ?2 AND deleted_at IS NULL",
+            params![stamp, task_id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Task"));
+        }
+        Ok(())
+    }
+
+    pub fn tag_folder_release(&self, folder_id: &str, version: &str) -> Result<()> {
+        let connection = self.connection()?;
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE folders SET release_version = ?1, updated_at = ?2
+             WHERE id = ?3 AND deleted_at IS NULL",
+            params![version, stamp, folder_id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Folder"));
+        }
+        Ok(())
+    }
+
+    pub fn remove_folder_release(&self, folder_id: &str) -> Result<()> {
+        let connection = self.connection()?;
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE folders SET release_version = NULL, updated_at = ?1
+             WHERE id = ?2 AND deleted_at IS NULL",
+            params![stamp, folder_id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Folder"));
+        }
+        Ok(())
     }
 
     pub fn list_entries(
