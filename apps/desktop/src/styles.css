@@ -500,6 +500,22 @@
   .remote-image-blocked {
     @apply inline-flex rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground;
   }
+
+  .note-link-card {
+    @apply block rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/60;
+  }
+
+  .note-link-card__host {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .note-link-card__label {
+    @apply mt-0.5 text-sm font-medium text-foreground;
+  }
+
+  .note-link-card__path {
+    @apply mt-0.5 truncate font-mono text-[11px] text-muted-foreground;
+  }
 }
 
 @layer base {

@@ -316,6 +316,65 @@ fn delete_release(database: tauri::State<'_, Database>, name: String) -> Result<
 }
 
 #[tauri::command]
+fn list_notes(database: tauri::State<'_, Database>) -> Result<Vec<repository::Note>, String> {
+    database.list_notes().map_err(to_message)
+}
+
+#[tauri::command]
+fn get_note(
+    database: tauri::State<'_, Database>,
+    id: String,
+) -> Result<repository::Note, String> {
+    database.get_note(&id).map_err(to_message)
+}
+
+#[tauri::command]
+fn create_note(
+    database: tauri::State<'_, Database>,
+    input: repository::CreateNoteInput,
+) -> Result<repository::Note, String> {
+    database.create_note(input).map_err(to_message)
+}
+
+#[tauri::command]
+fn update_note(
+    database: tauri::State<'_, Database>,
+    input: repository::UpdateNoteInput,
+) -> Result<repository::Note, String> {
+    database.update_note(input).map_err(to_message)
+}
+
+#[tauri::command]
+fn move_note(
+    database: tauri::State<'_, Database>,
+    id: String,
+    folder_id: Option<String>,
+) -> Result<repository::Note, String> {
+    database.move_note(&id, folder_id).map_err(to_message)
+}
+
+#[tauri::command]
+fn delete_note(database: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_note(&id).map_err(to_message)
+}
+
+#[tauri::command]
+fn list_note_attachments(
+    database: tauri::State<'_, Database>,
+    note_id: String,
+) -> Result<Vec<repository::NoteAttachment>, String> {
+    database.list_note_attachments(&note_id).map_err(to_message)
+}
+
+#[tauri::command]
+fn create_note_attachment(
+    database: tauri::State<'_, Database>,
+    input: repository::CreateNoteAttachmentInput,
+) -> Result<repository::NoteAttachment, String> {
+    database.create_note_attachment(input).map_err(to_message)
+}
+
+#[tauri::command]
 fn tag_task_release(
     database: tauri::State<'_, Database>,
     task_id: String,
@@ -571,7 +630,15 @@ pub fn run() {
             tag_task_release,
             remove_task_release,
             tag_folder_release,
-            remove_folder_release
+            remove_folder_release,
+            list_notes,
+            get_note,
+            create_note,
+            update_note,
+            move_note,
+            delete_note,
+            list_note_attachments,
+            create_note_attachment
         ])
         .run(tauri::generate_context!())
         .expect("failed to run DevThread");

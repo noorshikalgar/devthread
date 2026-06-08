@@ -4,6 +4,8 @@ import type {
   EntryType,
   Folder,
   LinkMetadata,
+  Note,
+  NoteAttachment,
   Release,
   Task,
   TaskQuickLink,
@@ -150,5 +152,42 @@ export const api = {
   ) =>
     invoke<Attachment>("create_attachment", {
       input: { workLogEntryId, originalName, mediaType, base64Data },
+    }),
+  listNotes: () => invoke<Note[]>("list_notes"),
+  getNote: (id: string) => invoke<Note>("get_note", { id }),
+  createNote: (input: {
+    title: string;
+    bodyMarkdown?: string;
+    folderId?: string | null;
+  }) =>
+    invoke<Note>("create_note", {
+      input: {
+        title: input.title,
+        bodyMarkdown: input.bodyMarkdown ?? "",
+        folderId: input.folderId ?? null,
+      },
+    }),
+  updateNote: (note: Note) =>
+    invoke<Note>("update_note", {
+      input: {
+        id: note.id,
+        title: note.title,
+        bodyMarkdown: note.bodyMarkdown,
+        folderId: note.folderId,
+      },
+    }),
+  moveNote: (noteId: string, folderId: string | null) =>
+    invoke<Note>("move_note", { id: noteId, folderId }),
+  deleteNote: (id: string) => invoke<void>("delete_note", { id }),
+  listNoteAttachments: (noteId: string) =>
+    invoke<NoteAttachment[]>("list_note_attachments", { noteId }),
+  createNoteAttachment: (
+    noteId: string,
+    originalName: string,
+    mediaType: string,
+    base64Data: string,
+  ) =>
+    invoke<NoteAttachment>("create_note_attachment", {
+      input: { noteId, originalName, mediaType, base64Data },
     }),
 };

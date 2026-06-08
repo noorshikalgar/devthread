@@ -12,6 +12,7 @@ import {
   Info,
   ListTodo,
   Moon,
+  NotebookPen,
   RefreshCw,
   RotateCcw,
   Search,
@@ -34,6 +35,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
+import { NotesView } from "@/components/NotesView";
 import { ReleaseView } from "@/components/ReleaseView";
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
@@ -152,7 +154,7 @@ type UpdateState =
   | "downloading"
   | "installed"
   | "error";
-type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases";
+type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases" | "notes";
 type WorklogRange = "7d" | "4w" | "12w" | "12m";
 interface AppContextMenuState {
   x: number;
@@ -1025,6 +1027,7 @@ export default function App() {
     onToggleArchive: () =>
       setWorkspaceMode((m) => (m === "archive" ? "tasks" : "archive")),
     onOpenWorklog: () => setWorkspaceMode("worklog"),
+    onOpenNotes: () => setWorkspaceMode("notes"),
     onEditTitle: () => {
       if (selectedTask) setPendingTitleEdit(true);
     },
@@ -1080,6 +1083,7 @@ export default function App() {
               mode === "archive" ? "tasks" : "archive",
             );
           }}
+          onNotesOpen={() => setWorkspaceMode("notes")}
           onReleasesOpen={() => setWorkspaceMode("releases")}
           onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
@@ -1092,6 +1096,7 @@ export default function App() {
             setSidebarOpen((open) => !open);
           }}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
+          notesActive={workspaceMode === "notes"}
           releasesActive={workspaceMode === "releases"}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
@@ -1192,6 +1197,15 @@ export default function App() {
               onTagTask={handleTagTask}
               releases={releases}
               tasks={sidebarTasks}
+            />
+          ) : workspaceMode === "notes" ? (
+            <NotesView
+              folders={folders}
+              onCreateFolder={() => {
+                const name = window.prompt("Folder name");
+                if (name && name.trim()) void createFolder(name.trim());
+              }}
+              onFoldersChanged={loadFolders}
             />
           ) : selectedTask ? (
             <>
@@ -1312,11 +1326,13 @@ export default function App() {
 function AppRail({
   archiveActive,
   onArchiveToggle,
+  onNotesOpen,
   onReleasesOpen,
   onSearchOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
+  notesActive,
   releasesActive,
   tasksActive,
   tasksOpen,
@@ -1325,11 +1341,13 @@ function AppRail({
 }: {
   archiveActive: boolean;
   onArchiveToggle: () => void;
+  onNotesOpen: () => void;
   onReleasesOpen: () => void;
   onSearchOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
+  notesActive: boolean;
   releasesActive: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
@@ -1363,6 +1381,13 @@ function AppRail({
       </Tooltip>
 
       <div className="mt-auto flex flex-col gap-1">
+        <RailButton
+          active={notesActive}
+          icon={NotebookPen}
+          label="Open notes"
+          onClick={onNotesOpen}
+          tooltip="Notes"
+        />
         <RailButton
           active={releasesActive}
           icon={Tag}

@@ -54,6 +54,25 @@ export interface Release {
   updatedAt: string;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  bodyMarkdown: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteAttachment {
+  id: string;
+  noteId: string;
+  originalName: string;
+  mediaType: string;
+  path: string;
+  byteSize: number;
+  createdAt: string;
+}
+
 export interface WorkLogEntry {
   id: string;
   taskId: string;

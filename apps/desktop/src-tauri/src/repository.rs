@@ -19,6 +19,7 @@ const ESTIMATE_ENTRY_TYPE_MIGRATION: &str =
     include_str!("../migrations/006_estimate_entry_type.sql");
 const QUICK_LINK_MIGRATION: &str = include_str!("../migrations/007_quick_links.sql");
 const RELEASE_MIGRATION: &str = include_str!("../migrations/008_releases.sql");
+const NOTES_MIGRATION: &str = include_str!("../migrations/010_notes.sql");
 const MAX_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
 const MAX_QUICK_LINKS_PER_TASK: i64 = 3;
 const TASK_STATUSES: &[&str] = &["planned", "active", "blocked", "paused", "done", "archived"];
@@ -283,6 +284,55 @@ pub struct UpdateReleaseInput {
     pub released_at: Option<Option<String>>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub id: String,
+    pub title: String,
+    pub body_markdown: String,
+    pub folder_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateNoteInput {
+    pub title: String,
+    pub body_markdown: Option<String>,
+    pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateNoteInput {
+    pub id: String,
+    pub title: String,
+    pub body_markdown: String,
+    pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteAttachment {
+    pub id: String,
+    pub note_id: String,
+    pub original_name: String,
+    pub media_type: String,
+    pub path: String,
+    pub byte_size: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateNoteAttachmentInput {
+    pub note_id: String,
+    pub original_name: String,
+    pub media_type: String,
+    pub base64_data: String,
+}
+
 pub struct Database {
     connection: Mutex<Connection>,
     attachments_dir: PathBuf,
@@ -334,6 +384,7 @@ impl Database {
         connection.execute_batch(QUICK_LINK_MIGRATION)?;
         connection.execute_batch(RELEASE_MIGRATION)?;
         Self::migrate_releases_to_name_key(connection)?;
+        connection.execute_batch(NOTES_MIGRATION)?;
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
         Ok(())
     }
@@ -760,15 +811,20 @@ impl Database {
 
     pub fn delete_folder(&self, folder_id: &str) -> Result<()> {
         let connection = self.connection()?;
-        let mut statement = connection
-            .prepare("SELECT 1 FROM tasks WHERE folder_id = ?1 AND deleted_at IS NULL LIMIT 1")?;
+        let mut statement = connection.prepare(
+            "SELECT EXISTS(
+                SELECT 1 FROM tasks WHERE folder_id = ?1 AND deleted_at IS NULL
+             ) OR EXISTS(
+                SELECT 1 FROM notes WHERE folder_id = ?1 AND deleted_at IS NULL
+             )",
+        )?;
         let in_use: bool = statement
             .query_row(params![folder_id], |row| row.get(0))
             .optional()?
             .unwrap_or(false);
         if in_use {
             return Err(RepositoryError::Invalid(
-                "Folder still contains tasks.".into(),
+                "Folder still contains tasks or notes.".into(),
             ));
         }
         let changed = connection.execute(
@@ -801,6 +857,20 @@ impl Database {
             params![folder_id, stamp],
         )?;
 
+        let note_attachments_changed = transaction.execute(
+            "UPDATE note_attachments SET deleted_at = ?2
+             WHERE deleted_at IS NULL AND note_id IN (
+                SELECT id FROM notes WHERE folder_id = ?1 AND deleted_at IS NULL
+             )",
+            params![folder_id, stamp],
+        )?;
+
+        let notes_changed = transaction.execute(
+            "UPDATE notes SET deleted_at = ?2, updated_at = ?2
+             WHERE folder_id = ?1 AND deleted_at IS NULL",
+            params![folder_id, stamp],
+        )?;
+
         let folder_changed = transaction.execute(
             "UPDATE folders SET deleted_at = ?2, updated_at = ?2
              WHERE id = ?1 AND deleted_at IS NULL",
@@ -812,7 +882,8 @@ impl Database {
 
         transaction.commit()?;
         let _ = entries_changed;
-        Ok(tasks_changed)
+        let _ = note_attachments_changed;
+        Ok(tasks_changed + notes_changed)
     }
 
     pub fn unassign_folder_tasks(&self, folder_id: &str) -> Result<usize> {
@@ -989,6 +1060,242 @@ impl Database {
             return Err(RepositoryError::NotFound("Folder"));
         }
         Ok(())
+    }
+
+    pub fn list_notes(&self) -> Result<Vec<Note>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT id, title, body_markdown, folder_id, created_at, updated_at
+             FROM notes WHERE deleted_at IS NULL
+             ORDER BY updated_at DESC",
+        )?;
+        let notes = statement
+            .query_map([], map_note)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(notes)
+    }
+
+    pub fn get_note(&self, note_id: &str) -> Result<Note> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT id, title, body_markdown, folder_id, created_at, updated_at
+                 FROM notes WHERE id = ?1 AND deleted_at IS NULL",
+                params![note_id],
+                map_note,
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => RepositoryError::NotFound("Note"),
+                other => RepositoryError::Database(other),
+            })
+    }
+
+    pub fn create_note(&self, input: CreateNoteInput) -> Result<Note> {
+        let title = required(input.title, "Title")?;
+        let folder_id = clean_optional(input.folder_id);
+        let body = input.body_markdown.unwrap_or_default();
+        let connection = self.connection()?;
+        if let Some(ref folder) = folder_id {
+            let exists: bool = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM folders WHERE id = ?1 AND deleted_at IS NULL)",
+                params![folder],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                return Err(RepositoryError::NotFound("Folder"));
+            }
+        }
+        let note_id = id();
+        let stamp = now();
+        connection.execute(
+            "INSERT INTO notes
+             (id, title, body_markdown, folder_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            params![note_id, title, body, folder_id, stamp],
+        )?;
+        Ok(Note {
+            id: note_id,
+            title,
+            body_markdown: body,
+            folder_id,
+            created_at: stamp.clone(),
+            updated_at: stamp,
+        })
+    }
+
+    pub fn update_note(&self, input: UpdateNoteInput) -> Result<Note> {
+        let title = required(input.title.clone(), "Title")?;
+        let folder_id = clean_optional(input.folder_id);
+        let connection = self.connection()?;
+        if let Some(ref folder) = folder_id {
+            let exists: bool = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM folders WHERE id = ?1 AND deleted_at IS NULL)",
+                params![folder],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                return Err(RepositoryError::NotFound("Folder"));
+            }
+        }
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE notes SET title = ?1, body_markdown = ?2, folder_id = ?3, updated_at = ?4
+             WHERE id = ?5 AND deleted_at IS NULL",
+            params![title, input.body_markdown, folder_id, stamp, input.id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Note"));
+        }
+        let note = connection.query_row(
+            "SELECT id, title, body_markdown, folder_id, created_at, updated_at
+             FROM notes WHERE id = ?1",
+            params![input.id],
+            map_note,
+        )?;
+        let _ = title;
+        Ok(note)
+    }
+
+    pub fn move_note(&self, note_id: &str, folder_id: Option<String>) -> Result<Note> {
+        let connection = self.connection()?;
+        let folder = clean_optional(folder_id);
+        if let Some(ref folder) = folder {
+            let exists: bool = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM folders WHERE id = ?1 AND deleted_at IS NULL)",
+                params![folder],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                return Err(RepositoryError::NotFound("Folder"));
+            }
+        }
+        let stamp = now();
+        let changed = connection.execute(
+            "UPDATE notes SET folder_id = ?1, updated_at = ?2
+             WHERE id = ?3 AND deleted_at IS NULL",
+            params![folder, stamp, note_id],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Note"));
+        }
+        connection
+            .query_row(
+                "SELECT id, title, body_markdown, folder_id, created_at, updated_at
+                 FROM notes WHERE id = ?1",
+                params![note_id],
+                map_note,
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => RepositoryError::NotFound("Note"),
+                other => RepositoryError::Database(other),
+            })
+    }
+
+    pub fn delete_note(&self, note_id: &str) -> Result<()> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        let stamp = now();
+        let changed = transaction.execute(
+            "UPDATE notes SET deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![note_id, stamp],
+        )?;
+        if changed == 0 {
+            return Err(RepositoryError::NotFound("Note"));
+        }
+        transaction.execute(
+            "UPDATE note_attachments SET deleted_at = ?2
+             WHERE note_id = ?1 AND deleted_at IS NULL",
+            params![note_id, stamp],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn list_note_attachments(&self, note_id: &str) -> Result<Vec<NoteAttachment>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT id, note_id, original_name, media_type, relative_path, byte_size, created_at
+             FROM note_attachments
+             WHERE note_id = ?1 AND deleted_at IS NULL
+             ORDER BY created_at",
+        )?;
+        let relative = statement
+            .query_map(params![note_id], map_note_attachment)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(relative
+            .into_iter()
+            .map(|attachment| attachment.with_root(&self.attachments_dir))
+            .collect())
+    }
+
+    pub fn create_note_attachment(
+        &self,
+        input: CreateNoteAttachmentInput,
+    ) -> Result<NoteAttachment> {
+        if !input.media_type.starts_with("image/") {
+            return Err(RepositoryError::Invalid(
+                "Only image attachments are supported right now.".into(),
+            ));
+        }
+        let bytes = STANDARD
+            .decode(input.base64_data)
+            .map_err(|_| RepositoryError::Invalid("Image data is invalid.".into()))?;
+        if bytes.is_empty() || bytes.len() > MAX_ATTACHMENT_BYTES {
+            return Err(RepositoryError::Invalid(
+                "Image must be between 1 byte and 10 MB.".into(),
+            ));
+        }
+        let original_name = required(input.original_name, "Image name")?;
+        let connection = self.connection()?;
+        let note_exists: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM notes WHERE id = ?1 AND deleted_at IS NULL)",
+            params![input.note_id],
+            |row| row.get(0),
+        )?;
+        if !note_exists {
+            return Err(RepositoryError::NotFound("Note"));
+        }
+
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        let relative_path = format!("notes/{}/{}", &digest[..2], digest);
+        let absolute_path = self.attachments_dir.join(&relative_path);
+        if let Some(parent) = absolute_path.parent() {
+            fs::create_dir_all(parent).map_err(|_| {
+                RepositoryError::Invalid("Could not prepare the attachment folder.".into())
+            })?;
+        }
+        if !absolute_path.exists() {
+            fs::write(&absolute_path, &bytes)
+                .map_err(|_| RepositoryError::Invalid("Could not save the image.".into()))?;
+        }
+
+        let attachment_id = id();
+        let created_at = now();
+        connection.execute(
+            "INSERT INTO note_attachments
+             (id, note_id, original_name, media_type, relative_path, byte_size, sha256, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                attachment_id,
+                input.note_id,
+                original_name,
+                input.media_type,
+                relative_path,
+                bytes.len() as i64,
+                digest,
+                created_at
+            ],
+        )?;
+        Ok(NoteAttachment {
+            id: attachment_id,
+            note_id: input.note_id,
+            original_name,
+            media_type: input.media_type,
+            path: absolute_path.to_string_lossy().into_owned(),
+            byte_size: bytes.len() as i64,
+            created_at,
+        })
     }
 
     pub fn list_entries(
@@ -1400,6 +1707,13 @@ impl Attachment {
     }
 }
 
+impl NoteAttachment {
+    fn with_root(mut self, root: &Path) -> Self {
+        self.path = root.join(&self.path).to_string_lossy().into_owned();
+        self
+    }
+}
+
 fn write_revision(transaction: &Transaction<'_>, entry_id: &str, source: &str) -> Result<()> {
     let entry = transaction
         .query_row(
@@ -1566,6 +1880,29 @@ fn map_attachment(row: &Row<'_>) -> rusqlite::Result<Attachment> {
     Ok(Attachment {
         id: row.get(0)?,
         work_log_entry_id: row.get(1)?,
+        original_name: row.get(2)?,
+        media_type: row.get(3)?,
+        path: row.get(4)?,
+        byte_size: row.get(5)?,
+        created_at: row.get(6)?,
+    })
+}
+
+fn map_note(row: &Row<'_>) -> rusqlite::Result<Note> {
+    Ok(Note {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        body_markdown: row.get(2)?,
+        folder_id: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
+    })
+}
+
+fn map_note_attachment(row: &Row<'_>) -> rusqlite::Result<NoteAttachment> {
+    Ok(NoteAttachment {
+        id: row.get(0)?,
+        note_id: row.get(1)?,
         original_name: row.get(2)?,
         media_type: row.get(3)?,
         path: row.get(4)?,
@@ -2065,5 +2402,148 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(created.description_markdown.as_deref(), Some("## New release"));
+    }
+
+    fn note(database: &Database) -> Note {
+        database
+            .create_note(CreateNoteInput {
+                title: "Untitled note".into(),
+                body_markdown: Some("# Hello".into()),
+                folder_id: None,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn note_crud_round_trip() {
+        let database = Database::memory().unwrap();
+        let folder = database
+            .create_folder(CreateFolderInput {
+                name: "Research".into(),
+            })
+            .unwrap();
+        let created = note(&database);
+        assert_eq!(created.title, "Untitled note");
+        assert_eq!(created.body_markdown, "# Hello");
+        assert!(created.folder_id.is_none());
+
+        let updated = database
+            .update_note(UpdateNoteInput {
+                id: created.id.clone(),
+                title: "Hello world".into(),
+                body_markdown: "## Body".into(),
+                folder_id: Some(folder.id.clone()),
+            })
+            .unwrap();
+        assert_eq!(updated.title, "Hello world");
+        assert_eq!(updated.body_markdown, "## Body");
+        assert_eq!(updated.folder_id.as_deref(), Some(folder.id.as_str()));
+
+        let listed = database.list_notes().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].title, "Hello world");
+    }
+
+    #[test]
+    fn note_rejects_empty_title() {
+        let database = Database::memory().unwrap();
+        let result = database.create_note(CreateNoteInput {
+            title: "   ".into(),
+            body_markdown: None,
+            folder_id: None,
+        });
+        assert!(matches!(result, Err(RepositoryError::Invalid(_))));
+    }
+
+    #[test]
+    fn note_rejects_unknown_folder() {
+        let database = Database::memory().unwrap();
+        let result = database.create_note(CreateNoteInput {
+            title: "x".into(),
+            body_markdown: None,
+            folder_id: Some("does-not-exist".into()),
+        });
+        assert!(matches!(result, Err(RepositoryError::NotFound("Folder"))));
+    }
+
+    #[test]
+    fn move_note_reassigns_folder() {
+        let database = Database::memory().unwrap();
+        let a = database
+            .create_folder(CreateFolderInput {
+                name: "A".into(),
+            })
+            .unwrap();
+        let b = database
+            .create_folder(CreateFolderInput {
+                name: "B".into(),
+            })
+            .unwrap();
+        let n = note(&database);
+        let moved = database.move_note(&n.id, Some(b.id.clone())).unwrap();
+        assert_eq!(moved.folder_id.as_deref(), Some(b.id.as_str()));
+        let _ = a;
+    }
+
+    #[test]
+    fn delete_note_soft_deletes() {
+        let database = Database::memory().unwrap();
+        let n = note(&database);
+        database.delete_note(&n.id).unwrap();
+        let listed = database.list_notes().unwrap();
+        assert!(listed.is_empty());
+        let get = database.get_note(&n.id);
+        assert!(matches!(get, Err(RepositoryError::NotFound("Note"))));
+    }
+
+    #[test]
+    fn delete_folder_cascade_removes_notes_and_attachments() {
+        let database = Database::memory().unwrap();
+        let folder = database
+            .create_folder(CreateFolderInput {
+                name: "Bucket".into(),
+            })
+            .unwrap();
+        let n = database
+            .create_note(CreateNoteInput {
+                title: "Sticky".into(),
+                body_markdown: Some("body".into()),
+                folder_id: Some(folder.id.clone()),
+            })
+            .unwrap();
+        let bytes = STANDARD.encode(b"hello world");
+        let attachment = database
+            .create_note_attachment(CreateNoteAttachmentInput {
+                note_id: n.id.clone(),
+                original_name: "hello.png".into(),
+                media_type: "image/png".into(),
+                base64_data: bytes,
+            })
+            .unwrap();
+        assert!(std::path::Path::new(&attachment.path).exists());
+
+        let removed = database.delete_folder_cascade(&folder.id).unwrap();
+        assert_eq!(removed, 1);
+        assert!(database.list_notes().unwrap().is_empty());
+        assert!(database.list_note_attachments(&n.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_folder_refuses_when_notes_present() {
+        let database = Database::memory().unwrap();
+        let folder = database
+            .create_folder(CreateFolderInput {
+                name: "Bucket".into(),
+            })
+            .unwrap();
+        database
+            .create_note(CreateNoteInput {
+                title: "Sticky".into(),
+                body_markdown: None,
+                folder_id: Some(folder.id.clone()),
+            })
+            .unwrap();
+        let result = database.delete_folder(&folder.id);
+        assert!(matches!(result, Err(RepositoryError::Invalid(_))));
     }
 }

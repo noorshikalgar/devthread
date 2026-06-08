@@ -36,6 +36,7 @@ const GROUPS: Group[] = [
       { keys: joinMod(MOD, "B"), description: "Toggle task sidebar" },
       { keys: joinMod(MOD, SHIFT, "A"), description: "Toggle archive view" },
       { keys: joinMod(MOD, SHIFT, "W"), description: "Open worklog view" },
+      { keys: joinMod(MOD, SHIFT, "O"), description: "Open notes view" },
     ],
   },
   {
