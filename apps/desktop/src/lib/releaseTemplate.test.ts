@@ -107,10 +107,7 @@ describe("renderReleaseTemplate", () => {
   });
 
   it("renders the released status as Released or Draft", () => {
-    const released = renderReleaseTemplate(
-      "_{{releasedAt}}_",
-      buildContext(),
-    );
+    const released = renderReleaseTemplate("_{{releasedAt}}_", buildContext());
     expect(released).toMatch(/^_Released /);
     const draft = renderReleaseTemplate(
       "_{{releasedAt}}_",
@@ -128,12 +125,12 @@ describe("renderReleaseTemplate", () => {
   });
 
   it("applies the upper and lower filters", () => {
-    expect(
-      renderReleaseTemplate("{{name|upper}}", buildContext()),
-    ).toBe("JUN 2026 REFRESH");
-    expect(
-      renderReleaseTemplate("{{name|lower}}", buildContext()),
-    ).toBe("jun 2026 refresh");
+    expect(renderReleaseTemplate("{{name|upper}}", buildContext())).toBe(
+      "JUN 2026 REFRESH",
+    );
+    expect(renderReleaseTemplate("{{name|lower}}", buildContext())).toBe(
+      "jun 2026 refresh",
+    );
   });
 
   it("hides conditional sections when the value is empty", () => {
@@ -194,10 +191,7 @@ describe("renderReleaseTemplate", () => {
   });
 
   it("falls back gracefully on unknown placeholders", () => {
-    const out = renderReleaseTemplate(
-      "Hello {{unknown}}!",
-      buildContext(),
-    );
+    const out = renderReleaseTemplate("Hello {{unknown}}!", buildContext());
     expect(out).toBe("Hello !");
   });
 

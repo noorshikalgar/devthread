@@ -10,7 +10,13 @@ import type { Folder as FolderModel, Task, WorkLogEntry } from "@/lib/types";
 afterEach(cleanup);
 
 const folders: FolderModel[] = [
-  { id: "f-1", name: "Backlog", releaseName: null, createdAt: "", updatedAt: "" },
+  {
+    id: "f-1",
+    name: "Backlog",
+    releaseName: null,
+    createdAt: "",
+    updatedAt: "",
+  },
   { id: "f-2", name: "Bugs", releaseName: null, createdAt: "", updatedAt: "" },
 ];
 

@@ -3,18 +3,14 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  WorklogHoursChart,
-  tooltipValueFormatter,
-} from "./WorklogHoursChart";
+import { WorklogHoursChart, tooltipValueFormatter } from "./WorklogHoursChart";
 import type { WorklogDay } from "@/lib/worklog";
 import type { WorklogSettings } from "@/lib/worklogSettings";
 
 // jsdom doesn't compute layout, so ResponsiveContainer would warn that
 // it has no width. Mock it out so the chart renders in a fixed box.
 vi.mock("recharts", async () => {
-  const actual =
-    await vi.importActual<typeof import("recharts")>("recharts");
+  const actual = await vi.importActual<typeof import("recharts")>("recharts");
   return {
     ...actual,
     ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (

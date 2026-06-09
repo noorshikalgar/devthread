@@ -78,7 +78,10 @@ function buildChartData(
 
 export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   const goalHours = effectiveDailyGoalMinutes(settings) / 60;
-  const data = useMemo(() => buildChartData(days, goalHours), [days, goalHours]);
+  const data = useMemo(
+    () => buildChartData(days, goalHours),
+    [days, goalHours],
+  );
 
   // The chart colours come from the active theme's --chart-* CSS
   // variables, so reading them on every render keeps them in sync if
@@ -147,16 +150,48 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
             margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
           >
             <defs>
-              <linearGradient id="worklog-primary-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={palette.primary} stopOpacity={0.45} />
-                <stop offset="100%" stopColor={palette.primary} stopOpacity={0.05} />
+              <linearGradient
+                id="worklog-primary-fill"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={palette.primary}
+                  stopOpacity={0.45}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={palette.primary}
+                  stopOpacity={0.05}
+                />
               </linearGradient>
-              <linearGradient id="worklog-above-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={palette.aboveGoal} stopOpacity={0.55} />
-                <stop offset="100%" stopColor={palette.aboveGoal} stopOpacity={0.1} />
+              <linearGradient
+                id="worklog-above-fill"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={palette.aboveGoal}
+                  stopOpacity={0.55}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={palette.aboveGoal}
+                  stopOpacity={0.1}
+                />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid
+              stroke={palette.grid}
+              strokeDasharray="3 3"
+              vertical={false}
+            />
             <XAxis
               axisLine={false}
               dataKey="dateLabel"

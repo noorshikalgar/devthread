@@ -444,9 +444,7 @@ export default function App() {
     try {
       await api.tagTaskRelease(taskId, name);
       setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId ? { ...t, releaseName: name } : t,
-        ),
+        prev.map((t) => (t.id === taskId ? { ...t, releaseName: name } : t)),
       );
     } catch (cause) {
       setError(String(cause));
@@ -458,9 +456,7 @@ export default function App() {
     try {
       await api.removeTaskRelease(taskId);
       setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId ? { ...t, releaseName: null } : t,
-        ),
+        prev.map((t) => (t.id === taskId ? { ...t, releaseName: null } : t)),
       );
     } catch (cause) {
       setError(String(cause));
@@ -472,9 +468,7 @@ export default function App() {
     try {
       await api.tagFolderRelease(folderId, name);
       setFolders((prev) =>
-        prev.map((f) =>
-          f.id === folderId ? { ...f, releaseName: name } : f,
-        ),
+        prev.map((f) => (f.id === folderId ? { ...f, releaseName: name } : f)),
       );
     } catch (cause) {
       setError(String(cause));
@@ -486,9 +480,7 @@ export default function App() {
     try {
       await api.removeFolderRelease(folderId);
       setFolders((prev) =>
-        prev.map((f) =>
-          f.id === folderId ? { ...f, releaseName: null } : f,
-        ),
+        prev.map((f) => (f.id === folderId ? { ...f, releaseName: null } : f)),
       );
     } catch (cause) {
       setError(String(cause));
@@ -1213,13 +1205,9 @@ export default function App() {
                 onStatusChange={(status) =>
                   updateTaskStatus(selectedTask, status)
                 }
-                onRemoveReleaseTag={() =>
-                  handleRemoveTaskTag(selectedTask.id)
-                }
+                onRemoveReleaseTag={() => handleRemoveTaskTag(selectedTask.id)}
                 onStatusOpenChange={setTaskStatusOpen}
-                onTagRelease={(name) =>
-                  handleTagTask(selectedTask.id, name)
-                }
+                onTagRelease={(name) => handleTagTask(selectedTask.id, name)}
                 onUpdate={updateTask}
                 pendingTitleEdit={pendingTitleEdit}
                 quickLinks={quickLinks}
@@ -1264,7 +1252,11 @@ export default function App() {
           )}
         </main>
       </div>
-      <StatusBar appVersion={APP_VERSION} counts={statusCounts} selectedTask={selectedTask} />
+      <StatusBar
+        appVersion={APP_VERSION}
+        counts={statusCounts}
+        selectedTask={selectedTask}
+      />
       <CommandPalette
         entries={entries}
         folders={folders}
@@ -1986,7 +1978,9 @@ function worklogRangeBounds(range: WorklogRange) {
   const now = new Date();
   if (range === "12m") {
     const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+    const end = new Date(
+      Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999),
+    );
     return { startAt: start.toISOString(), endAt: end.toISOString() };
   }
   const days =
@@ -2558,8 +2552,8 @@ function SettingsDialog({
               <div className="mt-8 max-w-sm space-y-2 border-t border-border pt-6">
                 <h3 className="text-sm font-medium">Worklog</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Used by the worklog charts. Set your target hours per
-                  workday and subtract any non-billable break time.
+                  Used by the worklog charts. Set your target hours per workday
+                  and subtract any non-billable break time.
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -2618,9 +2612,9 @@ function SettingsDialog({
                   </div>
                 </div>
                 <p className="pt-1 font-mono text-[10px] text-muted-foreground">
-                  Effective goal: {formatDuration(
-                    effectiveDailyGoalMinutes(worklogSettings),
-                  )} / day
+                  Effective goal:{" "}
+                  {formatDuration(effectiveDailyGoalMinutes(worklogSettings))} /
+                  day
                 </p>
               </div>
             </>

@@ -58,26 +58,22 @@ describe("worklogSettings", () => {
   });
 
   it("treats non-object input as defaults", () => {
-    expect(normalizeWorklogSettings("nope")).toEqual(
-      DEFAULT_WORKLOG_SETTINGS,
-    );
-    expect(normalizeWorklogSettings(null)).toEqual(
-      DEFAULT_WORKLOG_SETTINGS,
-    );
+    expect(normalizeWorklogSettings("nope")).toEqual(DEFAULT_WORKLOG_SETTINGS);
+    expect(normalizeWorklogSettings(null)).toEqual(DEFAULT_WORKLOG_SETTINGS);
   });
 
   it("computes the effective daily goal in minutes", () => {
-    expect(
-      effectiveDailyGoalMinutes({ dailyHours: 8, breakMinutes: 60 }),
-    ).toBe(7 * 60);
-    expect(
-      effectiveDailyGoalMinutes({ dailyHours: 8, breakMinutes: 0 }),
-    ).toBe(8 * 60);
+    expect(effectiveDailyGoalMinutes({ dailyHours: 8, breakMinutes: 60 })).toBe(
+      7 * 60,
+    );
+    expect(effectiveDailyGoalMinutes({ dailyHours: 8, breakMinutes: 0 })).toBe(
+      8 * 60,
+    );
   });
 
   it("clamps the effective goal to zero when breaks exceed the day", () => {
-    expect(
-      effectiveDailyGoalMinutes({ dailyHours: 0, breakMinutes: 30 }),
-    ).toBe(0);
+    expect(effectiveDailyGoalMinutes({ dailyHours: 0, breakMinutes: 30 })).toBe(
+      0,
+    );
   });
 });

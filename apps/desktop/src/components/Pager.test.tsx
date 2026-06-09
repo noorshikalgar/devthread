@@ -23,9 +23,10 @@ describe("Pager", () => {
     );
 
     expect(screen.getByText(/Showing 9–16 of 32/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Page 2" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("hides itself when the items list is empty", () => {
@@ -67,9 +68,10 @@ describe("Pager", () => {
         totalPages={4}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: "Page 3" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Page 3" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("disables Prev on the first page and Next on the last page", () => {
@@ -96,9 +98,7 @@ describe("Pager", () => {
         totalPages={4}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: "Next page" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
   });
 
   it("navigates when Prev/Next or a page button is clicked", () => {

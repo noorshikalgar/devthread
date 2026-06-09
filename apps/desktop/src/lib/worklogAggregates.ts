@@ -23,4 +23,3 @@ export function aggregateByBucket(
     .map(([label, minutes]) => ({ label, minutes }))
     .reverse();
 }
-

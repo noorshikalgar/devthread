@@ -94,9 +94,7 @@ describe("ReleaseView template persistence", () => {
         onRemoveTaskTag={vi.fn()}
         onSelectTask={vi.fn()}
         onTagTask={vi.fn()}
-        releases={[
-          { ...release, descriptionMarkdown: "# Saved template" },
-        ]}
+        releases={[{ ...release, descriptionMarkdown: "# Saved template" }]}
         tasks={[task]}
       />,
     );
@@ -108,9 +106,7 @@ describe("ReleaseView template persistence", () => {
     const editor = screen.getByLabelText(
       "Release notes template",
     ) as HTMLTextAreaElement;
-    await waitFor(() =>
-      expect(editor.value).toBe("# Saved template"),
-    );
+    await waitFor(() => expect(editor.value).toBe("# Saved template"));
   });
 
   it("loads the saved template content into the editor from release data", async () => {
@@ -171,9 +167,7 @@ describe("ReleaseView tasks tab", () => {
       />,
     );
 
-    expect(
-      screen.getByText("Selected for this release"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Selected for this release")).toBeInTheDocument();
     expect(screen.getByText("Other tasks")).toBeInTheDocument();
 
     // The selected (tagged) task is rendered with a checked checkbox.
@@ -208,13 +202,9 @@ describe("ReleaseView tasks tab", () => {
     fireEvent.change(search, { target: { value: "sidebar" } });
 
     // Only the sidebar task should remain visible in "Other tasks".
-    expect(
-      screen.queryByText("Refine release notes"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Refine release notes")).not.toBeInTheDocument();
     expect(screen.getByText("Polish sidebar")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Refactor composer"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Refactor composer")).not.toBeInTheDocument();
   });
 
   it("toggles a tag from Other via the add checkbox", async () => {
@@ -326,9 +316,7 @@ describe("ReleaseView tasks tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: /Release notes/ }));
-    expect(localStorage.getItem("devthread:release-active-tab")).toBe(
-      "notes",
-    );
+    expect(localStorage.getItem("devthread:release-active-tab")).toBe("notes");
 
     unmount();
     render(

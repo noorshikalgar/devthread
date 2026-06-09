@@ -54,9 +54,7 @@ export function formatTaskTable(
       key: "folder",
       label: "Folder",
       render: (r) =>
-        r.task.folderId
-          ? folderNames?.get(r.task.folderId) ?? "—"
-          : "—",
+        r.task.folderId ? (folderNames?.get(r.task.folderId) ?? "—") : "—",
       show:
         (!requested || requested.includes("folder")) &&
         rows.some((r) => r.task.folderId),

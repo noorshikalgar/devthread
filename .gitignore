@@ -9,6 +9,8 @@ apps/desktop/src-tauri/gen/
 vite.config.d.ts
 .DS_Store
 *.log
+opencode.json
+apps/desktop/opencode.json
 
 # Tauri updater signing keys (keep OUT of the repo)
 apps/desktop/devthread.key

@@ -86,7 +86,11 @@ function PlaceholderButton({
 
 interface HelpSectionProps {
   title: string;
-  entries: ReadonlyArray<{ label: string; syntax: string; description: string }>;
+  entries: ReadonlyArray<{
+    label: string;
+    syntax: string;
+    description: string;
+  }>;
 }
 
 function HelpSection({ title, entries }: HelpSectionProps) {
@@ -204,9 +208,9 @@ export function ReleaseView({
   const [templateDraft, setTemplateDraft] = useState("");
   const [templateDirty, setTemplateDirty] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [previewTab, setPreviewTab] = useState<
-    "preview" | "source" | "editor"
-  >("preview");
+  const [previewTab, setPreviewTab] = useState<"preview" | "source" | "editor">(
+    "preview",
+  );
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
@@ -260,9 +264,7 @@ export function ReleaseView({
   // Restore the last-used tab so the user lands where they left off.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(
-      "devthread:release-active-tab",
-    );
+    const stored = window.localStorage.getItem("devthread:release-active-tab");
     if (stored === "tasks" || stored === "notes") {
       setActiveTab(stored);
     }
@@ -374,13 +376,7 @@ export function ReleaseView({
       folderNames,
     });
     return renderReleaseTemplate(templateDraft, ctx);
-  }, [
-    selectedRelease,
-    templateDraft,
-    taskTableMd,
-    taggedTasks,
-    folderNames,
-  ]);
+  }, [selectedRelease, templateDraft, taskTableMd, taggedTasks, folderNames]);
 
   async function copySummary() {
     if (!selectedRelease) return;
@@ -519,7 +515,8 @@ export function ReleaseView({
             <div>
               <h1 className="text-sm font-semibold">Releases</h1>
               <p className="text-xs text-muted-foreground">
-                {releases.length} {releases.length === 1 ? "release" : "releases"}
+                {releases.length}{" "}
+                {releases.length === 1 ? "release" : "releases"}
               </p>
             </div>
             <Button
@@ -542,7 +539,8 @@ export function ReleaseView({
                 <button
                   className={cn(
                     "flex w-full min-w-0 flex-col gap-0.5 rounded-md border border-transparent px-3 py-2.5 text-left hover:bg-accent/60",
-                    selected && "border-border bg-accent text-accent-foreground",
+                    selected &&
+                      "border-border bg-accent text-accent-foreground",
                   )}
                   key={release.name}
                   onClick={() => setSelectedName(release.name)}
@@ -642,10 +640,7 @@ export function ReleaseView({
                 className="flex shrink-0 items-end gap-2 border-b border-border bg-card/30 px-6"
                 ref={tabBarRef}
               >
-                <div
-                  className="flex items-end gap-1"
-                  role="tablist"
-                >
+                <div className="flex items-end gap-1" role="tablist">
                   <button
                     aria-controls="release-tab-panel-tasks"
                     aria-selected={activeTab === "tasks"}
@@ -726,107 +721,71 @@ export function ReleaseView({
                 {activeTab === "tasks" && (
                   <ScrollArea className="flex-1">
                     <div className="space-y-4 px-6 py-4 pb-8">
-                    <div>
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          aria-label="Search tasks"
-                          aria-invalid={tasksSearchInvalid || undefined}
-                          className="h-8 pl-7 pr-9 text-xs"
-                          onChange={(e) => setTasksSearch(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape" && tasksSearch) {
-                              e.preventDefault();
-                              setTasksSearch("");
-                            }
-                          }}
-                          placeholder={
-                            tasksUseRegex
-                              ? "Regex pattern (case-insensitive)"
-                              : "Search by title…"
-                          }
-                          ref={tasksSearchInputRef}
-                          value={tasksSearch}
-                        />
-                        <button
-                          aria-label={
-                            tasksUseRegex
-                              ? "Disable regex search"
-                              : "Enable regex search"
-                          }
-                          aria-pressed={tasksUseRegex}
-                          className={cn(
-                            "absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                            tasksUseRegex &&
-                              "bg-primary/15 text-primary hover:bg-primary/20",
-                            tasksSearchInvalid && "text-destructive",
-                          )}
-                          onClick={() => setTasksUseRegex((v) => !v)}
-                          title={
-                            tasksUseRegex
-                              ? "Disable regex search"
-                              : "Enable regex search"
-                          }
-                          type="button"
-                        >
-                          <Regex className="size-3.5" />
-                        </button>
-                      </div>
-                      {tasksSearchInvalid && (
-                        <p className="mt-1 text-[10px] text-destructive">
-                          Invalid regex pattern.
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Selected for this release
-                        </h3>
-                        <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {filteredSelectedTasks.length}/{taggedTasks.length}
-                        </span>
-                      </div>
-                      {filteredSelectedTasks.length > 0 ? (
-                        <div className="space-y-1">
-                          {filteredSelectedTasks.map((task) => (
-                            <TasksTabRow
-                              folderName={
-                                folderNames.get(task.folderId ?? "") ??
-                                "No folder"
+                      <div>
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            aria-label="Search tasks"
+                            aria-invalid={tasksSearchInvalid || undefined}
+                            className="h-8 pl-7 pr-9 text-xs"
+                            onChange={(e) => setTasksSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape" && tasksSearch) {
+                                e.preventDefault();
+                                setTasksSearch("");
                               }
-                              key={task.id}
-                              onOpen={() => onSelectTask(task.id)}
-                              onToggle={() => void handleRemoveTag(task.id)}
-                              selected
-                              task={task}
-                            />
-                          ))}
+                            }}
+                            placeholder={
+                              tasksUseRegex
+                                ? "Regex pattern (case-insensitive)"
+                                : "Search by title…"
+                            }
+                            ref={tasksSearchInputRef}
+                            value={tasksSearch}
+                          />
+                          <button
+                            aria-label={
+                              tasksUseRegex
+                                ? "Disable regex search"
+                                : "Enable regex search"
+                            }
+                            aria-pressed={tasksUseRegex}
+                            className={cn(
+                              "absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                              tasksUseRegex &&
+                                "bg-primary/15 text-primary hover:bg-primary/20",
+                              tasksSearchInvalid && "text-destructive",
+                            )}
+                            onClick={() => setTasksUseRegex((v) => !v)}
+                            title={
+                              tasksUseRegex
+                                ? "Disable regex search"
+                                : "Enable regex search"
+                            }
+                            type="button"
+                          >
+                            <Regex className="size-3.5" />
+                          </button>
                         </div>
-                      ) : (
-                        <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                          {taggedTasks.length === 0
-                            ? "No tasks tagged yet. Use the checkboxes below to add some."
-                            : "No selected tasks match the search."}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Other tasks
-                        </h3>
-                        <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {filteredAvailableTasks.length}/
-                          {candidateTasks.length - taggedTasks.length}
-                        </span>
+                        {tasksSearchInvalid && (
+                          <p className="mt-1 text-[10px] text-destructive">
+                            Invalid regex pattern.
+                          </p>
+                        )}
                       </div>
-                      {filteredAvailableTasks.length > 0 ? (
-                        <ScrollArea className="max-h-[420px]">
-                          <div className="space-y-1 pr-2">
-                            {filteredAvailableTasks.map((task) => (
+
+                      <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Selected for this release
+                          </h3>
+                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {filteredSelectedTasks.length}/{taggedTasks.length}
+                          </span>
+                        </div>
+                        {filteredSelectedTasks.length > 0 ? (
+                          <div className="space-y-1">
+                            {filteredSelectedTasks.map((task) => (
                               <TasksTabRow
                                 folderName={
                                   folderNames.get(task.folderId ?? "") ??
@@ -834,21 +793,62 @@ export function ReleaseView({
                                 }
                                 key={task.id}
                                 onOpen={() => onSelectTask(task.id)}
-                                onToggle={() => void onTagTask(task.id, selectedRelease.name)}
-                                selected={false}
+                                onToggle={() => void handleRemoveTag(task.id)}
+                                selected
                                 task={task}
                               />
                             ))}
                           </div>
-                        </ScrollArea>
-                      ) : (
-                        <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                          {tasksSearch.trim() || tasksUseRegex
-                            ? "No tasks match the search."
-                            : "Every task is already in this release."}
-                        </p>
-                      )}
-                    </div>
+                        ) : (
+                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
+                            {taggedTasks.length === 0
+                              ? "No tasks tagged yet. Use the checkboxes below to add some."
+                              : "No selected tasks match the search."}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Other tasks
+                          </h3>
+                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {filteredAvailableTasks.length}/
+                            {candidateTasks.length - taggedTasks.length}
+                          </span>
+                        </div>
+                        {filteredAvailableTasks.length > 0 ? (
+                          <ScrollArea className="max-h-[420px]">
+                            <div className="space-y-1 pr-2">
+                              {filteredAvailableTasks.map((task) => (
+                                <TasksTabRow
+                                  folderName={
+                                    folderNames.get(task.folderId ?? "") ??
+                                    "No folder"
+                                  }
+                                  key={task.id}
+                                  onOpen={() => onSelectTask(task.id)}
+                                  onToggle={() =>
+                                    void onTagTask(
+                                      task.id,
+                                      selectedRelease.name,
+                                    )
+                                  }
+                                  selected={false}
+                                  task={task}
+                                />
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        ) : (
+                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
+                            {tasksSearch.trim() || tasksUseRegex
+                              ? "No tasks match the search."
+                              : "Every task is already in this release."}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </ScrollArea>
                 )}
@@ -908,10 +908,7 @@ export function ReleaseView({
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Editor
                             </h3>
-                            <Popover
-                              onOpenChange={setHelpOpen}
-                              open={helpOpen}
-                            >
+                            <Popover onOpenChange={setHelpOpen} open={helpOpen}>
                               <PopoverTrigger asChild>
                                 <Button
                                   aria-label="Template help"
@@ -934,7 +931,7 @@ export function ReleaseView({
                                   </p>
                                   <p className="text-[10px] text-muted-foreground">
                                     Hover over the editor for tooltips. Insert
-                                    via the {" "}
+                                    via the{" "}
                                     <span className="inline-flex items-center gap-0.5 align-middle">
                                       <Braces className="size-3" />
                                     </span>{" "}
@@ -1217,7 +1214,8 @@ export function ReleaseView({
                 className="mb-1 block text-xs font-medium"
                 htmlFor="new-release-version"
               >
-                Version <span className="text-muted-foreground">(optional)</span>
+                Version{" "}
+                <span className="text-muted-foreground">(optional)</span>
               </label>
               <Input
                 id="new-release-version"
@@ -1257,8 +1255,8 @@ export function ReleaseView({
           <DialogHeader>
             <DialogTitle>Edit release version</DialogTitle>
             <DialogDescription>
-              Update the optional version label for this release. Leave empty
-              to remove it.
+              Update the optional version label for this release. Leave empty to
+              remove it.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
