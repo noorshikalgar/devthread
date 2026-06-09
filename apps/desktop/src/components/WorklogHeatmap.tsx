@@ -113,9 +113,9 @@ export function WorklogHeatmap({
                 backgroundColor: chartAccentBlend(ratio),
                 backgroundImage: `repeating-linear-gradient(45deg, ${readChartColor(
                   "--chart-1",
-                )} ${BUCKET_STRIPES[i]!}px, transparent ${
-                  BUCKET_STRIPES[i]!
-                }px, transparent ${BUCKET_STRIPES[i]! * 2}px)`,
+                )} ${BUCKET_STRIPES[i]!}px, transparent ${BUCKET_STRIPES[
+                  i
+                ]!}px, transparent ${BUCKET_STRIPES[i]! * 2}px)`,
               }}
             />
           ))}
@@ -145,9 +145,7 @@ export function WorklogHeatmap({
               )}
               data-testid="heatmap-cell"
               key={day.key}
-              onClick={() =>
-                onSelectDay(isSelected ? null : day.key)
-              }
+              onClick={() => onSelectDay(isSelected ? null : day.key)}
               style={
                 hasTime
                   ? {

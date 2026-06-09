@@ -37,7 +37,8 @@ function collectText(node: ReactNode): string {
   if (node == null || node === false || node === true) return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(collectText).join("");
-  if (isValidElement(node)) return collectText((node.props as { children?: ReactNode }).children);
+  if (isValidElement(node))
+    return collectText((node.props as { children?: ReactNode }).children);
   return "";
 }
 
@@ -46,7 +47,9 @@ export interface BareLinkMatch {
   link: NoteLink;
 }
 
-export function findBareLinkInParagraph(children: ReactNode): BareLinkMatch | null {
+export function findBareLinkInParagraph(
+  children: ReactNode,
+): BareLinkMatch | null {
   let anchorChild: ReactNode | null = null;
   let otherCount = 0;
   const childList = Array.isArray(children) ? children : [children];
@@ -57,7 +60,8 @@ export function findBareLinkInParagraph(children: ReactNode): BareLinkMatch | nu
       const elementName =
         typeof child.type === "string"
           ? child.type
-          : ((child.type as { displayName?: string; name?: string }).displayName ??
+          : ((child.type as { displayName?: string; name?: string })
+              .displayName ??
             (child.type as { name?: string }).name ??
             "");
       if (elementName === "a") {
@@ -71,7 +75,8 @@ export function findBareLinkInParagraph(children: ReactNode): BareLinkMatch | nu
     }
     otherCount += 1;
   }
-  if (!anchorChild || !isValidElement(anchorChild) || otherCount > 0) return null;
+  if (!anchorChild || !isValidElement(anchorChild) || otherCount > 0)
+    return null;
   const props = anchorChild.props as { href?: unknown; children?: ReactNode };
   const href = typeof props.href === "string" ? props.href : null;
   if (!href || !BARE_URL.test(href)) return null;

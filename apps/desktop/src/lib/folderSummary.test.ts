@@ -27,9 +27,7 @@ const FIXED_NOW = new Date("2025-01-15T14:30:00Z");
 
 describe("formatFolderSummary", () => {
   it("renders a header, a task table, and a footer", () => {
-    const items: FolderSummaryTask[] = [
-      { task: baseTask, totalMinutes: 270 },
-    ];
+    const items: FolderSummaryTask[] = [{ task: baseTask, totalMinutes: 270 }];
     const out = formatFolderSummary(folder, items, undefined, FIXED_NOW);
     expect(out).toMatch(/^# Q1 roadmap — /);
     expect(out).toContain("| Ship the summary template");
@@ -40,9 +38,7 @@ describe("formatFolderSummary", () => {
   });
 
   it("includes Folder column only when tasks have a folderId", () => {
-    const items: FolderSummaryTask[] = [
-      { task: baseTask, totalMinutes: 30 },
-    ];
+    const items: FolderSummaryTask[] = [{ task: baseTask, totalMinutes: 30 }];
     const out = formatFolderSummary(folder, items, undefined, FIXED_NOW);
     expect(out).toContain("| Folder |");
   });
@@ -57,7 +53,10 @@ describe("formatFolderSummary", () => {
 
   it("omits Estimate column when no task has estimate", () => {
     const items: FolderSummaryTask[] = [
-      { task: { ...baseTask, estimatedMinutes: null, folderId: null }, totalMinutes: 30 },
+      {
+        task: { ...baseTask, estimatedMinutes: null, folderId: null },
+        totalMinutes: 30,
+      },
     ];
     const out = formatFolderSummary(folder, items, undefined, FIXED_NOW);
     expect(out).not.toContain("| Est. |");
@@ -77,7 +76,8 @@ describe("formatFolderSummary", () => {
         task: {
           ...baseTask,
           folderId: null,
-          title: "A really really really really really long task title that exceeds the maximum allowed length for display",
+          title:
+            "A really really really really really long task title that exceeds the maximum allowed length for display",
         },
       },
     ];

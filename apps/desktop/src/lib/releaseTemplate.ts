@@ -9,7 +9,11 @@
  * Unknown placeholders render as empty strings. Unknown filters leave the
  * value untouched. Block mismatches render as-is (graceful degradation).
  */
-import { formatTaskTable, TASK_TABLE_FIELDS, type TaskTableField } from "./taskTable";
+import {
+  formatTaskTable,
+  TASK_TABLE_FIELDS,
+  type TaskTableField,
+} from "./taskTable";
 import type { Folder, Release, Task } from "./types";
 
 export interface TaskRenderContext {
@@ -103,7 +107,7 @@ function buildTaskContext(
   folderNames: Map<string, string>,
 ): TaskRenderContext {
   const folderName = task.folderId
-    ? folderNames.get(task.folderId) ?? ""
+    ? (folderNames.get(task.folderId) ?? "")
     : "";
   const estimate = task.estimatedMinutes
     ? formatDuration(task.estimatedMinutes)
@@ -189,7 +193,10 @@ function applyFilter(
       // Only valid on the `{{tasks}}` placeholder; otherwise no-op.
       if (varName !== "tasks") return value;
       const requested = args[0]
-        ? (args[0].split(",").map((s) => s.trim()).filter(Boolean) as TaskTableField[])
+        ? (args[0]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean) as TaskTableField[])
         : [];
       const valid = requested.filter((f) =>
         TASK_TABLE_FIELDS.some((col) => col.key === f),
@@ -246,7 +253,11 @@ function tokenize(template: string): Token[] {
   while (i < template.length) {
     if (template.startsWith("{{#each ", i)) {
       flushBuffer();
-      const closeIdx = findBlockEnd(template, i + "{{#each ".length, "{{/each}}");
+      const closeIdx = findBlockEnd(
+        template,
+        i + "{{#each ".length,
+        "{{/each}}",
+      );
       if (closeIdx < 0) {
         buffer += template.slice(i);
         i = template.length;
@@ -254,7 +265,8 @@ function tokenize(template: string): Token[] {
       }
       const inner = template.slice(i, closeIdx);
       const openClose = inner.indexOf("}}", 8);
-      const eachExpr = openClose >= 0 ? inner.slice(8, openClose) : inner.slice(8);
+      const eachExpr =
+        openClose >= 0 ? inner.slice(8, openClose) : inner.slice(8);
       const name = eachExpr.split(/\s+/)[0]?.trim() ?? "";
       const bodyStr = openClose >= 0 ? inner.slice(openClose + 2) : "";
       tokens.push({ type: "each", name, body: tokenize(bodyStr) });
@@ -270,9 +282,13 @@ function tokenize(template: string): Token[] {
       const inner = template.slice(i, closeIdx);
       // Find the closing `}}` of the opening `{{#if X}}` tag.
       const openClose = inner.indexOf("}}", 6);
-      const condExpr = openClose >= 0 ? inner.slice(6, openClose) : inner.slice(6);
+      const condExpr =
+        openClose >= 0 ? inner.slice(6, openClose) : inner.slice(6);
       const elseMarker = "{{else}}";
-      const elseIdx = inner.indexOf(elseMarker, openClose >= 0 ? openClose + 2 : 6);
+      const elseIdx = inner.indexOf(
+        elseMarker,
+        openClose >= 0 ? openClose + 2 : 6,
+      );
       let name: string;
       let bodyStr: string;
       let elseStr: string | undefined;
@@ -330,11 +346,7 @@ function tokenize(template: string): Token[] {
   return tokens;
 }
 
-function findBlockEnd(
-  template: string,
-  start: number,
-  closer: string,
-): number {
+function findBlockEnd(template: string, start: number, closer: string): number {
   let depth = 1;
   let i = start;
   // closer has the form "{{/X}}"; derive the matching opener "{{#X " for nesting.
@@ -357,10 +369,7 @@ function findBlockEnd(
   return -1;
 }
 
-function lookup(
-  context: ReleaseRenderContext,
-  path: string,
-): unknown {
+function lookup(context: ReleaseRenderContext, path: string): unknown {
   if (!path) return "";
   if (path === "this") return undefined;
   const segments = path.split(".");
@@ -505,7 +514,11 @@ export const RELEASE_TEMPLATE_PLACEHOLDERS = [
   },
 ];
 
-export const RELEASE_TASK_FIELDS: { label: string; snippet: string; description: string }[] = [
+export const RELEASE_TASK_FIELDS: {
+  label: string;
+  snippet: string;
+  description: string;
+}[] = [
   {
     label: "Task title",
     snippet: "{{title}}",
@@ -710,20 +723,21 @@ export const RELEASE_TEMPLATE_FILTERS: TemplateHelpEntry[] = [
   },
 ];
 
-export const RELEASE_TEMPLATE_EXAMPLES: { title: string; template: string }[] = [
-  {
-    title: "Default",
-    template: `# {{name}}{{version}}
+export const RELEASE_TEMPLATE_EXAMPLES: { title: string; template: string }[] =
+  [
+    {
+      title: "Default",
+      template: `# {{name}}{{version}}
 
 _{{releasedAt}}_
 
 {{notes}}
 
 {{tasks}}`,
-  },
-  {
-    title: "Highlight bullets, no version",
-    template: `## {{name}}
+    },
+    {
+      title: "Highlight bullets, no version",
+      template: `## {{name}}
 
 {{#if notes}}
 {{notes}}
@@ -735,13 +749,13 @@ _{{releasedAt}}_
 {{#each taskList}}- {{title}}
 {{/each}}
 {{/if}}`,
-  },
-  {
-    title: "Custom table with chosen fields",
-    template: `## {{name}} ({{version}})
+    },
+    {
+      title: "Custom table with chosen fields",
+      template: `## {{name}} ({{version}})
 
 | Task | Status | Estimate |
 | --- | --- | --- |
 {{tasks|fields:task,status,estimate}}`,
-  },
-];
+    },
+  ];

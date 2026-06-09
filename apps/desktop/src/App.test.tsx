@@ -494,9 +494,7 @@ describe("TaskHeader", () => {
 
     fireEvent.click(screen.getByLabelText("Open settings"));
 
-    const hours = screen.getByLabelText(
-      "Hours per day",
-    ) as HTMLInputElement;
+    const hours = screen.getByLabelText("Hours per day") as HTMLInputElement;
     const breakMinutes = screen.getByLabelText(
       "Break minutes",
     ) as HTMLInputElement;

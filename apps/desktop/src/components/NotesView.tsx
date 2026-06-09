@@ -1,4 +1,10 @@
-import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -293,7 +299,8 @@ export function NotesView({
           <Button
             className="mt-2 w-full"
             onClick={() => {
-              const folderId = scope === ALL_FOLDERS || scope === UNFILED ? null : scope;
+              const folderId =
+                scope === ALL_FOLDERS || scope === UNFILED ? null : scope;
               void createNote(folderId);
             }}
             size="sm"
@@ -423,7 +430,8 @@ export function NotesView({
             <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
               <ImageIcon className="size-3" />
               <span>
-                {attachments.length} attachment{attachments.length === 1 ? "" : "s"}
+                {attachments.length} attachment
+                {attachments.length === 1 ? "" : "s"}
               </span>
               <span className="ml-auto">
                 {draftBody.length.toLocaleString()} chars

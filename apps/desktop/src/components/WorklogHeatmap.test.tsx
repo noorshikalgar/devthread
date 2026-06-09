@@ -78,12 +78,10 @@ describe("WorklogHeatmap", () => {
     // The hatch stripe width is a stable literal the component
     // bakes into the style attribute, so we can assert on it
     // without depending on getComputedStyle.
-    const stripe2h = /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(
-      style2h,
-    );
-    const stripe6h = /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(
-      style6h,
-    );
+    const stripe2h =
+      /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(style2h);
+    const stripe6h =
+      /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(style6h);
     expect(stripe2h).not.toBeNull();
     expect(stripe6h).not.toBeNull();
     // 2h → bucket index 2 → 2.5px stripe. 6h → bucket index 4 →

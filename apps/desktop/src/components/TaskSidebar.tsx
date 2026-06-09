@@ -552,13 +552,17 @@ function FolderGroup({
                   }
                 >
                   <Tag className="size-3.5 text-muted-foreground" />
-                  {folder.releaseName ? `Release ${folder.releaseName}` : "Tag for release"}
+                  {folder.releaseName
+                    ? `Release ${folder.releaseName}`
+                    : "Tag for release"}
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-48">
                   {releases.map((r) => (
                     <ContextMenuItem
                       key={r.name}
-                      onSelect={() => void onTagFolderRelease(folder.id, r.name)}
+                      onSelect={() =>
+                        void onTagFolderRelease(folder.id, r.name)
+                      }
                     >
                       <Tag className="size-3.5 text-muted-foreground" />
                       <span className="truncate">

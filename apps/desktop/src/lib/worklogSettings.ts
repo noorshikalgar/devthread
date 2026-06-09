@@ -73,11 +73,11 @@ export function saveWorklogSettings(settings: WorklogSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 }
 
-  /**
-   * Effective daily goal in minutes, after subtracting the configured break.
-   * This is the threshold the chart uses to colour the "above goal"
-   * segment of the daily-hours chart.
-   */
+/**
+ * Effective daily goal in minutes, after subtracting the configured break.
+ * This is the threshold the chart uses to colour the "above goal"
+ * segment of the daily-hours chart.
+ */
 export function effectiveDailyGoalMinutes(settings: WorklogSettings): number {
   return Math.max(0, settings.dailyHours * 60 - settings.breakMinutes);
 }

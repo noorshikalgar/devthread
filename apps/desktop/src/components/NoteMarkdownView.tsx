@@ -7,7 +7,11 @@ import { findBareLinkInParagraph, type NoteLink } from "@/lib/noteLinkCards";
 
 interface NoteMarkdownViewProps {
   source: string;
-  attachments: ReadonlyArray<{ id: string; path: string; originalName: string }>;
+  attachments: ReadonlyArray<{
+    id: string;
+    path: string;
+    originalName: string;
+  }>;
   className?: string;
 }
 
@@ -43,7 +47,11 @@ function resolveAttachmentUrl(attachmentPath: string): string {
 }
 
 function buildImageComponents(
-  attachments: ReadonlyArray<{ id: string; path: string; originalName: string }>,
+  attachments: ReadonlyArray<{
+    id: string;
+    path: string;
+    originalName: string;
+  }>,
 ): Partial<Components>["img"] {
   return (props: ImgHTMLAttributes<HTMLImageElement>) => {
     const alt = props.alt ?? "";
@@ -68,7 +76,11 @@ export function NoteMarkdownView({
   className,
 }: NoteMarkdownViewProps) {
   const components: Partial<Components> = {
-    a: ({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    a: ({
+      href,
+      children,
+      ...rest
+    }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
       <a
         {...rest}
         href={safeExternalUrl(href ?? "") ?? "#"}

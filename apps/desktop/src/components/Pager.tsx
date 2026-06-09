@@ -52,11 +52,7 @@ function pageNumbers(page: number, totalPages: number): Array<number | "…"> {
   return result;
 }
 
-function rangeText(
-  page: number,
-  pageSize: number,
-  totalItems: number,
-): string {
+function rangeText(page: number, pageSize: number, totalItems: number): string {
   if (totalItems === 0) return "0 of 0";
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalItems);

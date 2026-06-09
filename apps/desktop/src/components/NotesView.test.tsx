@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Note, NoteAttachment } from "@/lib/types";
 
@@ -41,10 +47,7 @@ const folder = {
   updatedAt: "2026-06-01T00:00:00Z",
 };
 
-function makeClipboardEvent(opts: {
-  text?: string;
-  files?: File[];
-}): unknown {
+function makeClipboardEvent(opts: { text?: string; files?: File[] }): unknown {
   const fileDescriptors = (opts.files ?? []).map(
     (file) =>
       ({
@@ -56,7 +59,8 @@ function makeClipboardEvent(opts: {
   return {
     clipboardData: {
       files: opts.files ?? [],
-      getData: (kind: string) => (kind === "text/plain" ? opts.text ?? "" : ""),
+      getData: (kind: string) =>
+        kind === "text/plain" ? (opts.text ?? "") : "",
       items: fileDescriptors,
     },
     preventDefault: () => undefined,
@@ -125,9 +129,9 @@ describe("NotesView", () => {
       ).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("button", { name: "Initial ideas" }));
-    const textarea = await screen.findByPlaceholderText(
+    const textarea = (await screen.findByPlaceholderText(
       /Write in Markdown/,
-    ) as HTMLTextAreaElement;
+    )) as HTMLTextAreaElement;
     expect(textarea.value).toContain("# Heading");
   });
 
@@ -139,16 +143,16 @@ describe("NotesView", () => {
         onFoldersChanged={() => undefined}
       />,
     );
-    await waitFor(() =>
-      screen.getByRole("button", { name: "Initial ideas" }),
-    );
+    await waitFor(() => screen.getByRole("button", { name: "Initial ideas" }));
     fireEvent.click(screen.getByRole("button", { name: "Initial ideas" }));
     const textarea = (await screen.findByPlaceholderText(
       /Write in Markdown/,
     )) as HTMLTextAreaElement;
     fireEvent.paste(
       textarea,
-      makeClipboardEvent({ text: "https://example.com" }) as unknown as React.ClipboardEvent<HTMLTextAreaElement>,
+      makeClipboardEvent({
+        text: "https://example.com",
+      }) as unknown as React.ClipboardEvent<HTMLTextAreaElement>,
     );
     expect(textarea.value).toContain("https://example.com");
   });
@@ -162,16 +166,16 @@ describe("NotesView", () => {
         onFoldersChanged={() => undefined}
       />,
     );
-    await waitFor(() =>
-      screen.getByRole("button", { name: "Initial ideas" }),
-    );
+    await waitFor(() => screen.getByRole("button", { name: "Initial ideas" }));
     fireEvent.click(screen.getByRole("button", { name: "Initial ideas" }));
     const textarea = (await screen.findByPlaceholderText(
       /Write in Markdown/,
     )) as HTMLTextAreaElement;
     fireEvent.paste(
       textarea,
-      makeClipboardEvent({ files: [image] }) as unknown as React.ClipboardEvent<HTMLTextAreaElement>,
+      makeClipboardEvent({
+        files: [image],
+      }) as unknown as React.ClipboardEvent<HTMLTextAreaElement>,
     );
     await waitFor(() => {
       expect(apiState.createNoteAttachment).toHaveBeenCalled();

@@ -71,7 +71,12 @@ import { formatDuration, parseDuration } from "@/lib/duration";
 import { openExternalUrl } from "@/lib/openExternal";
 import { STATUS_DOT, STATUS_LABEL, STATUS_ORDER } from "@/lib/status";
 import { copyTaskSummary as copyTaskSummaryToClipboard } from "@/lib/taskSummary";
-import { type Release, type Task, type TaskQuickLink, type TaskStatus } from "@/lib/types";
+import {
+  type Release,
+  type Task,
+  type TaskQuickLink,
+  type TaskStatus,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
