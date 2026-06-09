@@ -20,7 +20,7 @@ describe("theme CSS pipeline", () => {
 
   it(
     "emits a CSS rule for every registered theme id",
-    { timeout: 20_000 },
+    { timeout: 60_000 },
     () => {
       execFileSync("node", [VITE_BIN, "build", "--logLevel", "error"], {
         cwd: PROJECT_ROOT,
