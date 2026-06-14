@@ -1,3 +1,5 @@
+![DevThread Logo](docs/brand/devthread-mark.svg)
+
 # DevThread
 
 DevThread is an early-alpha, local-first desktop work journal for developers.
@@ -8,6 +10,8 @@ doing yesterday?"
 DevThread is being built in public. The product is usable for dogfooding, but the
 project is still in active development and the data model, UI, release process,
 and documentation may change before a stable release.
+
+![DevThread Tasks](docs/images/DevThread-Tasks.png)
 
 ## What It Is
 
@@ -25,6 +29,8 @@ local companion for tracking task-level context:
 
 The goal is simple: when you return to a task, DevThread should make the context
 feel close again.
+
+
 
 ## Project Status
 
