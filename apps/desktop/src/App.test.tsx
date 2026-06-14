@@ -202,12 +202,11 @@ describe("TaskHeader", () => {
     ).toBeInTheDocument();
   });
 
-  it("places the compact timeline control in the task header", () => {
-    const onCompactTimelineChange = vi.fn();
+  it("places the timeline view control in the task header", () => {
+    const onTimelineViewModeChange = vi.fn();
     render(
       <TaskHeader
-        compactTimeline={false}
-        onCompactTimelineChange={onCompactTimelineChange}
+        onTimelineViewModeChange={onTimelineViewModeChange}
         onLogTime={vi.fn()}
         onUpdate={vi.fn()}
         task={task}
@@ -215,10 +214,11 @@ describe("TaskHeader", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Show compact timeline" }),
-    );
-    expect(onCompactTimelineChange).toHaveBeenCalledWith(true);
+    expect(
+      screen.getByRole("group", { name: "Timeline view" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compact" }));
+    expect(onTimelineViewModeChange).toHaveBeenCalledWith("compact");
   });
 
   it("copies a task summary and shows quick links in the task header", async () => {

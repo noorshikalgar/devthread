@@ -165,7 +165,6 @@ describe("Timeline", () => {
     render(
       <Timeline
         attachments={[attachment]}
-        compact
         entries={[entry, imageOnlyEntry]}
         hasMore={false}
         historyEntryId={null}
@@ -175,6 +174,7 @@ describe("Timeline", () => {
         onRestoreRevision={vi.fn()}
         onTrash={vi.fn()}
         revisions={[]}
+        viewMode="compact"
       />,
     );
 

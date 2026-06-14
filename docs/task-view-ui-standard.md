@@ -67,6 +67,9 @@ The timeline is the signature Task view surface.
 
 Current standard:
 
+- Timeline view mode is selected from the task header using a compact segmented control: `Normal`, `Compact`.
+- `Normal` is the default mode.
+- `Compact` is a scan mode, not just a smaller Normal view.
 - Date headers use natural language with dashed separators.
 - Expanded timeline uses a three-column structure: left time gutter, center rail, and right entry surface.
 - Each day has one date section label; entries under that day show time only.
@@ -87,6 +90,17 @@ Rules:
 - Keep indentation shallow.
 - Use entry-type color only for dot/token accents, not whole rows.
 - Motion should be subtle: hover sharpening, small dot scale, and simple transitions only.
+
+Compact mode rules:
+
+- Group headers should be title case and include date/count context, for example `Today · Jun 14 · 1 update`.
+- Rows use fixed columns: dot, time, type token, meta, message, actions.
+- Row height should stay around 30-34px.
+- Rows are transparent by default and get a soft hover background.
+- Row time is time-only because the group header owns the date.
+- Type tokens are smaller than Normal mode tokens.
+- Duration or image meta appears in the compact meta column.
+- Actions stay hover-only to keep the scan surface quiet.
 
 ## Header And Filters
 

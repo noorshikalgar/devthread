@@ -12,8 +12,6 @@ import {
   Github,
   KanbanSquare,
   Link,
-  ListCollapse,
-  ListTree,
   Pause,
   Pencil,
   Play,
@@ -39,6 +37,7 @@ import {
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { LogTimeDialog, type LogTimeInput } from "@/components/LogTimeDialog";
+import type { TimelineViewMode } from "@/components/Timeline";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -83,14 +82,14 @@ interface Props {
   task: Task;
   totalMinutes: number;
   quickLinks?: TaskQuickLink[];
-  compactTimeline?: boolean;
+  timelineViewMode?: TimelineViewMode;
   pendingTitleEdit?: boolean;
   statusOpen?: boolean;
   onStatusOpenChange?: (open: boolean) => void;
   logTimeOpen?: boolean;
   onLogTimeOpenChange?: (open: boolean) => void;
   onLogTime: (input: LogTimeInput) => Promise<void>;
-  onCompactTimelineChange?: (compact: boolean) => void;
+  onTimelineViewModeChange?: (mode: TimelineViewMode) => void;
   onCreateQuickLink?: (url: string) => Promise<void>;
   onUpdateQuickLink?: (id: string, url: string) => Promise<void>;
   onDeleteQuickLink?: (id: string) => Promise<void>;
@@ -105,19 +104,30 @@ interface Props {
 }
 
 const TITLE_MAX_LENGTH = 140;
+const TIMELINE_VIEW_LABEL: Record<TimelineViewMode, string> = {
+  normal: "Normal",
+  compact: "Compact",
+};
+const TIMELINE_VIEW_OPTIONS: Array<{
+  value: TimelineViewMode;
+  label: string;
+}> = [
+  { value: "normal", label: "Normal" },
+  { value: "compact", label: "Compact" },
+];
 
 export function TaskHeader({
   task,
   totalMinutes,
   quickLinks = [],
-  compactTimeline = false,
+  timelineViewMode = "normal",
   pendingTitleEdit,
   statusOpen: statusOpenProp,
   onStatusOpenChange,
   logTimeOpen: logTimeOpenProp,
   onLogTimeOpenChange,
   onLogTime,
-  onCompactTimelineChange,
+  onTimelineViewModeChange,
   onCreateQuickLink,
   onUpdateQuickLink,
   onDeleteQuickLink,
@@ -275,31 +285,33 @@ export function TaskHeader({
         </div>
 
         <div className="flex items-center gap-0.5">
-          {onCompactTimelineChange && (
+          {onTimelineViewModeChange && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  aria-label={
-                    compactTimeline
-                      ? "Show detailed timeline"
-                      : "Show compact timeline"
-                  }
-                  className="size-7"
-                  onClick={() => onCompactTimelineChange(!compactTimeline)}
-                  size="icon-sm"
-                  variant="ghost"
+                <div
+                  aria-label="Timeline view"
+                  className="flex h-7 items-center rounded-md bg-muted/45 p-0.5"
+                  role="group"
                 >
-                  {compactTimeline ? (
-                    <ListTree className="size-3.5" />
-                  ) : (
-                    <ListCollapse className="size-3.5" />
-                  )}
-                </Button>
+                  {TIMELINE_VIEW_OPTIONS.map((option) => (
+                    <button
+                      aria-pressed={timelineViewMode === option.value}
+                      className={cn(
+                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+                        timelineViewMode === option.value &&
+                          "bg-background text-foreground shadow-sm",
+                      )}
+                      key={option.value}
+                      onClick={() => onTimelineViewModeChange(option.value)}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </TooltipTrigger>
               <TooltipContent>
-                {compactTimeline
-                  ? "Show detailed timeline"
-                  : "Show compact timeline"}
+                Timeline view: {TIMELINE_VIEW_LABEL[timelineViewMode]}
               </TooltipContent>
             </Tooltip>
           )}

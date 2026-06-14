@@ -37,7 +37,7 @@ import { Composer } from "@/components/Composer";
 import { ReleaseView } from "@/components/ReleaseView";
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
-import { Timeline } from "@/components/Timeline";
+import { Timeline, type TimelineViewMode } from "@/components/Timeline";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
@@ -204,7 +204,8 @@ export default function App() {
   );
   const [timelineSearch, setTimelineSearch] = useState("");
   const [timelineRegex, setTimelineRegex] = useState(false);
-  const [timelineCompact, setTimelineCompact] = useState(false);
+  const [timelineViewMode, setTimelineViewMode] =
+    useState<TimelineViewMode>("normal");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [taskStatusOpen, setTaskStatusOpen] = useState(false);
   const [taskLogTimeOpen, setTaskLogTimeOpen] = useState(false);
@@ -1189,14 +1190,14 @@ export default function App() {
             <>
               <TaskHeader
                 key={selectedTask.id}
-                compactTimeline={timelineCompact}
+                timelineViewMode={timelineViewMode}
                 logTimeOpen={taskLogTimeOpen}
                 onCreateQuickLink={createQuickLink}
                 onDelete={deleteTask}
                 onDeleteQuickLink={deleteQuickLink}
                 onLogTimeOpenChange={setTaskLogTimeOpen}
                 onUpdateQuickLink={updateQuickLink}
-                onCompactTimelineChange={setTimelineCompact}
+                onTimelineViewModeChange={setTimelineViewMode}
                 onLogTime={logTime}
                 onEstimateChange={(minutes) =>
                   updateTaskEstimate(selectedTask, minutes)
@@ -1233,7 +1234,6 @@ export default function App() {
                   />
                   <Timeline
                     attachments={attachments}
-                    compact={timelineCompact}
                     entries={visibleEntries}
                     hasMore={hasMore}
                     historyEntryId={historyEntryId}
@@ -1243,6 +1243,7 @@ export default function App() {
                     onRestoreRevision={restoreRevision}
                     onTrash={trashEntry}
                     revisions={revisions}
+                    viewMode={timelineViewMode}
                   />
                 </ThreadColumn>
               </div>

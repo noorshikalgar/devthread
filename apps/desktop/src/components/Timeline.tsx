@@ -49,8 +49,10 @@ interface Props {
   onRestoreRevision: (id: string) => Promise<void>;
   onTrash: (id: string) => Promise<void>;
   onLoadMore: () => Promise<void>;
-  compact?: boolean;
+  viewMode?: TimelineViewMode;
 }
+
+export type TimelineViewMode = "normal" | "compact";
 
 const ENTRY_LABELS: Record<EntryType, string> = {
   note: "Note",
@@ -119,7 +121,7 @@ export function Timeline({
   onRestoreRevision,
   onTrash,
   onLoadMore,
-  compact = false,
+  viewMode = "normal",
 }: Props) {
   if (!entries.length) {
     return (
@@ -131,6 +133,7 @@ export function Timeline({
   }
 
   const groups = groupByDate(entries);
+  const compact = viewMode === "compact";
 
   return (
     <section aria-label="Task timeline" className="flex flex-col gap-5 pt-5">
@@ -138,17 +141,17 @@ export function Timeline({
         <div key={group.label} className="group/day flex flex-col gap-2">
           {compact ? (
             <div className="flex items-center gap-3">
-              <h2 className="whitespace-nowrap font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                {group.label}
+              <h2 className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-medium tracking-[0.04em] text-muted-foreground">
+                {compactDateGroupLabel(group)}
               </h2>
               <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
             </div>
           ) : (
-            <div className="grid grid-cols-[64px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[78px_28px_minmax(0,1fr)] sm:gap-3">
-              <h2 className="text-right font-mono text-[10px] font-medium uppercase leading-4 tracking-[0.1em] text-muted-foreground">
+            <div className="grid grid-cols-[50px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5">
+              <h2 className="whitespace-nowrap text-right font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] font-medium leading-4 tracking-[0.04em] text-muted-foreground">
                 {group.label}
               </h2>
-              <div className="flex justify-center">
+              <div className="flex translate-x-px justify-center">
                 <span className="size-2 rounded-full border border-border bg-background shadow-[0_0_0_4px_hsl(var(--background))]" />
               </div>
               <div className="min-w-0 border-t border-dashed border-border/80" />
@@ -164,11 +167,11 @@ export function Timeline({
               <>
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[82px] sm:left-[104px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[69px] sm:left-[79px]"
                 />
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[82px] sm:left-[104px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[69px] sm:left-[79px]"
                 />
               </>
             )}
@@ -224,66 +227,95 @@ interface EntryProps {
   onTrash: Props["onTrash"];
 }
 
-function CompactTimelineEntry({ entry, attachments }: EntryProps) {
+function CompactTimelineEntry({
+  entry,
+  attachments,
+  onHistory,
+  onTrash,
+}: EntryProps) {
   const summary = compactSummary(entry.contentMarkdown, attachments.length);
+  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
   return (
     <li
-      className="group relative grid min-w-0 grid-cols-[16px_minmax(78px,auto)_minmax(0,1fr)] items-center gap-2 rounded-sm py-1.5 transition-colors hover:bg-accent/40"
+      className="group relative grid min-h-8 min-w-0 grid-cols-[16px_68px_78px_42px_minmax(0,1fr)_44px] items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-accent/35"
       data-entry-id={entry.id}
     >
-      <div className="relative flex h-full justify-center">
+      <div className="relative flex h-full items-center justify-center">
         <span
           aria-hidden
           className={cn(
-            "z-10 mt-1.5 size-2 rounded-full ring-4 ring-background transition-transform duration-150 group-hover:scale-125",
+            "z-10 size-2 rounded-full ring-[3px] ring-background transition-transform duration-150 group-hover:scale-110",
             TYPE_DOT[entry.entryType],
           )}
         />
         <span
           aria-hidden
-          className="absolute top-4 bottom-[-0.75rem] w-px border-l border-dashed border-border/80 group-last:hidden"
+          className="absolute bottom-[-0.5rem] top-1/2 w-px border-l border-border/35 group-last:hidden"
         />
       </div>
 
       <time
-        className="whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+        className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground"
         dateTime={entry.occurredAt}
       >
-        {formatCompactDateTime(entry.occurredAt)}
+        {formatMessageTimestamp(entry.occurredAt)}
       </time>
 
-      <div className="flex min-w-0 items-center gap-1.5 text-xs">
-        <span
-          className={cn(
-            "inline-flex h-4 shrink-0 items-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.08em]",
-            TYPE_TOKEN[entry.entryType],
-          )}
-        >
-          {ENTRY_LABELS[entry.entryType]}
-        </span>
-        {entry.durationMinutes != null && entry.durationMinutes > 0 && (
+      <span
+        className={cn(
+          "inline-flex h-[18px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.04em]",
+          TYPE_TOKEN[entry.entryType],
+        )}
+      >
+        <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
+      </span>
+
+      <span className="flex min-w-0 items-center">
+        {entry.durationMinutes != null && entry.durationMinutes > 0 ? (
           <span
             aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-            className="inline-flex h-4 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 font-mono text-[10px] text-foreground"
+            className="truncate font-mono text-[10px] text-foreground/80"
           >
-            <Clock4 className="size-2.5 text-muted-foreground" />
             {formatDuration(entry.durationMinutes)}
           </span>
-        )}
-        {attachments.length > 0 && summary.hasText && (
-          <span className="inline-flex h-4 shrink-0 items-center rounded-md border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+        ) : attachments.length > 0 && summary.hasText ? (
+          <span className="font-mono text-[10px] text-muted-foreground">
             image
           </span>
+        ) : null}
+      </span>
+
+      <span
+        className={cn(
+          "min-w-0 truncate text-xs",
+          summary.hasText ? "text-foreground" : "text-muted-foreground",
         )}
-        <span
-          className={cn(
-            "min-w-0 truncate",
-            summary.hasText ? "text-foreground" : "text-muted-foreground",
-          )}
-          title={summary.text}
+        title={summary.text}
+      >
+        {summary.text}
+      </span>
+
+      <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <Button
+          aria-label="Revision history"
+          className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
+          onClick={() => void onHistory(entry.id)}
+          size="icon-sm"
+          variant="ghost"
         >
-          {summary.text}
-        </span>
+          <History />
+        </Button>
+        {canTrash && (
+          <Button
+            aria-label="Move entry to trash"
+            className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
+            onClick={() => void onTrash(entry.id)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Trash2 />
+          </Button>
+        )}
       </div>
     </li>
   );
@@ -350,20 +382,20 @@ function TimelineEntry({
   return (
     <li
       className={cn(
-        "group relative grid grid-cols-[64px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[78px_28px_minmax(0,1fr)] sm:gap-3",
+        "group relative grid grid-cols-[50px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5",
       )}
       data-entry-id={entry.id}
     >
       <time
-        className="flex items-start justify-end pt-3 font-mono leading-4"
+        className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
         dateTime={entry.occurredAt}
       >
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground">
           {formatMessageTimestamp(entry.occurredAt)}
         </span>
       </time>
 
-      <div className="relative z-10 flex justify-center pt-4">
+      <div className="relative z-10 flex translate-x-px justify-center pt-4">
         <span
           aria-hidden
           className={cn(
@@ -620,7 +652,7 @@ function LinkPreviewCard({
 
   return (
     <a
-      className="group/link flex min-h-12 w-full max-w-[520px] min-w-0 items-center gap-2 rounded-md bg-muted/35 px-2 py-1.5 text-left transition-colors hover:bg-accent/70"
+      className="group/link flex min-h-9 w-full max-w-[300px] min-w-0 items-center gap-2 rounded-md bg-muted/35 px-2 py-1.5 text-left transition-colors hover:bg-accent/70"
       href={safeExternalUrl(link.url) ?? "#"}
       onClick={(event) => {
         event.preventDefault();
@@ -630,7 +662,7 @@ function LinkPreviewCard({
       target="_blank"
     >
       {imageUrl && (
-        <span className="flex size-11 shrink-0 overflow-hidden rounded bg-secondary">
+        <span className="flex size-8 shrink-0 overflow-hidden rounded bg-secondary">
           <img
             alt=""
             className="h-full w-full object-cover transition-transform duration-200 group-hover/link:scale-[1.03]"
@@ -640,12 +672,12 @@ function LinkPreviewCard({
         </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-xs font-medium leading-5 text-foreground">
+        <span className="truncate text-[11px] font-medium leading-4 text-foreground">
           {title}
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="block truncate text-[10px] leading-4 text-muted-foreground">
+            <span className="block truncate text-[9px] leading-3 text-muted-foreground">
               {formatShortUrl(displayUrl)}
             </span>
           </TooltipTrigger>
@@ -654,7 +686,7 @@ function LinkPreviewCard({
           </TooltipContent>
         </Tooltip>
       </span>
-      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground opacity-70" />
+      <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-70" />
     </a>
   );
 }
@@ -680,13 +712,18 @@ function formatMessageTimestamp(value: string) {
   }).format(new Date(value));
 }
 
-function formatCompactDateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+function formatCompactGroupDate(value: string) {
+  return formatTimelineDayMonth(new Date(value));
+}
+
+function compactDateGroupLabel(group: DateGroup) {
+  const count = group.items.length;
+  const suffix = `${count} ${count === 1 ? "update" : "updates"}`;
+  const date =
+    group.label === "Today" || group.label === "Yesterday"
+      ? ` · ${formatCompactGroupDate(group.items[0].occurredAt)}`
+      : "";
+  return `${group.label}${date} · ${suffix}`;
 }
 
 function formatShortUrl(value: string) {
@@ -756,26 +793,18 @@ function dateLabel(value: string): string {
   const diffDays = Math.round(
     (startOfToday.getTime() - startOfEntry.getTime()) / 86_400_000,
   );
-  const shortDate = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(date.getFullYear() !== today.getFullYear()
-      ? { year: "numeric" as const }
-      : {}),
-  }).format(date);
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
-  if (diffDays > 1 && diffDays < 7) {
-    return `${new Intl.DateTimeFormat(undefined, {
-      weekday: "long",
-    }).format(date)}, ${shortDate}`;
+  return `${new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+  }).format(date)}, ${formatTimelineDayMonth(date, today)}`;
+}
+
+function formatTimelineDayMonth(date: Date, reference = new Date()) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  if (date.getFullYear() !== reference.getFullYear()) {
+    return `${day}/${month}/${String(date.getFullYear()).slice(-2)}`;
   }
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    ...(date.getFullYear() !== today.getFullYear()
-      ? { year: "numeric" as const }
-      : {}),
-  }).format(date);
+  return `${day}/${month}`;
 }
