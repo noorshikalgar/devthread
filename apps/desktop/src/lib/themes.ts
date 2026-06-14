@@ -13,6 +13,12 @@ export const APP_THEMES = [
     dark: true,
   },
   {
+    id: "dark-gray",
+    label: "Dark Gray",
+    family: "Neutral",
+    dark: true,
+  },
+  {
     id: "tokyo-night-dark",
     label: "Tokyo Night",
     family: "Tokyo Night",
@@ -52,6 +58,12 @@ export const APP_THEMES = [
     id: "default-light",
     label: "Default Light",
     family: "Default",
+    dark: false,
+  },
+  {
+    id: "light-gray",
+    label: "Light Gray",
+    family: "Neutral",
     dark: false,
   },
   {

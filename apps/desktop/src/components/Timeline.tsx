@@ -3,8 +3,8 @@ import {
   Clock4,
   ExternalLink,
   History,
-  Pencil,
   RotateCcw,
+  SquarePen,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -76,6 +76,26 @@ const TYPE_DOT: Record<EntryType, string> = {
   estimate: "bg-fuchsia-500",
 };
 
+const TYPE_TOKEN: Record<EntryType, string> = {
+  progress:
+    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  next_step:
+    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  finding:
+    "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  blocker:
+    "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  decision:
+    "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  note: "border-border bg-muted/45 text-muted-foreground",
+  worklog:
+    "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+  status:
+    "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  estimate:
+    "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
+};
+
 const PROTECTED_ENTRY_TYPES = new Set<EntryType>([
   "progress",
   "worklog",
@@ -115,14 +135,43 @@ export function Timeline({
   return (
     <section aria-label="Task timeline" className="flex flex-col gap-5 pt-5">
       {groups.map((group) => (
-        <div key={group.label} className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="whitespace-nowrap text-xs font-medium text-muted-foreground">
-              {group.label}
-            </h2>
-            <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
-          </div>
-          <ol className={cn("flex flex-col", compact ? "gap-0" : "gap-1")}>
+        <div key={group.label} className="group/day flex flex-col gap-2">
+          {compact ? (
+            <div className="flex items-center gap-3">
+              <h2 className="whitespace-nowrap font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {group.label}
+              </h2>
+              <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-[64px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[78px_28px_minmax(0,1fr)] sm:gap-3">
+              <h2 className="text-right font-mono text-[10px] font-medium uppercase leading-4 tracking-[0.1em] text-muted-foreground">
+                {group.label}
+              </h2>
+              <div className="flex justify-center">
+                <span className="size-2 rounded-full border border-border bg-background shadow-[0_0_0_4px_hsl(var(--background))]" />
+              </div>
+              <div className="min-w-0 border-t border-dashed border-border/80" />
+            </div>
+          )}
+          <ol
+            className={cn(
+              "relative flex flex-col",
+              compact ? "gap-0" : "gap-1",
+            )}
+          >
+            {!compact && (
+              <>
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[82px] sm:left-[104px]"
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[82px] sm:left-[104px]"
+                />
+              </>
+            )}
             {group.items.map((entry) => (
               <TimelineItem
                 attachments={attachments.filter(
@@ -186,13 +235,13 @@ function CompactTimelineEntry({ entry, attachments }: EntryProps) {
         <span
           aria-hidden
           className={cn(
-            "z-10 mt-1.5 size-2 rounded-full ring-4 ring-background",
+            "z-10 mt-1.5 size-2 rounded-full ring-4 ring-background transition-transform duration-150 group-hover:scale-125",
             TYPE_DOT[entry.entryType],
           )}
         />
         <span
           aria-hidden
-          className="absolute top-4 bottom-[-0.75rem] w-px bg-border group-last:hidden"
+          className="absolute top-4 bottom-[-0.75rem] w-px border-l border-dashed border-border/80 group-last:hidden"
         />
       </div>
 
@@ -204,7 +253,12 @@ function CompactTimelineEntry({ entry, attachments }: EntryProps) {
       </time>
 
       <div className="flex min-w-0 items-center gap-1.5 text-xs">
-        <span className="inline-flex h-4 shrink-0 items-center rounded bg-muted/60 px-1.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span
+          className={cn(
+            "inline-flex h-4 shrink-0 items-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.08em]",
+            TYPE_TOKEN[entry.entryType],
+          )}
+        >
           {ENTRY_LABELS[entry.entryType]}
         </span>
         {entry.durationMinutes != null && entry.durationMinutes > 0 && (
@@ -296,27 +350,37 @@ function TimelineEntry({
   return (
     <li
       className={cn(
-        "group relative grid grid-cols-[16px_minmax(0,1fr)] gap-2 rounded-md py-3 pr-1 transition-colors hover:bg-accent/35",
+        "group relative grid grid-cols-[64px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[78px_28px_minmax(0,1fr)] sm:gap-3",
       )}
       data-entry-id={entry.id}
     >
-      <div className="relative flex justify-center pt-[7px]">
+      <time
+        className="flex items-start justify-end pt-3 font-mono leading-4"
+        dateTime={entry.occurredAt}
+      >
+        <span className="text-[10px] text-muted-foreground">
+          {formatMessageTimestamp(entry.occurredAt)}
+        </span>
+      </time>
+
+      <div className="relative z-10 flex justify-center pt-4">
         <span
           aria-hidden
           className={cn(
-            "z-10 size-2 rounded-full ring-4 ring-background",
+            "z-10 size-2.5 rounded-full ring-[5px] ring-background transition-transform duration-150 group-hover:scale-125",
             TYPE_DOT[entry.entryType],
           )}
         />
-        <span
-          aria-hidden
-          className="absolute top-[18px] bottom-[-1.25rem] w-px border-l border-dashed border-border/80 group-last:hidden"
-        />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-2 pr-8">
+      <div className="relative flex min-w-0 flex-col gap-2 rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70 group-hover:border-border group-hover:bg-card group-hover:shadow-md">
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="inline-flex h-5 items-center rounded bg-muted/60 px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span
+            className={cn(
+              "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
+              TYPE_TOKEN[entry.entryType],
+            )}
+          >
             {ENTRY_LABELS[entry.entryType]}
           </span>
           {entry.durationMinutes != null && entry.durationMinutes > 0 && (
@@ -363,7 +427,7 @@ function TimelineEntry({
           <>
             <div
               className={cn(
-                "markdown select-text",
+                "markdown max-w-[78ch] select-text",
                 long && !expanded && "markdown--collapsed",
               )}
             >
@@ -437,15 +501,13 @@ function TimelineEntry({
               </div>
             )}
 
-            <div className="flex justify-end">
-              <time
-                className="text-[10px] text-muted-foreground/75"
-                dateTime={entry.occurredAt}
-              >
-                {formatMessageTimestamp(entry.occurredAt)}
-                {edited ? ` · edited ${formatTime(entry.updatedAt)}` : ""}
-              </time>
-            </div>
+            {edited && (
+              <div className="flex justify-end">
+                <span className="text-[10px] text-muted-foreground/75">
+                  edited {formatTime(entry.updatedAt)}
+                </span>
+              </div>
+            )}
           </>
         )}
 
@@ -490,22 +552,22 @@ function TimelineEntry({
       </div>
 
       {!editing && (
-        <div className="absolute right-1 top-2.5 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+        <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
           {canEdit && (
             <Button
               aria-label="Edit entry"
-              className="size-6 [&_svg]:size-3.5"
+              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
               onClick={() => setEditing(true)}
               size="icon-sm"
               variant="ghost"
             >
-              <Pencil />
+              <SquarePen />
             </Button>
           )}
           {canEdit && (
             <Button
               aria-label="Revision history"
-              className="size-6 [&_svg]:size-3.5"
+              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
               onClick={() => void onHistory(entry.id)}
               size="icon-sm"
               variant="ghost"
@@ -516,7 +578,7 @@ function TimelineEntry({
           {canTrash && (
             <Button
               aria-label="Move entry to trash"
-              className="size-6 [&_svg]:size-3.5"
+              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
               onClick={() => void onTrash(entry.id)}
               size="icon-sm"
               variant="ghost"
@@ -701,8 +763,8 @@ function dateLabel(value: string): string {
       ? { year: "numeric" as const }
       : {}),
   }).format(date);
-  if (diffDays === 0) return `Today, ${shortDate}`;
-  if (diffDays === 1) return `Yesterday, ${shortDate}`;
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
   if (diffDays > 1 && diffDays < 7) {
     return `${new Intl.DateTimeFormat(undefined, {
       weekday: "long",
