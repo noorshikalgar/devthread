@@ -8,6 +8,16 @@ if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   };
 }
 
+if (typeof globalThis.ResizeObserver === "undefined") {
+  // jsdom doesn't ship ResizeObserver; provide a no-op so components
+  // that use it for measurement can mount without throwing.
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
   return render(ui, {
     wrapper: ({ children }) => (

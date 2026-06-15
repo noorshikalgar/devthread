@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { computeStreaks } from "@/lib/worklogStreaks";
 import type { WorklogDay } from "@/lib/worklog";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,16 @@ const RANGE_DAYS = {
   "12m": 365,
 } as const;
 
+const TOOLTIP_GAP = 8;
+const TOOLTIP_WIDTH = 180;
+const TOOLTIP_HEIGHT = 56;
+
+interface HoverState {
+  day: WorklogDay;
+  top: number;
+  left: number;
+}
+
 export function WorklogHeatmap({
   days,
   goalMinutes = 8 * 60,
@@ -41,6 +51,30 @@ export function WorklogHeatmap({
   selectedDay,
   onSelectDay,
 }: WorklogHeatmapProps) {
+  const [hover, setHover] = useState<HoverState | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cellSize, setCellSize] = useState(14);
+
+  // Measure the grid container and resize the cells to fill the
+  // full available width. 7 rows × 53 columns (a year) with a
+  // 3px gap gives us cellSize = (width - 52*3) / 53. The 12px
+  // floor keeps tiny cells tappable on very narrow viewports.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const el = gridRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (!width) return;
+      const weeks = Math.ceil(days.length / 7);
+      const gap = 3;
+      const next = Math.max(12, (width - (weeks - 1) * gap) / weeks);
+      setCellSize(next);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [days.length]);
+
   const streaks = useMemo(() => computeStreaks(days), [days]);
   const mostActive = useMemo(
     () =>
@@ -52,7 +86,6 @@ export function WorklogHeatmap({
   );
   const goalHits = days.filter((day) => day.minutes >= goalMinutes).length;
   const loggedDays = days.filter((day) => day.minutes > 0).length;
-  const leadingBlanks = days.length ? new Date(days[0]!.date).getDay() : 0;
   const selectedRangeKeys = useMemo(() => {
     const selectedKeys = new Set<string>();
     const lastDate = days.at(-1)?.date;
@@ -72,11 +105,43 @@ export function WorklogHeatmap({
     return selectedKeys;
   }, [days, range]);
 
+  function handleCellEnter(
+    event: MouseEvent<HTMLButtonElement>,
+    day: WorklogDay,
+  ) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceRight = viewportWidth - rect.right;
+    // Prefer the side that has the most room; fall back to the other
+    // when there's not enough space.
+    const placeAbove =
+      spaceAbove > spaceBelow && spaceAbove > TOOLTIP_HEIGHT + TOOLTIP_GAP;
+    const top = placeAbove
+      ? rect.top - TOOLTIP_HEIGHT - TOOLTIP_GAP
+      : rect.bottom + TOOLTIP_GAP;
+    const placeRight =
+      spaceRight < TOOLTIP_WIDTH && rect.left > TOOLTIP_WIDTH + TOOLTIP_GAP;
+    const left = placeRight
+      ? rect.left - TOOLTIP_WIDTH - TOOLTIP_GAP
+      : Math.max(
+          TOOLTIP_GAP,
+          Math.min(
+            rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2,
+            viewportWidth - TOOLTIP_WIDTH - TOOLTIP_GAP,
+          ),
+        );
+    setHover({ day, top, left });
+  }
+
+  function handleCellLeave() {
+    setHover(null);
+  }
+
   return (
-    <div
-      className="flex h-full min-h-0 flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm"
-      data-testid="worklog-heatmap"
-    >
+    <div className="flex h-full min-h-0 flex-col" data-testid="worklog-heatmap">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium">
           Daily heatmap
@@ -103,20 +168,21 @@ export function WorklogHeatmap({
           <span className="ml-0.5">More</span>
         </div>
       </div>
-      <div className="mt-3 flex min-h-0 justify-center">
+      <div className="mt-3 flex min-h-0">
         <div
-          className="grid max-w-full grid-flow-col grid-rows-7 gap-[3px] overflow-x-auto px-0.5 py-1"
+          className="grid w-full grid-flow-col grid-rows-7 gap-[3px] px-0.5 py-1"
+          ref={gridRef}
           style={{
-            gridAutoColumns: "clamp(11px, 1.05vw, 14px)",
+            gridAutoColumns: `${cellSize}px`,
           }}
         >
-          {Array.from({ length: leadingBlanks }).map((_, index) => (
-            <span
-              aria-hidden
-              className="size-[clamp(11px,1.05vw,14px)]"
-              key={`blank-${index}`}
-            />
-          ))}
+          {/*
+           * Render every day starting at the top-left of the grid
+           * (no leading weekday padding). Days before the year
+           * begins, or after it ends, are explicit zero-minute
+           * placeholders so the visual rhythm is consistent and
+           * the first day of the year is always the first cell.
+           */}
           {days.map((day) => {
             const isSelected = selectedDay === day.key;
             const hasTime = day.minutes > 0;
@@ -126,7 +192,7 @@ export function WorklogHeatmap({
               <button
                 aria-label={`${day.key} ${formatHM(day.minutes)}`}
                 className={cn(
-                  "size-[clamp(11px,1.05vw,14px)] rounded-[3px] border border-border/45 transition duration-150 hover:scale-110 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "aspect-square rounded-[3px] border border-border/45 transition duration-150 hover:scale-110 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   hasTime ? HEATMAP_LEVELS[bucket]! : "bg-muted/35",
                   !isInSelectedRange && "opacity-25",
                   isSelected &&
@@ -135,7 +201,8 @@ export function WorklogHeatmap({
                 data-testid="heatmap-cell"
                 key={day.key}
                 onClick={() => onSelectDay(isSelected ? null : day.key)}
-                title={`${day.key} · ${formatHM(day.minutes)}`}
+                onMouseEnter={(event) => handleCellEnter(event, day)}
+                onMouseLeave={handleCellLeave}
                 type="button"
               />
             );
@@ -161,6 +228,25 @@ export function WorklogHeatmap({
         />
         <HeatmapStat label="Goal hit" value={`${goalHits} days`} />
       </div>
+      {hover && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 max-w-[200px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/30"
+          style={{ top: hover.top, left: hover.left, width: TOOLTIP_WIDTH }}
+        >
+          <p className="font-medium text-popover-foreground">
+            {formatShortDate(hover.day.key)}
+          </p>
+          <p className="font-mono tabular-nums text-muted-foreground">
+            {formatHM(hover.day.minutes)}
+            {hover.day.minutes > 0 && goalMinutes > 0 && (
+              <span className="ml-2 text-foreground/70">
+                {Math.round((hover.day.minutes / goalMinutes) * 100)}% of goal
+              </span>
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -176,12 +262,12 @@ function HeatmapStat({
 }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+      <span className="text-[11px] font-normal text-foreground/70">
         {label}
       </span>
       <span
         className={cn(
-          "font-medium tabular-nums",
+          "text-xs font-semibold tabular-nums",
           tone === "active" && "text-foreground",
           tone === "muted" && "text-muted-foreground",
           tone === "default" && "text-foreground",
@@ -195,6 +281,7 @@ function HeatmapStat({
 
 function formatShortDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
     month: "short",
     day: "numeric",
   }).format(new Date(value));
