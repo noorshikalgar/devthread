@@ -646,7 +646,7 @@ function TimelineEntry({
         className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
         dateTime={entry.occurredAt}
       >
-        <span className="text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground">
+        <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground">
           {formatMessageTimestamp(entry.occurredAt)}
         </span>
       </time>

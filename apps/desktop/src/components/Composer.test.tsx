@@ -3,8 +3,11 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { draftKey } from "../lib/composer";
 import { Composer } from "./Composer";
+import {
+  clearComposerDraft,
+  getComposerDraft,
+} from "../lib/composerDraftStore";
 import { renderWithProviders as render } from "../test-utils";
 
 afterEach(() => {
@@ -106,7 +109,10 @@ describe("Composer", () => {
 
     await screen.findByText(/Draft retained/);
     expect(composer).toHaveValue("Do not lose this");
-    expect(localStorage.getItem(draftKey("task-b"))).toBe("Do not lose this");
+    // The unsent draft stays in the per-task store so the
+    // sidebar's status dot can show a ring on the next visit.
+    expect(getComposerDraft("task-b")?.content).toBe("Do not lose this");
+    clearComposerDraft("task-b");
   });
 
   it("previews a pasted image and submits it with the entry", async () => {

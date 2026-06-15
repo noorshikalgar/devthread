@@ -223,7 +223,7 @@ export function TaskHeader({
     task.status !== "done" && task.status !== "archived";
   const isArchived = task.status === "archived";
   return (
-    <header className="flex flex-col gap-2.5 bg-card/70 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+    <header className="flex flex-col gap-2.5 bg-card px-6 py-3">
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {titleDraft === null ? (
@@ -378,19 +378,6 @@ export function TaskHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onSelect={() => {
-                  void navigator.clipboard.writeText(task.id);
-                  toast.success("Task ID copied");
-                }}
-              >
-                <Copy className="mr-2 size-3.5" />
-                Copy task ID
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                  {task.id.slice(0, 8)}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               {!readOnly && (
                 <DropdownMenuItem
                   onSelect={() =>

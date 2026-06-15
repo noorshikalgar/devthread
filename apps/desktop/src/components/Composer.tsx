@@ -23,10 +23,15 @@ import { fileToPendingImage } from "@/lib/content";
 import { extractLinkPreviews } from "@/lib/content";
 import {
   detectMention,
-  draftKey,
   parseSlashCommand,
   resolveMentionsInContent,
 } from "@/lib/composer";
+import {
+  clearComposerDraft as clearComposerDraftStore,
+  getComposerDraft,
+  setComposerDraft,
+  type ComposerDraft,
+} from "@/lib/composerDraftStore";
 import {
   ENTRY_TYPES,
   type EntryType,
@@ -156,18 +161,32 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     [mention.query],
   );
 
+  // Hydrate the draft from the per-task store so switching away
+  // and back preserves what the user was typing.
   useEffect(() => {
-    setContent(localStorage.getItem(draftKey(taskId)) ?? "");
-    setImages([]);
+    const draft = getComposerDraft(taskId);
+    setContent(draft?.content ?? "");
+    setEntryType(draft?.entryType ?? "note");
+    setImages(draft?.images ?? []);
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
     requestAnimationFrame(() => textarea.current?.focus());
   }, [taskId]);
 
+  // Persist the in-progress draft so it survives task switches.
+  // We only update the store when the user has actually entered
+  // something (content, images, or a non-default entry type) —
+  // an empty draft doesn't deserve a ring on the sidebar dot.
   useEffect(() => {
-    if (content) localStorage.setItem(draftKey(taskId), content);
-    else localStorage.removeItem(draftKey(taskId));
-  }, [content, taskId]);
+    const trimmed = content.trim();
+    const hasContent = trimmed.length > 0 || images.length > 0;
+    if (!hasContent && entryType === "note") {
+      clearComposerDraftStore(taskId);
+      return;
+    }
+    const draft: ComposerDraft = { content, entryType, images };
+    setComposerDraft(taskId, draft);
+  }, [content, entryType, images, taskId]);
 
   useEffect(() => {
     if (!mention.active) return;
@@ -199,11 +218,13 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     updateMention(value);
   }
 
-  function clearComposerDraft() {
+  function resetComposer() {
     setContent("");
     setImages([]);
+    setEntryType("note");
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
+    clearComposerDraftStore(taskId);
     requestAnimationFrame(() => textarea.current?.focus());
   }
 
@@ -247,6 +268,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
       setImages([]);
       setEntryType("note");
       setMention({ active: false, query: "", anchor: 0 });
+      clearComposerDraftStore(taskId);
       requestAnimationFrame(() => textarea.current?.focus());
     } catch (cause) {
       setError(String(cause));
@@ -482,7 +504,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                   <Button
                     aria-label="Clear draft"
                     className="text-muted-foreground hover:text-foreground"
-                    onClick={clearComposerDraft}
+                    onClick={resetComposer}
                     size="icon-sm"
                     variant="ghost"
                   >

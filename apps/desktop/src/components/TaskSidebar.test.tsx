@@ -5,6 +5,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskSidebar } from "./TaskSidebar";
 import type { Folder, Task } from "@/lib/types";
+import { setComposerDraft } from "@/lib/composerDraftStore";
 import { renderWithProviders as render } from "../test-utils";
 
 const baseTask: Task = {
@@ -29,7 +30,7 @@ describe("TaskSidebar", () => {
   it("creates a new task immediately when the new task button is pressed", async () => {
     const create = vi.fn().mockResolvedValue(undefined);
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={[]}
         onCreate={create}
         onCreateFolder={vi.fn()}
@@ -52,7 +53,7 @@ describe("TaskSidebar", () => {
   it("asks for a folder name before creating a folder", async () => {
     const createFolder = vi.fn().mockResolvedValue(undefined);
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={createFolder}
@@ -100,7 +101,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -148,7 +149,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -185,7 +186,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -205,7 +206,7 @@ describe("TaskSidebar", () => {
 
   it("limits long search input and truncates the no-match query", () => {
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -235,7 +236,7 @@ describe("TaskSidebar", () => {
 
   it("replaces the search icon with a clear action while searching", () => {
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -272,7 +273,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -317,7 +318,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -374,7 +375,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -414,7 +415,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={create}
         onCreateFolder={vi.fn()}
@@ -445,7 +446,7 @@ describe("TaskSidebar", () => {
     });
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -493,7 +494,7 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar
+      <TaskSidebar mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -517,5 +518,204 @@ describe("TaskSidebar", () => {
     fireEvent.click(screen.getByText("Copy"));
     fireEvent.click(screen.getByText("Copy as CSV"));
     expect(onCopyFolder).toHaveBeenLastCalledWith(folders[0], "csv");
+  });
+});
+
+describe("TaskSidebar (archive mode)", () => {
+  const folders: Folder[] = [
+    { id: "f1", name: "Engineering", releaseName: null, createdAt: "", updatedAt: "" },
+  ];
+  const archivedTasks: Task[] = [
+    { ...baseTask, id: "a1", title: "Old spike", folderId: "f1" },
+    { ...baseTask, id: "a2", title: "Stale exploration", folderId: null },
+  ];
+
+  it("renders the Archive title and 'Restore selected' button (disabled until a checkbox is checked)", () => {
+    const onRestore = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TaskSidebar
+        mode="archive"
+        folders={folders}
+        onDeleteTask={vi.fn()}
+        onRestoreTask={onRestore}
+        onSelect={() => undefined}
+        selectedId="a1"
+        tasks={archivedTasks}
+      />,
+    );
+    // The header title is "Archive" and the bulk button reads
+    // "Restore selected".
+    expect(screen.getByText("Archive")).toBeInTheDocument();
+    const restoreSelected = screen.getByLabelText("Restore selected");
+    expect(restoreSelected).toBeDisabled();
+  });
+
+  it("uses checkboxes (not status dots) and shows folder + archive date on each row", () => {
+    render(
+      <TaskSidebar
+        mode="archive"
+        folders={folders}
+        onDeleteTask={vi.fn()}
+        onRestoreTask={vi.fn()}
+        onSelect={() => undefined}
+        selectedId="a1"
+        tasks={archivedTasks}
+      />,
+    );
+    // Checkboxes are rendered with a Select- prefix aria-label.
+    expect(
+      screen.getByLabelText("Select Old spike"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Select Stale exploration"),
+    ).toBeInTheDocument();
+    // The row is a single line: just the title, no folder or
+    // archive-date subtitle (mirrors the active TaskRow shape).
+    expect(screen.queryByText(/Engineering/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No folder/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/archived/)).not.toBeInTheDocument();
+  });
+
+  it("enables 'Restore selected' when at least one checkbox is checked and triggers the restore on click", async () => {
+    const onRestore = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TaskSidebar
+        mode="archive"
+        folders={folders}
+        onDeleteTask={vi.fn()}
+        onRestoreTask={onRestore}
+        onSelect={() => undefined}
+        selectedId="a1"
+        tasks={archivedTasks}
+      />,
+    );
+    const restoreSelected = screen.getByLabelText("Restore selected");
+    expect(restoreSelected).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Select Old spike"));
+    expect(restoreSelected).not.toBeDisabled();
+    fireEvent.click(restoreSelected);
+    await waitFor(() => expect(onRestore).toHaveBeenCalledTimes(1));
+    expect(onRestore).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a1" }),
+    );
+  });
+
+  it("hides folder and active-mode UI in archive mode", () => {
+    render(
+      <TaskSidebar
+        mode="archive"
+        folders={folders}
+        onDeleteTask={vi.fn()}
+        onRestoreTask={vi.fn()}
+        onSelect={() => undefined}
+        selectedId="a1"
+        tasks={archivedTasks}
+      />,
+    );
+    // No active-mode buttons or labels.
+    expect(screen.queryByLabelText("New task")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New folder")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active tasks")).not.toBeInTheDocument();
+    expect(screen.queryByText("All Tasks")).not.toBeInTheDocument();
+  });
+
+  it("renders hover restore + delete buttons that fire the matching callbacks", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const onRestore = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TaskSidebar
+        mode="archive"
+        folders={folders}
+        onDeleteTask={onDelete}
+        onRestoreTask={onRestore}
+        onSelect={() => undefined}
+        selectedId="a1"
+        tasks={archivedTasks}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Restore Old spike"));
+    await waitFor(() => expect(onRestore).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a1" }),
+    ));
+    fireEvent.click(screen.getByLabelText("Delete Old spike"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete task" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("a1"));
+  });
+});
+
+describe("TaskSidebar composer draft ring", () => {
+  const baseTask: Task = {
+    id: "task-1",
+    title: "Active task",
+    descriptionMarkdown: "",
+    status: "active",
+    nextStep: null,
+    estimatedMinutes: null,
+    folderId: null,
+    releaseName: null,
+    createdAt: "2026-06-05T00:00:00Z",
+    updatedAt: "2026-06-05T00:00:00Z",
+  };
+
+  afterEach(() => {
+    setComposerDraft("task-1", {
+      content: "",
+      entryType: "note",
+      images: [],
+    });
+  });
+
+  it("draws a ring on the status dot when the task has an unsent draft", async () => {
+    setComposerDraft("task-1", {
+      content: "Half-typed note",
+      entryType: "note",
+      images: [],
+    });
+    render(
+      <TaskSidebar
+        mode="active"
+        folders={[]}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId="task-1"
+        tasks={[baseTask]}
+      />,
+    );
+    // The active-tasks section renders the task with a status dot
+    // wrapped in a ring when a draft exists. The task appears in
+    // both the Active Tasks section and the All Tasks list, so
+    // check the first match (Active Tasks, which is the more
+    // prominent placement).
+    const rows = screen.getAllByText("Active task");
+    const dot = rows[0]!.closest("button")!.querySelector("span.rounded-full")!;
+    expect(dot.className).toMatch(/ring-/);
+  });
+
+  it("does not draw a ring when there is no draft", () => {
+    render(
+      <TaskSidebar
+        mode="active"
+        folders={[]}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId="task-1"
+        tasks={[baseTask]}
+      />,
+    );
+    const rows = screen.getAllByText("Active task");
+    const dot = rows[0]!.closest("button")!.querySelector("span.rounded-full")!;
+    expect(dot.className).not.toMatch(/ring-/);
   });
 });

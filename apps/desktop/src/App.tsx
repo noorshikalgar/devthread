@@ -121,6 +121,15 @@ import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
 import {
+  getCachedTaskData,
+  updateCachedTaskData,
+  invalidateTaskData,
+} from "@/lib/taskDataCache";
+import {
+  getCachedWorklogYear,
+  setCachedWorklogYear,
+} from "@/lib/worklogCache";
+import {
   type Attachment,
   type EntryType,
   type Folder,
@@ -276,6 +285,44 @@ export default function App() {
     [tasks],
   );
 
+  // The archive view mutates `selectedId` so the read-only TaskHeader
+  // and Timeline load the right entries/quicklinks. That same
+  // `selectedId` would otherwise leak into the regular task view and
+  // re-enable all the editing actions on a task that's been
+  // archived. To keep the modes independent, we snapshot the active
+  // selection before leaving the task view and restore it on return.
+  const lastActiveSelectedIdRef = useRef<string | null>(null);
+  const previousWorkspaceModeRef = useRef<WorkspaceMode>(workspaceMode);
+  useEffect(() => {
+    const prev = previousWorkspaceModeRef.current;
+    const next = workspaceMode;
+    if (prev === "tasks" && next !== "tasks") {
+      // Heading out of the task view — remember the active pick.
+      if (selectedTask && selectedTask.status !== "archived") {
+        lastActiveSelectedIdRef.current = selectedId;
+      }
+    } else if (prev !== "tasks" && next === "tasks") {
+      // Coming back — clear out any archive selection that bled in
+      // and restore the previous active pick (or the first active
+      // task as a fallback).
+      if (selectedTask && selectedTask.status === "archived") {
+        const remembered = lastActiveSelectedIdRef.current;
+        const stillValid =
+          remembered &&
+          tasks.some(
+            (task) => task.id === remembered && task.status !== "archived",
+          );
+        if (stillValid) {
+          setSelectedId(remembered);
+        } else {
+          const firstActive = tasks.find((task) => task.status !== "archived");
+          setSelectedId(firstActive?.id ?? null);
+        }
+      }
+    }
+    previousWorkspaceModeRef.current = next;
+  }, [workspaceMode, selectedId, selectedTask, tasks]);
+
   useEffect(() => {
     void loadTasks();
     void loadFolders();
@@ -393,6 +440,19 @@ export default function App() {
       return;
     }
     localStorage.setItem(SELECTED_TASK_KEY, selectedId);
+    // Hydrate from the per-task cache so toggling between Tasks and
+    // Archive is instant. We only re-fetch if we don't have the
+    // payload yet, or the cached entries belong to a different task
+    // (which can happen if the user lands on a never-loaded task).
+    const cached = getCachedTaskData(selectedId);
+    if (cached) {
+      setEntries(cached.entries);
+      setQuickLinks(cached.quickLinks);
+      setAttachments(cached.attachments);
+      setHasMore(cached.entries.length === PAGE_SIZE);
+      setHistoryEntryId(null);
+      return;
+    }
     setEntries([]);
     setAttachments([]);
     setQuickLinks([]);
@@ -402,6 +462,15 @@ export default function App() {
 
   useEffect(() => {
     if (workspaceMode !== "worklog") return;
+    // Hydrate from the per-year cache so toggling back to Worklog is
+    // instant. The fetch only happens on the first visit for that
+    // year, or when the user explicitly changes the year.
+    const cached = getCachedWorklogYear(worklogYear);
+    if (cached) {
+      setWorklogMetrics(cached.metrics);
+      setWorklogHeatmapMetrics(cached.heatmapMetrics);
+      return;
+    }
     void loadWorklogMetrics(worklogYear);
   }, [workspaceMode, worklogYear]);
 
@@ -511,6 +580,11 @@ export default function App() {
       setAttachments(nextAttachments);
       setHasMore(next.length === PAGE_SIZE);
       setHistoryEntryId(null);
+      // Keep the per-task cache in sync so toggling modes is instant.
+      updateCachedTaskData(taskId, {
+        entries: next,
+        attachments: nextAttachments,
+      });
     } catch (cause) {
       setError(String(cause));
     }
@@ -518,7 +592,9 @@ export default function App() {
 
   async function loadQuickLinks(taskId: string) {
     try {
-      setQuickLinks(await api.listQuickLinks(taskId));
+      const next = await api.listQuickLinks(taskId);
+      setQuickLinks(next);
+      updateCachedTaskData(taskId, { quickLinks: next });
     } catch (cause) {
       setError(String(cause));
     }
@@ -534,6 +610,10 @@ export default function App() {
       );
       setWorklogMetrics(metrics);
       setWorklogHeatmapMetrics(metrics);
+      setCachedWorklogYear(year, {
+        metrics,
+        heatmapMetrics: metrics,
+      });
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -579,7 +659,11 @@ export default function App() {
         "private",
       );
       if (selectedId === task.id) {
-        setEntries((current) => [entry, ...current]);
+        setEntries((current) => {
+          const next = [entry, ...current];
+          updateCachedTaskData(task.id, { entries: next });
+          return next;
+        });
       }
     } catch (cause) {
       setError(`Status changed, but the timeline log failed: ${cause}`);
@@ -608,7 +692,11 @@ export default function App() {
         minutes,
       );
       if (selectedId === task.id) {
-        setEntries((current) => [entry, ...current]);
+        setEntries((current) => {
+          const next = [entry, ...current];
+          updateCachedTaskData(task.id, { entries: next });
+          return next;
+        });
       }
     } catch (cause) {
       setError(`Estimate changed, but the timeline log failed: ${cause}`);
@@ -641,9 +729,13 @@ export default function App() {
         enriched.provider,
       );
       if (selectedId !== taskId) return;
-      setQuickLinks((existing) =>
-        existing.map((link) => (link.id === saved.id ? saved : link)),
-      );
+      setQuickLinks((existing) => {
+        const next = existing.map((link) =>
+          link.id === saved.id ? saved : link,
+        );
+        updateCachedTaskData(taskId, { quickLinks: next });
+        return next;
+      });
     } catch (cause) {
       console.warn("quick link preview enrichment failed", cause);
     }
@@ -664,7 +756,9 @@ export default function App() {
     );
     setQuickLinks((current) => {
       const withoutDuplicate = current.filter((link) => link.id !== saved.id);
-      return [...withoutDuplicate, saved].slice(0, 3);
+      const next = [...withoutDuplicate, saved].slice(0, 3);
+      updateCachedTaskData(selectedId, { quickLinks: next });
+      return next;
     });
     void enrichQuickLinkInBackground(selectedId, saved.id, saved.url);
   }
@@ -681,16 +775,24 @@ export default function App() {
       normalized.domain,
       normalized.provider,
     );
-    setQuickLinks((current) =>
-      current.map((link) => (link.id === saved.id ? saved : link)),
-    );
+    setQuickLinks((current) => {
+      const next = current.map((link) =>
+        link.id === saved.id ? saved : link,
+      );
+      updateCachedTaskData(saved.taskId, { quickLinks: next });
+      return next;
+    });
     const taskId = saved.taskId;
     void enrichQuickLinkInBackground(taskId, saved.id, saved.url);
   }
 
   async function deleteQuickLink(id: string) {
     await api.deleteQuickLink(id);
-    setQuickLinks((current) => current.filter((link) => link.id !== id));
+    setQuickLinks((current) => {
+      const next = current.filter((link) => link.id !== id);
+      if (selectedId) updateCachedTaskData(selectedId, { quickLinks: next });
+      return next;
+    });
   }
 
   async function createEntry(
@@ -725,8 +827,16 @@ export default function App() {
         );
       }
     }
-    setEntries((current) => [entry, ...current]);
-    setAttachments((current) => [...current, ...savedImages]);
+    setEntries((current) => {
+      const next = [entry, ...current];
+      updateCachedTaskData(selectedId, { entries: next });
+      return next;
+    });
+    setAttachments((current) => {
+      const next = [...current, ...savedImages];
+      updateCachedTaskData(selectedId, { attachments: next });
+      return next;
+    });
     await loadTasks();
   }
 
@@ -748,6 +858,7 @@ export default function App() {
     setEntries((current) => {
       const next = [entry, ...current];
       next.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      updateCachedTaskData(selectedId, { entries: next });
       return next;
     });
     await loadTasks();
@@ -780,7 +891,11 @@ export default function App() {
 
   async function trashEntry(entryId: string) {
     await api.trashEntry(entryId);
-    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+    setEntries((current) => {
+      const next = current.filter((entry) => entry.id !== entryId);
+      if (selectedId) updateCachedTaskData(selectedId, { entries: next });
+      return next;
+    });
     toast("Entry moved to trash.", {
       description: "You can restore it from the trash view.",
       action: {
@@ -799,7 +914,11 @@ export default function App() {
   async function loadMore() {
     if (!selectedId) return;
     const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
-    setEntries((current) => [...current, ...next]);
+    setEntries((current) => {
+      const merged = [...current, ...next];
+      updateCachedTaskData(selectedId, { entries: merged });
+      return merged;
+    });
     setHasMore(next.length === PAGE_SIZE);
   }
 
@@ -898,6 +1017,9 @@ export default function App() {
   async function deleteTask(taskId: string) {
     await api.deleteTask(taskId);
     setTasks((current) => current.filter((task) => task.id !== taskId));
+    // Drop any cached data for the deleted task so a stale entry
+    // doesn't resurface on a subsequent view toggle.
+    invalidateTaskData(taskId);
     if (selectedId === taskId) {
       const next = tasks.find((task) => task.id !== taskId) ?? null;
       setSelectedId(next?.id ?? null);
@@ -989,9 +1111,13 @@ export default function App() {
   }
 
   function replaceEntry(updated: WorkLogEntry) {
-    setEntries((current) =>
-      current.map((entry) => (entry.id === updated.id ? updated : entry)),
-    );
+    setEntries((current) => {
+      const next = current.map((entry) =>
+        entry.id === updated.id ? updated : entry,
+      );
+      updateCachedTaskData(updated.taskId, { entries: next });
+      return next;
+    });
   }
 
   function startSidebarResize(event: MouseEvent<HTMLButtonElement>) {
@@ -1034,8 +1160,17 @@ export default function App() {
     onNewTask: () => void createTask(),
     onNewFolder: () => newFolderDialogRef.current?.(),
     onToggleSidebar: () => setSidebarOpen((o) => !o),
-    onToggleArchive: () =>
-      setWorkspaceMode((m) => (m === "archive" ? "tasks" : "archive")),
+    onToggleArchive: () => {
+      // Match the rail button: first invocation enters the archive
+      // view (and opens the sidebar), later invocations just toggle
+      // the sidebar without bouncing back to the task view.
+      if (workspaceMode !== "archive") {
+        setWorkspaceMode("archive");
+        setSidebarOpen(true);
+        return;
+      }
+      setSidebarOpen((open) => !open);
+    },
     onOpenWorklog: () => setWorkspaceMode("worklog"),
     onEditTitle: () => {
       if (selectedTask) setPendingTitleEdit(true);
@@ -1087,10 +1222,21 @@ export default function App() {
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
+          archiveOpen={
+            workspaceMode === "archive" && sidebarOpen
+          }
           onArchiveToggle={() => {
-            setWorkspaceMode((mode) =>
-              mode === "archive" ? "tasks" : "archive",
-            );
+            // First click enters the archive view (with the sidebar
+            // open so the user sees the list). Subsequent clicks
+            // only toggle the sidebar — they don't bounce back to
+            // the task view, mirroring how the Tasks rail button
+            // handles second-and-later clicks.
+            if (workspaceMode !== "archive") {
+              setWorkspaceMode("archive");
+              setSidebarOpen(true);
+              return;
+            }
+            setSidebarOpen((open) => !open);
           }}
           onReleasesOpen={() => setWorkspaceMode("releases")}
           onSearchOpen={() => setPaletteOpen(true)}
@@ -1117,33 +1263,55 @@ export default function App() {
             resizingSidebar && "transition-none",
           )}
           style={{
-            width: workspaceMode === "tasks" && sidebarOpen ? sidebarWidth : 0,
+            // The sidebar shell hosts both the active tasks list and
+            // the archive list — the same `sidebarOpen` toggle hides
+            // either of them, so the archive icon can mirror the
+            // tasks icon's behavior.
+            width:
+              (workspaceMode === "tasks" || workspaceMode === "archive") &&
+              sidebarOpen
+                ? sidebarWidth
+                : 0,
           }}
         >
           <div className="h-full select-none" style={{ width: sidebarWidth }}>
-            <TaskSidebar
-              folders={folders}
-              newFolderDialogRef={newFolderDialogRef}
-              onCopyFolder={copyFolder}
-              onCreate={createTask}
-              onCreateFolder={createFolder}
-              onDeleteFolder={deleteFolder}
-              onDeleteTask={deleteTask}
-              onMoveTask={moveTask}
-              onRemoveFolderRelease={handleRemoveFolderReleaseTag}
-              onRemoveTaskRelease={handleRemoveTaskTag}
-              onRenameFolder={renameFolder}
-              onSelect={setSelectedId}
-              onTagFolderRelease={handleTagFolderRelease}
-              onTagTaskRelease={handleTagTask}
-              releases={releases}
-              selectedId={selectedId}
-              tasks={sidebarTasks}
-            />
+            {workspaceMode === "archive" ? (
+              <TaskSidebar
+                mode="archive"
+                folders={folders}
+                onDeleteTask={deleteTask}
+                onRestoreTask={(task) => updateTaskStatus(task, "planned")}
+                onSelect={setSelectedId}
+                selectedId={selectedId}
+                tasks={archivedTasks}
+              />
+            ) : (
+              <TaskSidebar
+                mode="active"
+                folders={folders}
+                newFolderDialogRef={newFolderDialogRef}
+                onCopyFolder={copyFolder}
+                onCreate={createTask}
+                onCreateFolder={createFolder}
+                onDeleteFolder={deleteFolder}
+                onDeleteTask={deleteTask}
+                onMoveTask={moveTask}
+                onRemoveFolderRelease={handleRemoveFolderReleaseTag}
+                onRemoveTaskRelease={handleRemoveTaskTag}
+                onRenameFolder={renameFolder}
+                onSelect={setSelectedId}
+                onTagFolderRelease={handleTagFolderRelease}
+                onTagTaskRelease={handleTagTask}
+                releases={releases}
+                selectedId={selectedId}
+                tasks={sidebarTasks}
+              />
+            )}
           </div>
-          {workspaceMode === "tasks" && sidebarOpen && (
-            <button
-              aria-label="Resize task sidebar"
+          {(workspaceMode === "tasks" || workspaceMode === "archive") &&
+            sidebarOpen && (
+              <button
+                aria-label="Resize task sidebar"
               className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
               onDoubleClick={() => {
                 setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
@@ -1180,15 +1348,11 @@ export default function App() {
             <ArchiveView
               attachments={attachments}
               entries={entries}
-              folders={folders}
               quickLinks={quickLinks}
               releases={releases}
               selectedId={selectedId}
               tasks={archivedTasks}
               totalMinutes={totalMinutes}
-              onDeleteTask={deleteTask}
-              onRestoreTask={(task) => updateTaskStatus(task, "planned")}
-              onSelect={setSelectedId}
             />
           ) : workspaceMode === "worklog" ? (
             <WorklogMetricsView
@@ -1336,6 +1500,7 @@ export default function App() {
 
 function AppRail({
   archiveActive,
+  archiveOpen,
   onArchiveToggle,
   onReleasesOpen,
   onSearchOpen,
@@ -1349,6 +1514,7 @@ function AppRail({
   worklogActive,
 }: {
   archiveActive: boolean;
+  archiveOpen: boolean;
   onArchiveToggle: () => void;
   onReleasesOpen: () => void;
   onSearchOpen: () => void;
@@ -1405,7 +1571,13 @@ function AppRail({
         <RailButton
           active={archiveActive}
           icon={Archive}
-          label={archiveActive ? "Hide archived tasks" : "Show archived tasks"}
+          label={
+            archiveActive
+              ? archiveOpen
+                ? "Hide archive sidebar"
+                : "Show archive sidebar"
+              : "Open archive"
+          }
           onClick={onArchiveToggle}
           tooltip="Archive"
         />
@@ -1500,329 +1672,62 @@ function AppContextMenu({
 function ArchiveView({
   attachments,
   entries,
-  folders,
   quickLinks,
   releases,
   selectedId,
   tasks,
   totalMinutes,
-  onDeleteTask,
-  onRestoreTask,
-  onSelect,
 }: {
   attachments: Attachment[];
   entries: WorkLogEntry[];
-  folders: Folder[];
   quickLinks: TaskQuickLink[];
   releases: Release[];
   selectedId: string | null;
   tasks: Task[];
   totalMinutes: number;
-  onDeleteTask: (taskId: string) => Promise<void>;
-  onRestoreTask: (task: Task) => Promise<void>;
-  onSelect: (id: string) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const folderNames = useMemo(
-    () => new Map(folders.map((folder) => [folder.id, folder.name])),
-    [folders],
-  );
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return tasks;
-    return tasks.filter((task) =>
-      `${task.title} ${folderNames.get(task.folderId ?? "") ?? ""}`
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [folderNames, query, tasks]);
   const selectedTask = useMemo(
-    () => tasks.find((task) => task.id === selectedId) ?? filtered[0] ?? null,
-    [filtered, selectedId, tasks],
+    () => tasks.find((task) => task.id === selectedId) ?? tasks[0] ?? null,
+    [selectedId, tasks],
   );
-  const selectedForRestore = tasks.filter((task) => checkedIds.has(task.id));
-
-  // Auto-select the first archived task when entering archive view so
-  // the read-only TaskHeader has something to anchor against. Parent
-  // already drives entries/quicklinks loading via its selectedId
-  // effect, so we just need to keep selection in sync.
-  useEffect(() => {
-    if (selectedId) {
-      const stillArchived = tasks.some(
-        (task) => task.id === selectedId && task.status === "archived",
-      );
-      if (stillArchived) return;
-    }
-    if (filtered[0]) onSelect(filtered[0].id);
-  }, [filtered, onSelect, selectedId, tasks]);
-
-  async function restoreMany() {
-    if (!selectedForRestore.length || busy) return;
-    setBusy(true);
-    try {
-      await Promise.all(selectedForRestore.map((task) => onRestoreTask(task)));
-      setCheckedIds(new Set());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function restoreOne(task: Task) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRestoreTask(task);
-      setCheckedIds((current) => {
-        const next = new Set(current);
-        next.delete(task.id);
-        return next;
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[minmax(280px,380px)_minmax(0,1fr)] bg-background">
-      <div className="flex min-h-0 flex-col border-r border-border bg-card/60">
-        <div className="border-b border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-semibold">Archive</h1>
-              <p className="text-xs text-muted-foreground">
-                {tasks.length} archived {tasks.length === 1 ? "task" : "tasks"}
-              </p>
-            </div>
-            <Button
-              disabled={!selectedForRestore.length || busy}
-              onClick={() => void restoreMany()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <ArchiveRestore className="size-3.5" />
-              Restore selected
-            </Button>
-          </div>
-          <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search archived tasks"
-              className="h-8 pl-7 text-xs"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search archive"
-              value={query}
-            />
-          </div>
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {filtered.map((task) => {
-              const selected = selectedTask?.id === task.id;
-              return (
-                <div
-                  className={cn(
-                    "group flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-2 hover:bg-accent/60",
-                    selected &&
-                      "border-border bg-accent text-accent-foreground",
-                  )}
-                  key={task.id}
-                >
-                  <input
-                    aria-label={`Select ${task.title}`}
-                    checked={checkedIds.has(task.id)}
-                    className="size-3.5 shrink-0 accent-primary"
-                    onChange={(event) => {
-                      setCheckedIds((current) => {
-                        const next = new Set(current);
-                        if (event.target.checked) next.add(task.id);
-                        else next.delete(task.id);
-                        return next;
-                      });
-                    }}
-                    type="checkbox"
-                  />
-                  <button
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => onSelect(task.id)}
-                    type="button"
-                  >
-                    <span className="block truncate text-sm font-medium">
-                      {task.title}
-                    </span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {folderNames.get(task.folderId ?? "") ?? "No folder"} ·{" "}
-                      archived {formatShortDate(task.updatedAt)}
-                    </span>
-                  </button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label={`Restore ${task.title}`}
-                        className="size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                        disabled={busy}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void restoreOne(task);
-                        }}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <ArchiveRestore className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">Restore to active</TooltipContent>
-                  </Tooltip>
-                </div>
-              );
-            })}
-            {!filtered.length && (
-              <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                {query.trim()
-                  ? "No archived tasks match this search."
-                  : "No archived tasks yet."}
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      {selectedTask ? (
+        <>
+          <TaskHeader
+            key={selectedTask.id}
+            quickLinks={quickLinks}
+            readOnly
+            releases={releases}
+            task={selectedTask}
+            totalMinutes={totalMinutes}
+          />
+          <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="mx-auto flex w-full max-w-3xl flex-col px-8 py-4 pb-12">
+                <Timeline
+                  attachments={attachments}
+                  entries={entries}
+                  hasMore={false}
+                  historyEntryId={null}
+                  readOnly
+                  revisions={[]}
+                  viewMode="normal"
+                />
               </div>
-            )}
+            </ScrollArea>
           </div>
-        </ScrollArea>
-      </div>
-
-      <div className="flex min-h-0 flex-col">
-        {selectedTask ? (
-          <>
-            <TaskHeader
-              key={selectedTask.id}
-              quickLinks={quickLinks}
-              readOnly
-              releases={releases}
-              task={selectedTask}
-              totalMinutes={totalMinutes}
-            />
-            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto flex w-full max-w-3xl flex-col px-8 py-4 pb-12">
-                  <Timeline
-                    attachments={attachments}
-                    entries={entries}
-                    hasMore={false}
-                    historyEntryId={null}
-                    readOnly
-                    revisions={[]}
-                    viewMode="normal"
-                  />
-                  <div className="mt-8 flex justify-end gap-2 border-t border-border pt-5">
-                    <Button
-                      disabled={busy}
-                      onClick={() => void restoreOne(selectedTask)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <ArchiveRestore className="size-3.5" />
-                      Restore to active
-                    </Button>
-                    <Button
-                      disabled={busy}
-                      onClick={() => setTaskToDelete(selectedTask)}
-                      size="sm"
-                      type="button"
-                      variant="destructive"
-                    >
-                      <Trash2 className="size-3.5" />
-                      Delete permanently
-                    </Button>
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
-          </>
-        ) : (
-          <div className="grid flex-1 place-items-center px-8 text-center text-sm text-muted-foreground">
-            <div>
-              <Archive className="mx-auto mb-3 size-8 opacity-60" />
-              <p>No archived task selected.</p>
-            </div>
+        </>
+      ) : (
+        <div className="grid flex-1 place-items-center px-8 text-center text-sm text-muted-foreground">
+          <div>
+            <Archive className="mx-auto mb-3 size-8 opacity-60" />
+            <p>No archived task selected.</p>
           </div>
-        )}
-      </div>
-
-      <DeleteArchiveTaskDialog
-        onConfirm={async () => {
-          if (!taskToDelete) return;
-          await onDeleteTask(taskToDelete.id);
-          setCheckedIds((current) => {
-            const next = new Set(current);
-            next.delete(taskToDelete.id);
-            return next;
-          });
-          setTaskToDelete(null);
-        }}
-        onOpenChange={(open) => {
-          if (!open) setTaskToDelete(null);
-        }}
-        task={taskToDelete}
-      />
-    </section>
-  );
-}
-
-function DeleteArchiveTaskDialog({
-  task,
-  onOpenChange,
-  onConfirm,
-}: {
-  task: Task | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
-}) {
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!task) setDeleting(false);
-  }, [task]);
-
-  if (!task) return null;
-
-  return (
-    <Dialog onOpenChange={onOpenChange} open>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Delete archived task?</DialogTitle>
-          <DialogDescription>
-            This permanently removes the task and timeline from this local
-            workspace. Restoring keeps the history intact.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-          {task.title}
         </div>
-        <div className="flex justify-end gap-2">
-          <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="ghost"
-          >
-            Cancel
-          </Button>
-          <Button
-            disabled={deleting}
-            onClick={() => {
-              setDeleting(true);
-              void onConfirm().finally(() => setDeleting(false));
-            }}
-            type="button"
-            variant="destructive"
-          >
-            {deleting ? "Deleting..." : "Delete task"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </div>
   );
 }
 
@@ -2124,7 +2029,7 @@ function WorklogMetricsHeader({
   yearOptions: ReadonlyArray<number>;
 }) {
   return (
-    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-4 bg-card/70 px-6 backdrop-blur supports-[backdrop-filter]:bg-card/55">
+    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-4 bg-card px-6">
       <div className="flex min-w-0 items-center gap-2.5">
         <BarChart3 className="size-4 shrink-0 text-foreground/80" />
         <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">

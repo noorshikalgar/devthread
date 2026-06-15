@@ -2,9 +2,11 @@
 
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { TaskHeader } from "./App";
 import type { Task, TaskQuickLink } from "./lib/types";
+import { clearTaskDataCache } from "./lib/taskDataCache";
+import { clearWorklogCache } from "./lib/worklogCache";
 import { renderWithProviders as render } from "./test-utils";
 
 vi.mock("./lib/api", () => ({
@@ -73,6 +75,10 @@ afterEach(() => {
   localStorage.clear();
   document.documentElement.className = "";
   vi.clearAllMocks();
+  // Reset module-level data stores so a prior test's cached task
+  // data doesn't bleed into the next test's first load.
+  clearTaskDataCache();
+  clearWorklogCache();
 });
 
 function mockAppApi() {
@@ -159,9 +165,11 @@ describe("TaskHeader", () => {
     expect(screen.queryByText("Updates")).not.toBeInTheDocument();
     expect(screen.queryByText("ID")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("More task actions"));
+    // The Copy task ID entry was removed — the overflow menu is now
+    // only populated with state-changing actions (archive / delete).
     expect(
-      await screen.findByRole("menuitem", { name: /Copy task ID/ }),
-    ).toBeInTheDocument();
+      screen.queryByRole("menuitem", { name: /Copy task ID/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps only functional task header actions", async () => {
@@ -664,6 +672,175 @@ describe("TaskHeader", () => {
     expect(screen.queryByText("Filter shipped.")).not.toBeInTheDocument();
     expect(
       screen.getByText("Logged 1d 3h on the sidebar."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("App workspace mode transitions", () => {
+  const activeTask: Task = {
+    id: "active-1",
+    title: "Active pick",
+    descriptionMarkdown: "",
+    status: "active",
+    nextStep: null,
+    estimatedMinutes: null,
+    folderId: null,
+    releaseName: null,
+    createdAt: "2026-06-05T00:00:00Z",
+    updatedAt: "2026-06-05T00:00:00Z",
+  };
+  const archivedTask: Task = {
+    ...activeTask,
+    id: "archived-1",
+    title: "Archived pick",
+    status: "archived",
+    updatedAt: "2026-06-04T00:00:00Z",
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.listTasks).mockResolvedValue([activeTask, archivedTask]);
+    vi.mocked(api.listFolders).mockResolvedValue([]);
+    vi.mocked(api.listEntries).mockResolvedValue([]);
+    vi.mocked(api.listAttachments).mockResolvedValue([]);
+    vi.mocked(api.listQuickLinks).mockResolvedValue([]);
+  });
+
+  it("restores the previous active selection after visiting the archive view", async () => {
+    render(<App />);
+    // Land in the task view, with the first (active) task selected.
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Status: Active. Click to change."),
+      ).toBeInTheDocument(),
+    );
+
+    // Open the archive view and pick the archived task.
+    fireEvent.click(screen.getByLabelText("Open archive"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Select Archived pick"),
+      ).toBeInTheDocument(),
+    );
+    // Click the row body to open it in the read-only panel
+    // (the checkbox is a separate multi-select target). The title
+    // appears twice (sidebar + read-only header), so we click the
+    // first occurrence in the sidebar nav.
+    const archivedTitles = screen.getAllByText("Archived pick");
+    fireEvent.click(archivedTitles[0]!);
+    // The status chip in the archive view is the static read-only one.
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Status: Archived."),
+      ).toBeInTheDocument(),
+    );
+
+    // Return to the task view — the active task should be re-selected,
+    // not the archived one, and the interactive status chip should
+    // reappear (no longer the read-only static span).
+    fireEvent.click(screen.getByLabelText("Show task sidebar"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Status: Active. Click to change."),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByLabelText("Status: Archived."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hydrates the active task from the per-task cache without re-fetching", async () => {
+    // First load: listEntries + listQuickLinks + listAttachments fire.
+    render(<App />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Status: Active. Click to change."))
+        .toBeInTheDocument(),
+    );
+    expect(api.listEntries).toHaveBeenCalledTimes(1);
+    expect(api.listQuickLinks).toHaveBeenCalledTimes(1);
+    expect(api.listAttachments).toHaveBeenCalledTimes(1);
+
+    // Visit the archive view, pick the archived task — entries/links
+    // get fetched once for the archive task.
+    fireEvent.click(screen.getByLabelText("Open archive"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Select Archived pick")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getAllByText("Archived pick")[0]!);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Status: Archived.")).toBeInTheDocument(),
+    );
+    // Archive task: 1 more fetch each (entries + quickLinks; attachments
+    // are not loaded for archive view, but the effect still tries).
+    const afterArchiveLoads = vi.mocked(api.listEntries).mock.calls.length;
+
+    // Return to the task view — the active task's cache should
+    // hydrate without any new fetch.
+    fireEvent.click(screen.getByLabelText("Show task sidebar"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Status: Active. Click to change."))
+        .toBeInTheDocument(),
+    );
+    expect(vi.mocked(api.listEntries).mock.calls.length).toBe(
+      afterArchiveLoads,
+    );
+    expect(vi.mocked(api.listQuickLinks).mock.calls.length).toBe(2);
+  });
+
+  it("clicking the archive rail icon a second time hides the sidebar, it does not bounce back to tasks", async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Open archive")).toBeInTheDocument(),
+    );
+
+    // First click → archive view, sidebar visible (search input is
+    // inside the sidebar and is reachable by label).
+    fireEvent.click(screen.getByLabelText("Open archive"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Search archive")).toBeInTheDocument(),
+    );
+    // The button label flips to "Hide archive sidebar" once active.
+    expect(
+      screen.getByLabelText("Hide archive sidebar"),
+    ).toBeInTheDocument();
+
+    // Second click on the same icon — the search input should be
+    // hidden (the parent sidebar collapses to width 0). We can
+    // detect this by checking the visible style on the input.
+    fireEvent.click(screen.getByLabelText("Hide archive sidebar"));
+    const searchInput = screen.getByLabelText(
+      "Search archive",
+    ) as HTMLInputElement;
+    await waitFor(() => {
+      // The search input's parent <aside> is rendered inside two
+      // wrapper <div>s: the inner one has a fixed `width: 280px`
+      // and the outer one toggles to `width: 0` when hidden.
+      // Walking up via `style` is the only way to observe the
+      // toggle in jsdom (no layout).
+      const aside = searchInput.closest("aside");
+      const innerWrapper = aside?.parentElement;
+      const outerWrapper = innerWrapper?.parentElement;
+      expect(outerWrapper?.style.width).toBe("0px");
+    });
+    // The rail label flips to indicate "Show archive sidebar".
+    expect(
+      screen.getByLabelText("Show archive sidebar"),
+    ).toBeInTheDocument();
+    // The read-only header for the selected archived task is still
+    // mounted — the archive view did not bounce back to tasks.
+    expect(screen.getByLabelText("Status: Archived.")).toBeInTheDocument();
+
+    // A third click should bring the sidebar back (width > 0) without
+    // changing the workspace mode.
+    fireEvent.click(screen.getByLabelText("Show archive sidebar"));
+    await waitFor(() => {
+      const aside = searchInput.closest("aside");
+      const outerWrapper = aside?.parentElement?.parentElement;
+      expect(outerWrapper?.style.width).toBe("280px");
+    });
+    // The rail label flips back to "Hide archive sidebar" because
+    // the sidebar is now visible again.
+    expect(
+      screen.getByLabelText("Hide archive sidebar"),
     ).toBeInTheDocument();
   });
 });
