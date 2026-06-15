@@ -304,6 +304,49 @@ describe("TaskHeader", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("readOnly mode disables log time and estimate without removing them", () => {
+    render(
+      <TaskHeader
+        onLogTime={vi.fn()}
+        onUpdate={vi.fn()}
+        readOnly
+        task={task}
+        totalMinutes={45}
+      />,
+    );
+    // The log time and estimate buttons are still visible (showing
+    // data is fine) but the click is a no-op — the tooltip changes
+    // to "Read-only in archive".
+    const logTime = screen.getByLabelText("Log time. 45m logged.");
+    expect(logTime).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(logTime);
+    // The pause/start work session quick action is hidden in readOnly.
+    expect(
+      screen.queryByLabelText("Pause work session"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Start work session"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("readOnly mode replaces the status popover with a static chip", () => {
+    render(
+      <TaskHeader
+        onLogTime={vi.fn()}
+        onUpdate={vi.fn()}
+        readOnly
+        task={task}
+        totalMinutes={0}
+      />,
+    );
+    // The interactive status button is gone in readOnly; the static
+    // span announces the current status without "Click to change".
+    expect(
+      screen.queryByLabelText("Status: Active. Click to change."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Status: Active.")).toBeInTheDocument();
+  });
+
   it("closes the status picker after selecting a status", async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     render(

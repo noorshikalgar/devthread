@@ -113,6 +113,10 @@ import {
 } from "@/lib/worklogSettings";
 import type { WorklogDay } from "@/lib/worklog";
 import { aggregateByBucket } from "@/lib/worklogAggregates";
+import {
+  exportWorklogToExcel,
+  buildWorklogFilename,
+} from "@/lib/worklogExportPayload";
 import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
@@ -1174,10 +1178,17 @@ export default function App() {
           )}
           {workspaceMode === "archive" ? (
             <ArchiveView
+              attachments={attachments}
+              entries={entries}
               folders={folders}
+              quickLinks={quickLinks}
+              releases={releases}
+              selectedId={selectedId}
+              tasks={archivedTasks}
+              totalMinutes={totalMinutes}
               onDeleteTask={deleteTask}
               onRestoreTask={(task) => updateTaskStatus(task, "planned")}
-              tasks={archivedTasks}
+              onSelect={setSelectedId}
             />
           ) : workspaceMode === "worklog" ? (
             <WorklogMetricsView
@@ -1487,18 +1498,31 @@ function AppContextMenu({
 }
 
 function ArchiveView({
+  attachments,
+  entries,
   folders,
+  quickLinks,
+  releases,
+  selectedId,
   tasks,
-  onRestoreTask,
+  totalMinutes,
   onDeleteTask,
+  onRestoreTask,
+  onSelect,
 }: {
+  attachments: Attachment[];
+  entries: WorkLogEntry[];
   folders: Folder[];
+  quickLinks: TaskQuickLink[];
+  releases: Release[];
+  selectedId: string | null;
   tasks: Task[];
-  onRestoreTask: (task: Task) => Promise<void>;
+  totalMinutes: number;
   onDeleteTask: (taskId: string) => Promise<void>;
+  onRestoreTask: (task: Task) => Promise<void>;
+  onSelect: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1516,14 +1540,25 @@ function ArchiveView({
         .includes(term),
     );
   }, [folderNames, query, tasks]);
-  const selectedTask =
-    filtered.find((task) => task.id === selectedId) ?? filtered[0] ?? null;
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedId) ?? filtered[0] ?? null,
+    [filtered, selectedId, tasks],
+  );
   const selectedForRestore = tasks.filter((task) => checkedIds.has(task.id));
 
+  // Auto-select the first archived task when entering archive view so
+  // the read-only TaskHeader has something to anchor against. Parent
+  // already drives entries/quicklinks loading via its selectedId
+  // effect, so we just need to keep selection in sync.
   useEffect(() => {
-    if (selectedTask) setSelectedId(selectedTask.id);
-    else setSelectedId(null);
-  }, [selectedTask?.id]);
+    if (selectedId) {
+      const stillArchived = tasks.some(
+        (task) => task.id === selectedId && task.status === "archived",
+      );
+      if (stillArchived) return;
+    }
+    if (filtered[0]) onSelect(filtered[0].id);
+  }, [filtered, onSelect, selectedId, tasks]);
 
   async function restoreMany() {
     if (!selectedForRestore.length || busy) return;
@@ -1613,7 +1648,7 @@ function ArchiveView({
                   />
                   <button
                     className="min-w-0 flex-1 text-left"
-                    onClick={() => setSelectedId(task.id)}
+                    onClick={() => onSelect(task.id)}
                     type="button"
                   >
                     <span className="block truncate text-sm font-medium">
@@ -1624,6 +1659,25 @@ function ArchiveView({
                       archived {formatShortDate(task.updatedAt)}
                     </span>
                   </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label={`Restore ${task.title}`}
+                        className="size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                        disabled={busy}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void restoreOne(task);
+                        }}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <ArchiveRestore className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">Restore to active</TooltipContent>
+                  </Tooltip>
                 </div>
               );
             })}
@@ -1640,68 +1694,53 @@ function ArchiveView({
 
       <div className="flex min-h-0 flex-col">
         {selectedTask ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-8 py-8">
-            <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
-              <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Archived task
-                </p>
-                <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight">
-                  {selectedTask.title}
-                </h2>
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                  <ArchiveMetaChip
-                    label="Folder"
-                    value={
-                      folderNames.get(selectedTask.folderId ?? "") ??
-                      "No folder"
-                    }
+          <>
+            <TaskHeader
+              key={selectedTask.id}
+              quickLinks={quickLinks}
+              readOnly
+              releases={releases}
+              task={selectedTask}
+              totalMinutes={totalMinutes}
+            />
+            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="mx-auto flex w-full max-w-3xl flex-col px-8 py-4 pb-12">
+                  <Timeline
+                    attachments={attachments}
+                    entries={entries}
+                    hasMore={false}
+                    historyEntryId={null}
+                    readOnly
+                    revisions={[]}
+                    viewMode="normal"
                   />
-                  <ArchiveMetaChip
-                    label="Created"
-                    value={formatShortDate(selectedTask.createdAt)}
-                  />
-                  <ArchiveMetaChip
-                    label="Archived"
-                    value={formatShortDateTime(selectedTask.updatedAt)}
-                  />
+                  <div className="mt-8 flex justify-end gap-2 border-t border-border pt-5">
+                    <Button
+                      disabled={busy}
+                      onClick={() => void restoreOne(selectedTask)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <ArchiveRestore className="size-3.5" />
+                      Restore to active
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      onClick={() => setTaskToDelete(selectedTask)}
+                      size="sm"
+                      type="button"
+                      variant="destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                      Delete permanently
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  disabled={busy}
-                  onClick={() => void restoreOne(selectedTask)}
-                  size="sm"
-                  type="button"
-                >
-                  <ArchiveRestore className="size-3.5" />
-                  Restore
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => setTaskToDelete(selectedTask)}
-                  size="sm"
-                  type="button"
-                  variant="destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </Button>
-              </div>
+              </ScrollArea>
             </div>
-            <div className="grid flex-1 place-items-center text-center text-sm text-muted-foreground">
-              <div>
-                <Archive className="mx-auto mb-3 size-8 opacity-60" />
-                <p>
-                  Restore this task to bring it back to the active workspace.
-                </p>
-                <p className="mt-1 text-xs">
-                  Delete only when you are sure the local timeline is no longer
-                  needed.
-                </p>
-              </div>
-            </div>
-          </div>
+          </>
         ) : (
           <div className="grid flex-1 place-items-center px-8 text-center text-sm text-muted-foreground">
             <div>
@@ -1948,12 +1987,18 @@ function WorklogMetricsView({
   }
 
   function exportToExcel() {
-    // Excel export is a planned feature; the tauri command + payload
-    // builder will land in a follow-up. For now we surface a toast
-    // so the button is wired and discoverable.
-    toast.info("Excel export coming soon", {
-      description: `Will write worklog-${selectedYear}.xlsx to your downloads folder.`,
-    });
+    try {
+      exportWorklogToExcel({
+        year: selectedYear,
+        settings: worklogSettings,
+        entries,
+      });
+      toast.success("Worklog exported", {
+        description: `Saved ${buildWorklogFilename(selectedYear)}`,
+      });
+    } catch (cause) {
+      toast.error(`Could not export worklog: ${String(cause)}`);
+    }
   }
 
   return (
@@ -2888,17 +2933,6 @@ function stripOneLine(value: string) {
     .replace(/[`*_~>#-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function ArchiveMetaChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted/30 px-2">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-foreground">{value}</span>
-    </span>
-  );
 }
 
 function RailButton({

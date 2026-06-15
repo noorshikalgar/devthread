@@ -40,17 +40,18 @@ interface Props {
   revisions: WorkLogRevision[];
   historyEntryId: string | null;
   hasMore: boolean;
-  onEdit: (
+  onEdit?: (
     id: string,
     type: EntryType,
     content: string,
     visibility: Visibility,
   ) => Promise<void>;
-  onHistory: (id: string) => Promise<void>;
-  onRestoreRevision: (id: string) => Promise<void>;
-  onTrash: (id: string) => Promise<void>;
-  onLoadMore: () => Promise<void>;
+  onHistory?: (id: string) => Promise<void>;
+  onRestoreRevision?: (id: string) => Promise<void>;
+  onTrash?: (id: string) => Promise<void>;
+  onLoadMore?: () => Promise<void>;
   viewMode?: TimelineViewMode;
+  readOnly?: boolean;
 }
 
 export type TimelineViewMode = "normal" | "compact";
@@ -119,12 +120,19 @@ export function Timeline({
   onTrash,
   onLoadMore,
   viewMode = "normal",
+  readOnly = false,
 }: Props) {
   if (!entries.length) {
     return (
       <div className="flex min-h-[240px] flex-col items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-        <p className="font-medium text-foreground">No updates yet.</p>
-        <p>Record the first thing that happened.</p>
+        <p className="font-medium text-foreground">
+          {readOnly ? "No archived history." : "No updates yet."}
+        </p>
+        <p>
+          {readOnly
+            ? "This task has no recorded timeline entries."
+            : "Record the first thing that happened."}
+        </p>
       </div>
     );
   }
@@ -138,14 +146,14 @@ export function Timeline({
         <div key={group.label} className="group/day flex flex-col gap-2">
           {compact ? (
             <div className="flex items-center gap-3">
-              <h2 className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-medium tracking-[0.04em] text-muted-foreground">
+              <h2 className="whitespace-nowrap text-[12px] font-semibold tracking-[0.02em] text-foreground">
                 {compactDateGroupLabel(group)}
               </h2>
               <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
             </div>
           ) : (
             <div className="grid grid-cols-[50px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5">
-              <h2 className="whitespace-nowrap text-right font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] font-medium leading-4 tracking-[0.04em] text-muted-foreground">
+              <h2 className="whitespace-nowrap text-right text-[11px] font-semibold leading-4 tracking-[0.02em] text-foreground">
                 {group.label}
               </h2>
               <div className="flex translate-x-px justify-center">
@@ -181,10 +189,12 @@ export function Timeline({
                 entry={entry}
                 historyOpen={historyEntryId === entry.id}
                 key={entry.id}
-                onEdit={onEdit}
-                onHistory={onHistory}
-                onRestoreRevision={onRestoreRevision}
-                onTrash={onTrash}
+                onEdit={readOnly ? undefined : onEdit}
+                onHistory={readOnly ? undefined : onHistory}
+                onRestoreRevision={
+                  readOnly ? undefined : onRestoreRevision
+                }
+                onTrash={readOnly ? undefined : onTrash}
                 revisions={historyEntryId === entry.id ? revisions : []}
               />
             ))}
@@ -192,7 +202,7 @@ export function Timeline({
         </div>
       ))}
 
-      {hasMore && (
+      {hasMore && !readOnly && onLoadMore && (
         <div className="flex justify-center pt-2">
           <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
             Load older updates
@@ -276,7 +286,7 @@ function CompactTimelineEntry({
 
       <time
         className={cn(
-          "whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground",
+          "whitespace-nowrap text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground",
           expanded && "pt-3",
         )}
         dateTime={entry.occurredAt}
@@ -377,6 +387,7 @@ function TimelineEntryCard({
   const [viewingImage, setViewingImage] = useState<Attachment | null>(null);
 
   async function save() {
+    if (!onEdit) return;
     await onEdit(entry.id, entry.entryType, content, entry.visibility);
     setEditing(false);
   }
@@ -385,8 +396,9 @@ function TimelineEntryCard({
   const long = isLongEntry(entry.contentMarkdown);
   const links = extractLinkPreviews(entry.contentMarkdown);
   const linkMetadata = useLinkMetadata(links);
-  const canEdit = !SYSTEM_FACT_ENTRY_TYPES.has(entry.entryType);
-  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
+  const canEdit = !SYSTEM_FACT_ENTRY_TYPES.has(entry.entryType) && !!onEdit;
+  const canTrash =
+    !PROTECTED_ENTRY_TYPES.has(entry.entryType) && !!onTrash;
 
   return (
     <>
@@ -538,7 +550,7 @@ function TimelineEntryCard({
                   </div>
                   <Button
                     aria-label="Restore revision"
-                    onClick={() => void onRestoreRevision(revision.id)}
+                    onClick={() => void onRestoreRevision?.(revision.id)}
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -566,7 +578,7 @@ function TimelineEntryCard({
                 <SquarePen />
               </Button>
             )}
-            {canEdit && (
+            {canEdit && onHistory && (
               <Button
                 aria-label="Revision history"
                 className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
@@ -577,7 +589,7 @@ function TimelineEntryCard({
                 <History />
               </Button>
             )}
-            {canTrash && (
+            {canTrash && onTrash && (
               <Button
                 aria-label="Move entry to trash"
                 className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
@@ -634,7 +646,7 @@ function TimelineEntry({
         className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
         dateTime={entry.occurredAt}
       >
-        <span className="text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground">
+        <span className="text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground">
           {formatMessageTimestamp(entry.occurredAt)}
         </span>
       </time>

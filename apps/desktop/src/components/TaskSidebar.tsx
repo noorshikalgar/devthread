@@ -314,7 +314,7 @@ export function TaskSidebar({
             >
               <button
                 aria-expanded={openActiveTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
                 onClick={() => setOpenActiveTasks((open) => !open)}
                 type="button"
               >
@@ -326,8 +326,20 @@ export function TaskSidebar({
                 />
                 <span className="min-w-0 flex-1 truncate">Active tasks</span>
               </button>
-              {openActiveTasks && (
-                <div className="flex min-w-0 flex-col gap-px overflow-hidden pt-1">
+              <div
+                aria-hidden={!openActiveTasks}
+                className={cn(
+                  "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                  openActiveTasks
+                    ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex min-w-0 flex-col gap-px overflow-hidden pt-1",
+                  )}
+                >
                   {activeTasks.map((task) => (
                     <button
                       className={cn(
@@ -347,12 +359,12 @@ export function TaskSidebar({
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
             </section>
           )}
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
-            <div className="px-0.5 pb-1 text-[11px] font-medium text-muted-foreground">
+            <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
               {isSearching ? "Search results" : "All Tasks"}
             </div>
             {isSearching
@@ -530,7 +542,14 @@ function FolderGroup({
       {folder && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="group/folder flex h-7 min-w-0 items-center rounded text-sm text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground">
+            <div
+              className={cn(
+                "group/folder flex h-7 min-w-0 items-center rounded text-sm transition-colors hover:bg-accent/45",
+                open
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
               <button
                 aria-expanded={open}
                 className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left"
@@ -538,7 +557,10 @@ function FolderGroup({
                 type="button"
               >
                 <FolderIcon
-                  className="size-3.5 shrink-0 text-muted-foreground/90 transition-colors duration-150 ease-out group-hover/folder:text-foreground"
+                  className={cn(
+                    "size-3.5 shrink-0 transition-colors duration-150 ease-out group-hover/folder:text-foreground",
+                    open ? "text-foreground/80" : "text-muted-foreground/90",
+                  )}
                   strokeWidth={1.75}
                 />
                 <EllipsisTooltip

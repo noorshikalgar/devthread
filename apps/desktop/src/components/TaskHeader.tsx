@@ -88,7 +88,7 @@ interface Props {
   onStatusOpenChange?: (open: boolean) => void;
   logTimeOpen?: boolean;
   onLogTimeOpenChange?: (open: boolean) => void;
-  onLogTime: (input: LogTimeInput) => Promise<void>;
+  onLogTime?: (input: LogTimeInput) => Promise<void>;
   onTimelineViewModeChange?: (mode: TimelineViewMode) => void;
   onCreateQuickLink?: (url: string) => Promise<void>;
   onUpdateQuickLink?: (id: string, url: string) => Promise<void>;
@@ -97,10 +97,11 @@ interface Props {
   onPendingTitleEditConsumed?: () => void;
   onStatusChange?: (status: TaskStatus) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
-  onUpdate: (task: Task) => Promise<void>;
+  onUpdate?: (task: Task) => Promise<void>;
   onTagRelease?: (name: string) => Promise<void>;
   onRemoveReleaseTag?: () => Promise<void>;
   releases?: Release[];
+  readOnly?: boolean;
 }
 
 const TITLE_MAX_LENGTH = 140;
@@ -139,6 +140,7 @@ export function TaskHeader({
   onTagRelease,
   onRemoveReleaseTag,
   releases,
+  readOnly = false,
 }: Props) {
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [titleState, setTitleState] = useState<"idle" | "saving" | "error">(
@@ -183,6 +185,7 @@ export function TaskHeader({
 
   async function commitTitle() {
     if (titleDraft === null) return;
+    if (!onUpdate) return;
     const normalized = titleDraft.trim();
     setTitleDraft(null);
     consumePendingTitleEditRef.current?.();
@@ -224,6 +227,14 @@ export function TaskHeader({
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {titleDraft === null ? (
+            readOnly ? (
+              <h1
+                className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight"
+                title={task.title}
+              >
+                <span className="truncate">{task.title}</span>
+              </h1>
+            ) : (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -243,6 +254,7 @@ export function TaskHeader({
                 {task.title}
               </TooltipContent>
             </Tooltip>
+            )
           ) : (
             <Input
               aria-label="Task title"
@@ -315,7 +327,7 @@ export function TaskHeader({
               </TooltipContent>
             </Tooltip>
           )}
-          {showWorkSessionAction && (
+          {showWorkSessionAction && !readOnly && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -379,24 +391,26 @@ export function TaskHeader({
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() =>
-                  void changeStatus(isArchived ? "planned" : "archived")
-                }
-              >
-                {isArchived ? (
-                  <>
-                    <Check className="mr-2 size-3.5" />
-                    Restore to active
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="mr-2 size-3.5" />
-                    Archive task
-                  </>
-                )}
-              </DropdownMenuItem>
-              {onDelete && (
+              {!readOnly && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    void changeStatus(isArchived ? "planned" : "archived")
+                  }
+                >
+                  {isArchived ? (
+                    <>
+                      <Check className="mr-2 size-3.5" />
+                      Restore to active
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 size-3.5" />
+                      Archive task
+                    </>
+                  )}
+                </DropdownMenuItem>
+              )}
+              {onDelete && !readOnly && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => void onDelete(task.id)}
@@ -412,6 +426,21 @@ export function TaskHeader({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
+          {readOnly ? (
+            <span
+              aria-label={`Status: ${statusLabel}.`}
+              className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 rounded-full",
+                  STATUS_DOT[task.status],
+                )}
+              />
+              <span className="font-medium">{statusLabel}</span>
+            </span>
+          ) : (
           <Popover onOpenChange={setStatusOpen} open={statusOpen}>
             <PopoverTrigger asChild>
               <button
@@ -461,19 +490,22 @@ export function TaskHeader({
               })}
             </PopoverContent>
           </Popover>
+          )}
           <QuickLinks
             links={quickLinks}
             onAdd={
-              onCreateQuickLink && quickLinks.length < 3
+              !readOnly &&
+              onCreateQuickLink &&
+              quickLinks.length < 3
                 ? () => {
                     setEditingQuickLink(null);
                     setQuickLinkOpen(true);
                   }
                 : undefined
             }
-            onDelete={onDeleteQuickLink}
+            onDelete={readOnly ? undefined : onDeleteQuickLink}
             onEdit={
-              onUpdateQuickLink
+              !readOnly && onUpdateQuickLink
                 ? (link) => {
                     setEditingQuickLink(link);
                     setQuickLinkOpen(true);
@@ -481,7 +513,29 @@ export function TaskHeader({
                 : undefined
             }
           />
-          {(onTagRelease || task.releaseName || releases?.length) && (
+          {(onTagRelease || task.releaseName || releases?.length) &&
+            (readOnly ? (
+              task.releaseName && (
+                <span
+                  aria-label={`Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}.`}
+                  className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground"
+                >
+                  <Tag className="size-3 text-muted-foreground" />
+                  <span className="font-medium">
+                    {(() => {
+                      const r = releases?.find(
+                        (x) => x.name === task.releaseName,
+                      );
+                      return r
+                        ? r.version
+                          ? `${r.name} (${r.version})`
+                          : r.name
+                        : task.releaseName;
+                    })()}
+                  </span>
+                </span>
+              )
+            ) : (
             <Popover onOpenChange={setReleaseOpen} open={releaseOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -559,94 +613,128 @@ export function TaskHeader({
                 )}
               </PopoverContent>
             </Popover>
-          )}
+            ))}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <button
                 aria-label={
                   totalMinutes > 0
                     ? `Log time. ${formatDuration(totalMinutes)} logged.`
                     : "Log time"
                 }
-                className="h-8 gap-1.5 px-2.5 text-xs"
-                onClick={() => setLogTimeOpen(true)}
-                size="sm"
-                variant="ghost"
+                aria-disabled={readOnly}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  readOnly
+                    ? "cursor-not-allowed"
+                    : "hover:text-foreground",
+                )}
+                onClick={() => {
+                  if (readOnly) return;
+                  setLogTimeOpen(true);
+                }}
+                type="button"
               >
                 <Clock4 className="size-3.5" />
-                Log time
+                <span>Log time</span>
                 {totalMinutes > 0 && (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · {formatDuration(totalMinutes)}
+                  <span className="text-foreground/40">·</span>
+                )}
+                {totalMinutes > 0 && (
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {formatDuration(totalMinutes)}
                   </span>
                 )}
-              </Button>
+              </button>
             </TooltipTrigger>
-            <TooltipContent>Record time spent on this task</TooltipContent>
+            <TooltipContent>
+              {readOnly
+                ? "Read-only in archive"
+                : "Record time spent on this task"}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <button
                 aria-label={
                   task.estimatedMinutes
                     ? `Estimate: ${formatDuration(task.estimatedMinutes)}. Click to change.`
                     : "Set estimate"
                 }
-                className="h-8 gap-1.5 px-2.5 text-xs"
-                onClick={() => setEstimateOpen(true)}
-                size="sm"
-                variant="ghost"
+                aria-disabled={readOnly}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  readOnly
+                    ? "cursor-not-allowed"
+                    : "hover:text-foreground",
+                )}
+                onClick={() => {
+                  if (readOnly) return;
+                  setEstimateOpen(true);
+                }}
+                type="button"
               >
                 <Calculator className="size-3.5" />
-                Estimate
+                <span>Estimate</span>
+                <span className="text-foreground/40">·</span>
                 {task.estimatedMinutes != null && task.estimatedMinutes > 0 ? (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · {formatDuration(task.estimatedMinutes)}
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {formatDuration(task.estimatedMinutes)}
                   </span>
                 ) : (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · none
+                  <span className="font-mono font-normal text-foreground/60">
+                    none
                   </span>
                 )}
-              </Button>
+              </button>
             </TooltipTrigger>
-            <TooltipContent>Set expected time for this task</TooltipContent>
+            <TooltipContent>
+              {readOnly
+                ? "Read-only in archive"
+                : "Set expected time for this task"}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>
-      <LogTimeDialog
-        onOpenChange={setLogTimeOpen}
-        onSubmit={onLogTime}
-        open={logTimeOpen}
-        taskTitle={task.title}
-      />
-      <EstimateDialog
-        currentMinutes={task.estimatedMinutes}
-        onOpenChange={setEstimateOpen}
-        onSubmit={async (minutes) => {
-          await onEstimateChange?.(minutes);
-        }}
-        open={estimateOpen}
-        taskTitle={task.title}
-      />
-      <QuickLinkDialog
-        link={editingQuickLink}
-        onOpenChange={(open) => {
-          setQuickLinkOpen(open);
-          if (!open) setEditingQuickLink(null);
-        }}
-        onSubmit={async (url) => {
-          if (editingQuickLink) {
-            if (!onUpdateQuickLink) return;
-            await onUpdateQuickLink(editingQuickLink.id, url);
-            return;
-          }
-          if (onCreateQuickLink) await onCreateQuickLink(url);
-        }}
-        open={quickLinkOpen}
-      />
+      {!readOnly && onLogTime && (
+        <LogTimeDialog
+          onOpenChange={setLogTimeOpen}
+          onSubmit={onLogTime}
+          open={logTimeOpen}
+          taskTitle={task.title}
+        />
+      )}
+      {!readOnly && onEstimateChange && (
+        <EstimateDialog
+          currentMinutes={task.estimatedMinutes}
+          onOpenChange={setEstimateOpen}
+          onSubmit={async (minutes) => {
+            await onEstimateChange?.(minutes);
+          }}
+          open={estimateOpen}
+          taskTitle={task.title}
+        />
+      )}
+      {!readOnly && (onCreateQuickLink || onUpdateQuickLink) && (
+        <QuickLinkDialog
+          link={editingQuickLink}
+          onOpenChange={(open) => {
+            setQuickLinkOpen(open);
+            if (!open) setEditingQuickLink(null);
+          }}
+          onSubmit={async (url) => {
+            if (editingQuickLink) {
+              if (!onUpdateQuickLink) return;
+              await onUpdateQuickLink(editingQuickLink.id, url);
+              return;
+            }
+            if (onCreateQuickLink) await onCreateQuickLink(url);
+          }}
+          open={quickLinkOpen}
+        />
+      )}
     </header>
   );
 
@@ -656,7 +744,7 @@ export function TaskHeader({
       await onStatusChange(status);
       return;
     }
-    await onUpdate({ ...task, status });
+    await onUpdate?.({ ...task, status });
   }
 }
 
@@ -675,7 +763,9 @@ function QuickLinks({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">Links</span>
+      <span className="text-[11px] font-normal text-foreground/70">
+        Quicklinks
+      </span>
       {links.map((link) => (
         <QuickLinkButton
           key={link.id}
@@ -743,8 +833,20 @@ function QuickLinkButton({
           </Button>
         </DropdownMenuTrigger>
       </HoverTooltip>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel className="truncate">{link.title}</DropdownMenuLabel>
+      <DropdownMenuContent align="start" className="min-w-[180px]">
+        <DropdownMenuItem
+          onSelect={() => {
+            void navigator.clipboard
+              .writeText(link.url)
+              .then(() => toast.success("Link copied"))
+              .catch((cause) =>
+                toast.error(`Could not copy link: ${String(cause)}`),
+              );
+          }}
+        >
+          <Copy className="mr-2 size-3.5" />
+          Copy link
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
           <ExternalLink className="mr-2 size-3.5" />
           Open link
