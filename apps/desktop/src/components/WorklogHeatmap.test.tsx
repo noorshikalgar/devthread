@@ -29,7 +29,7 @@ describe("WorklogHeatmap", () => {
     expect(screen.getAllByTestId("heatmap-cell")).toHaveLength(3);
   });
 
-  it("paints each cell using the theme accent and a hatch pattern", () => {
+  it("paints logged cells with shadcn chart token levels", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -39,28 +39,17 @@ describe("WorklogHeatmap", () => {
       />,
     );
     const cells = screen.getAllByTestId("heatmap-cell") as HTMLButtonElement[];
-    // The 9h day (cell #2) is the brightest. It should declare an
-    // accent fill AND a diagonal-hatch backgroundImage, with no
-    // fixed emerald-500 class.
     const busy = cells[1]!;
-    const style = busy.getAttribute("style") ?? "";
-    expect(style).toMatch(/background-color/);
-    expect(style).toMatch(/repeating-linear-gradient\(45deg/);
-    // The 2h day (cell #3) should also have the hatch but a
-    // different (looser) stripe.
-    const light = cells[2]!;
-    expect(light.getAttribute("style") ?? "").toMatch(
-      /repeating-linear-gradient\(45deg/,
+    expect(busy.className).toMatch(/bg-\[hsl\(var\(--chart-1\)/);
+    expect(busy.className).not.toMatch(/bg-emerald/);
+    expect(busy.getAttribute("style") ?? "").not.toMatch(
+      /repeating-linear-gradient/,
     );
+    const light = cells[2]!;
+    expect(light.className).toMatch(/bg-\[hsl\(var\(--chart-1\)/);
   });
 
-  it("routes 2h and 6h into different intensity buckets (different hatch stripe widths)", () => {
-    // Regression test: an earlier ladder routed both 2h and 6h
-    // to the >= 240 bucket, so the cells looked identical. The
-    // new ladder uses 5 buckets with visibly different stripe
-    // widths (8 / 4 / 2.5 / 1.5 / 1px) — measurable even when
-    // getComputedStyle returns null in the jsdom environment
-    // (so the colour fall back is the same for both cells).
+  it("routes 2h and 6h into different chart token intensity buckets", () => {
     render(
       <WorklogHeatmap
         days={[
@@ -73,29 +62,10 @@ describe("WorklogHeatmap", () => {
       />,
     );
     const cells = screen.getAllByTestId("heatmap-cell") as HTMLButtonElement[];
-    const style2h = cells[0]!.getAttribute("style") ?? "";
-    const style6h = cells[1]!.getAttribute("style") ?? "";
-    // The hatch stripe width is a stable literal the component
-    // bakes into the style attribute, so we can assert on it
-    // without depending on getComputedStyle.
-    const stripe2h =
-      /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(style2h);
-    const stripe6h =
-      /repeating-linear-gradient\(45deg,\s*\S+\s+([\d.]+)px/.exec(style6h);
-    expect(stripe2h).not.toBeNull();
-    expect(stripe6h).not.toBeNull();
-    // 2h → bucket index 2 → 2.5px stripe. 6h → bucket index 4 →
-    // 1px stripe. They must differ.
-    expect(stripe2h![1]).not.toBe(stripe6h![1]);
+    expect(cells[0]!.className).not.toBe(cells[1]!.className);
   });
 
-  it("paints the streak pill using the theme background + accent text (theme-aware)", () => {
-    // Regression test: the previous className set 'text-foreground'
-    // (and even 'boxShadow' over a same-colour background), which
-    // made the pill invisible on amber-heavy themes. The new pill
-    // uses --background as its canvas and --chart-1 for the text
-    // colour, so the contrast comes from "light accent on dark
-    // card" rather than "amber on amber".
+  it("paints the streak pill with shadcn chart accent tokens", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -105,16 +75,8 @@ describe("WorklogHeatmap", () => {
       />,
     );
     const pill = screen.getByTestId("worklog-streak-pill");
-    const style = pill.getAttribute("style") ?? "";
-    // The pill paints its own background from --background so the
-    // accent text always contrasts with it.
-    expect(style).toMatch(/background-color:\s*var\(--background\)/);
-    expect(style).toMatch(/color:/);
-    // The pill should NOT carry a hard-coded emerald background.
+    expect(pill.className).toMatch(/bg-\[hsl\(var\(--chart-1\)/);
     expect(pill.className).not.toMatch(/bg-emerald/);
-    // The label colour cascades from the inline style, not the
-    // class list (which was the original bug).
-    expect(pill.className).not.toMatch(/text-foreground/);
   });
 
   it("renders the current streak in the header pill", () => {
@@ -165,10 +127,10 @@ describe("WorklogHeatmap", () => {
     );
     const pill = screen.getByTestId("worklog-streak-pill");
     expect(pill).toHaveTextContent(/1d/);
-    expect(pill).toHaveTextContent(/best 4d/);
+    expect(pill).toHaveTextContent(/Best 4d/);
   });
 
-  it("renders rectangular cells (not squares)", () => {
+  it("renders small square cells", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -179,8 +141,52 @@ describe("WorklogHeatmap", () => {
     );
     const cells = screen.getAllByTestId("heatmap-cell");
     cells.forEach((cell) => {
-      expect(cell.className).toMatch(/\bh-7\b/);
+      expect(cell.className).toContain("size-[clamp(9px,1.08vw,15px)]");
     });
+  });
+
+  it("dims cells outside the selected range without removing them", () => {
+    const days = Array.from({ length: 10 }, (_, index) => {
+      const day = String(index + 1).padStart(2, "0");
+      return {
+        key: `2026-06-${day}`,
+        date: `2026-06-${day}`,
+        minutes: index * 10,
+      };
+    });
+    render(
+      <WorklogHeatmap
+        days={days}
+        onSelectDay={vi.fn()}
+        range="7d"
+        selectedDay={null}
+      />,
+    );
+    const cells = screen.getAllByTestId("heatmap-cell");
+    expect(cells).toHaveLength(10);
+    expect(cells[0]!.className).toContain("opacity-25");
+    expect(cells[9]!.className).not.toContain("opacity-25");
+  });
+
+  it("does not dim year cells in the 12m view", () => {
+    render(
+      <WorklogHeatmap
+        days={DAYS}
+        onSelectDay={vi.fn()}
+        range="12m"
+        selectedDay={null}
+        selectedYear={2026}
+        yearOptions={[2026, 2025, 2024]}
+      />,
+    );
+    const cells = screen.getAllByTestId("heatmap-cell");
+    cells.forEach((cell) => {
+      expect(cell.className).not.toContain("opacity-25");
+    });
+    expect(screen.getByRole("button", { name: "2026" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("does not render any amber goal overlays", () => {

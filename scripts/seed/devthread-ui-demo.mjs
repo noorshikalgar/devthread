@@ -98,6 +98,7 @@ function seed() {
       );
     }
   }
+  entries.push(...buildDemoWorklogs(tasks));
 
   const quickLinks = [
     link("seedui-link-timeline-jira", "seedui-task-timeline-polish", "https://linear.app/devthread/issue/DT-141/timeline-density-pass", "DT-141 Timeline density pass", "linear.app", "linear"),
@@ -134,7 +135,10 @@ function seed() {
 
   runSql(sql);
 
+  const worklogCount = entries.filter((item) => item.entryType === "worklog").length;
+  const worklogMinutes = entries.reduce((sum, item) => sum + (item.entryType === "worklog" ? item.durationMinutes ?? 0 : 0), 0);
   console.log(`Seeded ${tasks.length} tasks, ${folders.length} folders, ${entries.length} timeline entries, ${quickLinks.length} quick links, and ${attachments.length} images.`);
+  console.log(`Worklog demo data: ${worklogCount} logs · ${Math.round(worklogMinutes / 60)}h across the last 12 months.`);
   console.log(`Database: ${dbPath}`);
 }
 
@@ -167,7 +171,7 @@ function task(id, title, status, folderId, estimate, description, nextStep, upda
     description,
     status,
     nextStep,
-    estimatedMinutes: estimate,
+    estimatedMinutes: estimate * 4,
     folderId,
     createdAt: addMinutes(updatedAt, -420),
     updatedAt,
@@ -199,6 +203,66 @@ function link(id, taskId, url, title, domain, provider) {
     createdAt: "2026-06-14T08:55:00Z",
     updatedAt: "2026-06-14T08:55:00Z",
   };
+}
+
+function buildDemoWorklogs(tasks) {
+  const focusTasks = tasks.filter((item) => item.status !== "blocked");
+  const content = [
+    "Reviewed acceptance criteria and split the UI pass into a small implementation checklist.",
+    "Paired the layout changes with a quick visual smoke pass before moving to the next surface.",
+    "Validated dark gray and light gray theme tokens against the updated task timeline treatment.",
+    "Captured before and after notes for the README screenshot story.",
+    "Reworked spacing and text hierarchy so the panel reads faster during repeated use.",
+    "Checked hover, focus, and empty states after the interaction changes landed.",
+    "Trimmed the component API and kept the implementation aligned with existing shadcn patterns.",
+    "Ran a local desktop pass and logged follow-up polish items for the next UI review.",
+  ];
+  const links = [
+    "https://linear.app/devthread/view/ui-polish",
+    "https://playwright.dev/docs/screenshots",
+    "https://www.figma.com/file/devthread-product-polish",
+    "https://github.com/noormohammed/devthread/pull/42",
+    "https://ui.shadcn.com/docs/components/card",
+  ];
+  const logs = [];
+  const end = new Date("2026-06-14T18:00:00Z");
+  let cursor = 0;
+
+  for (let offset = 0; offset < 365; offset += 1) {
+    const day = new Date(end);
+    day.setUTCDate(end.getUTCDate() - offset);
+    const weekday = day.getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+
+    const cadence = offset < 21 ? 1 : offset < 120 ? 2 : offset < 240 ? 3 : 5;
+    if (offset % cadence !== 0 && offset % 11 !== 0) continue;
+
+    const entriesForDay = offset < 28 ? 2 + (offset % 3 === 0 ? 1 : 0) : offset % 9 === 0 ? 2 : 1;
+    for (let index = 0; index < entriesForDay; index += 1) {
+      const task = focusTasks[(offset + index * 7) % focusTasks.length];
+      const minutes = [25, 35, 45, 50, 60, 75, 90, 110, 125][(offset + index * 3) % 9];
+      const hour = 9 + ((offset + index * 2) % 7);
+      const minute = [5, 15, 25, 35, 45][(offset + index) % 5];
+      const occurred = new Date(day);
+      occurred.setUTCHours(hour, minute, 0, 0);
+      const taskKey = task.title.match(/\b[A-Z]{2,}-\d+\b/)?.[0] ?? "DT";
+      const body = content[(offset + index) % content.length];
+      const maybeLink = (offset + index) % 5 === 0 ? ` Reference: ${links[(offset + index) % links.length]}` : "";
+      logs.push(
+        entry(
+          `seedui-worklog-${String(cursor).padStart(4, "0")}`,
+          task.id,
+          "worklog",
+          `${taskKey}: ${body}${maybeLink}`,
+          occurred.toISOString().replace(".000Z", "Z"),
+          minutes,
+        ),
+      );
+      cursor += 1;
+    }
+  }
+
+  return logs.reverse();
 }
 
 function attachment(id, entryId, fileName, title, rows, accent) {

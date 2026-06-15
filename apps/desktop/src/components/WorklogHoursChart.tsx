@@ -24,6 +24,7 @@ function formatShortDate(value: string): string {
 
 export interface WorklogHoursChartProps {
   days: ReadonlyArray<WorklogDay>;
+  onSelectDay?: (key: string) => void;
   settings: WorklogSettings;
 }
 
@@ -76,7 +77,11 @@ function buildChartData(
   });
 }
 
-export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
+export function WorklogHoursChart({
+  days,
+  onSelectDay,
+  settings,
+}: WorklogHoursChartProps) {
   const goalHours = effectiveDailyGoalMinutes(settings) / 60;
   const data = useMemo(
     () => buildChartData(days, goalHours),
@@ -105,12 +110,13 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   }, [settings.dailyHours, settings.breakMinutes]);
 
   const aboveDays = data.filter((d) => d.isAboveGoal).length;
+  const loggedDays = days.filter((day) => day.minutes > 0);
   const maxHours = data.reduce((max, d) => Math.max(max, d.hours), goalHours);
   const yMax = Math.max(8, Math.ceil((maxHours + 1) * 2) / 2);
 
   if (!data.length) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">Daily hours</h2>
         </div>
@@ -124,7 +130,7 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   return (
     <div
       aria-label={`Daily worklog hours, goal ${formatHoursTooltip(goalHours)} per day`}
-      className="rounded-lg border border-border bg-card p-4"
+      className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm"
       data-testid="worklog-hours-chart"
       role="figure"
     >
@@ -140,14 +146,25 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
           </p>
         </div>
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {aboveDays} day{aboveDays === 1 ? "" : "s"} above goal
+          {loggedDays.length} logged · {aboveDays} day
+          {aboveDays === 1 ? "" : "s"} above goal
         </p>
       </div>
-      <div className="h-[260px] w-full">
+      <div className="h-[220px] w-full">
         <ResponsiveContainer height="100%" width="100%">
           <ComposedChart
             data={data}
             margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
+            onClick={(state: unknown) => {
+              const payload = (
+                state as {
+                  activePayload?: Array<{ payload?: ChartDatum }>;
+                }
+              )?.activePayload?.[0]?.payload as
+                | ChartDatum
+                | undefined;
+              if (payload) onSelectDay?.(payload.date);
+            }}
           >
             <defs>
               <linearGradient
@@ -240,13 +257,15 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
               y={goalHours}
             />
             <Area
+              activeDot={{ fill: palette.primary, r: 3, strokeWidth: 0 }}
               dataKey="hours"
+              dot={false}
               fill="url(#worklog-primary-fill)"
               fillOpacity={1}
               isAnimationActive={false}
               name="Logged"
               stroke={palette.primary}
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               type="monotone"
             />
             <Line
@@ -261,6 +280,29 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {loggedDays.length > 0 && loggedDays.length < 5 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {formatLowDataInsight(loggedDays)}
+        </p>
+      )}
     </div>
   );
+}
+
+function formatLowDataInsight(days: ReadonlyArray<WorklogDay>) {
+  const best = days.reduce((current, day) =>
+    day.minutes > current.minutes ? day : current,
+  );
+  return `You logged ${formatHM(best.minutes)} on ${formatShortDate(
+    best.date,
+  )}. Add more logs to build a trend.`;
+}
+
+function formatHM(minutes: number): string {
+  if (minutes === 0) return "0m";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

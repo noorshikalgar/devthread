@@ -239,10 +239,16 @@ export default function App() {
     const stored = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
     return stored ? Number(stored) : null;
   });
-  const [worklogRange, setWorklogRange] = useState<WorklogRange>("12w");
+  const [worklogRange] = useState<WorklogRange>("12m");
+  const [worklogYear, setWorklogYear] = useState(() =>
+    new Date().getUTCFullYear(),
+  );
   const [worklogMetrics, setWorklogMetrics] = useState<WorklogMetricEntry[]>(
     [],
   );
+  const [worklogHeatmapMetrics, setWorklogHeatmapMetrics] = useState<
+    WorklogMetricEntry[]
+  >([]);
   const [worklogLoading, setWorklogLoading] = useState(false);
   const [releases, setReleases] = useState<Release[]>([]);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
@@ -388,8 +394,8 @@ export default function App() {
 
   useEffect(() => {
     if (workspaceMode !== "worklog") return;
-    void loadWorklogMetrics(worklogRange);
-  }, [workspaceMode, worklogRange]);
+    void loadWorklogMetrics(worklogRange, worklogYear);
+  }, [workspaceMode, worklogRange, worklogYear]);
 
   const visibleEntries = useMemo(() => {
     const term = timelineSearch.trim();
@@ -510,11 +516,22 @@ export default function App() {
     }
   }
 
-  async function loadWorklogMetrics(range: WorklogRange) {
+  async function loadWorklogMetrics(range: WorklogRange, year: number) {
     setWorklogLoading(true);
     try {
-      const { startAt, endAt } = worklogRangeBounds(range);
-      setWorklogMetrics(await api.listWorklogMetrics(startAt, endAt));
+      const { startAt, endAt } = worklogRangeBounds(range, year);
+      const yearBounds = worklogCalendarYearBounds(year);
+      const [rangeMetrics, heatmapMetrics] =
+        range === "12m"
+          ? await api
+              .listWorklogMetrics(yearBounds.startAt, yearBounds.endAt)
+              .then((metrics) => [metrics, metrics] as const)
+          : await Promise.all([
+              api.listWorklogMetrics(startAt, endAt),
+              api.listWorklogMetrics(yearBounds.startAt, yearBounds.endAt),
+            ]);
+      setWorklogMetrics(rangeMetrics);
+      setWorklogHeatmapMetrics(heatmapMetrics);
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -1167,9 +1184,16 @@ export default function App() {
           ) : workspaceMode === "worklog" ? (
             <WorklogMetricsView
               entries={worklogMetrics}
+              heatmapEntries={worklogHeatmapMetrics}
               loading={worklogLoading}
-              onRangeChange={setWorklogRange}
+              onSelectTask={(id) => {
+                setSelectedId(id);
+                setWorkspaceMode("tasks");
+                setSidebarOpen(true);
+              }}
               range={worklogRange}
+              selectedYear={worklogYear}
+              onYearChange={setWorklogYear}
               worklogSettings={worklogSettings}
             />
           ) : workspaceMode === "releases" ? (
@@ -1768,24 +1792,32 @@ function DeleteArchiveTaskDialog({
 
 function WorklogMetricsView({
   entries,
+  heatmapEntries,
   loading,
+  onSelectTask,
+  onYearChange,
   range,
+  selectedYear,
   worklogSettings,
-  onRangeChange,
 }: {
   entries: WorklogMetricEntry[];
+  heatmapEntries: WorklogMetricEntry[];
   loading: boolean;
+  onSelectTask: (id: string) => void;
+  onYearChange: (year: number) => void;
   range: WorklogRange;
+  selectedYear: number;
   worklogSettings: WorklogSettings;
-  onRangeChange: (range: WorklogRange) => void;
 }) {
-  const [selectedDay, setSelectedDay] = useState<string | null>(
-    dayKey(new Date().toISOString()),
-  );
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [logPage, setLogPage] = useState(1);
   const days = useMemo(
-    () => buildWorklogDays(range, entries),
-    [entries, range],
+    () => buildWorklogDays(range, entries, selectedYear),
+    [entries, range, selectedYear],
+  );
+  const heatmapDays = useMemo(
+    () => buildWorklogDays("12m", heatmapEntries, selectedYear),
+    [heatmapEntries, selectedYear],
   );
   const totalMinutes = entries.reduce(
     (sum, entry) => sum + entry.durationMinutes,
@@ -1796,10 +1828,18 @@ function WorklogMetricsView({
     (best, day) => (!best || day.minutes > best.minutes ? day : best),
     null,
   );
-  const filteredEntries = selectedDay
-    ? entries.filter((entry) => dayKey(entry.occurredAt) === selectedDay)
+  const latestLoggedDay = loggedDays.at(-1)?.key ?? null;
+  const activeDay = selectedDay ?? latestLoggedDay;
+  const filteredEntries = activeDay
+    ? entries.filter((entry) => dayKey(entry.occurredAt) === activeDay)
     : entries;
-  const recentEntries = filteredEntries;
+  const dailyGoalMinutes = effectiveDailyGoalMinutes(worklogSettings);
+  const taskTotals = buildTaskWorklogTotals(entries);
+  const activeDayMinutes = activeDay
+    ? filteredEntries.reduce((sum, entry) => sum + entry.durationMinutes, 0)
+    : 0;
+  const activeDayTaskCount = new Set(filteredEntries.map((entry) => entry.taskId))
+    .size;
 
   // Reset to the first page whenever the user picks a new day or
   // changes the range. Otherwise the pager can get stuck showing
@@ -1825,43 +1865,31 @@ function WorklogMetricsView({
   // at this density, so they're out.
   const weekly = aggregateByBucket(entries, weekLabel);
   const monthly = aggregateByBucket(entries, monthLabel);
+  const yearOptions = useMemo(
+    () => {
+      const current = new Date().getUTCFullYear();
+      return [current, current - 1, current - 2];
+    },
+    [],
+  );
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-8 py-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Worklog metrics
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Time spent across tasks
-          </h1>
-        </div>
-        <div className="flex rounded-md border border-border bg-card p-0.5">
-          {WORKLOG_RANGES.map((option) => (
-            <Button
-              aria-pressed={range === option.value}
-              className="h-7 px-2.5 text-xs"
-              key={option.value}
-              onClick={() => {
-                setSelectedDay(null);
-                onRangeChange(option.value);
-              }}
-              size="sm"
-              type="button"
-              variant={range === option.value ? "secondary" : "ghost"}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+      <div className="flex h-10 items-center gap-2 border-b border-border px-8">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Worklog metrics
+        </span>
+        <span className="text-muted-foreground/60">/</span>
+        <h1 className="text-sm font-medium text-foreground">
+          Time spent across tasks
+        </h1>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-6">
+        <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-4 px-8 py-5 pb-14">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard label="Total" value={formatDuration(totalMinutes)} />
             <MetricCard
-              label="Daily avg"
+              label="Avg/day"
               value={formatDuration(
                 loggedDays.length
                   ? Math.round(totalMinutes / loggedDays.length)
@@ -1870,77 +1898,80 @@ function WorklogMetricsView({
             />
             <MetricCard
               label="Best day"
-              value={bestDay ? formatDuration(bestDay.minutes) : "0m"}
-              detail={bestDay ? formatShortDate(bestDay.date) : undefined}
+              value={
+                bestDay
+                  ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
+                      bestDay.minutes,
+                    )}`
+                  : "0m"
+              }
             />
-            <MetricCard label="Logged days" value={String(loggedDays.length)} />
+            <MetricCard
+              label="Logged"
+              value={`${loggedDays.length} day${loggedDays.length === 1 ? "" : "s"}`}
+            />
           </div>
-
-          <WorklogHoursChart days={days} settings={worklogSettings} />
 
           <WorklogHeatmap
-            days={days}
+            days={heatmapDays}
+            goalMinutes={dailyGoalMinutes}
             onSelectDay={setSelectedDay}
             range={range}
-            selectedDay={selectedDay}
+            selectedDay={activeDay}
+            selectedYear={selectedYear}
+            yearOptions={yearOptions}
+            onYearChange={(year) => {
+              setSelectedDay(null);
+              onYearChange(year);
+            }}
           />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <WorklogBars items={weekly} title="Weekly totals" />
-            <WorklogBars items={monthly} title="Monthly totals" />
-          </div>
-
-          <div className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-sm font-medium">
-                {selectedDay
-                  ? `Logs on ${formatShortDate(selectedDay)}`
-                  : "Recent worklogs"}
-              </h2>
-              {loading && (
-                <span className="text-xs text-muted-foreground">
-                  Loading...
-                </span>
-              )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+            <div className="flex min-w-0 flex-col gap-4">
+              <WorklogHoursChart
+                days={days}
+                onSelectDay={setSelectedDay}
+                settings={worklogSettings}
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <WorklogBars
+                  goalMinutes={dailyGoalMinutes * 5}
+                  items={weekly}
+                  title="This week"
+                />
+                <WorklogBars
+                  goalMinutes={dailyGoalMinutes * 20}
+                  items={monthly}
+                  title={new Intl.DateTimeFormat(undefined, {
+                    month: "long",
+                  }).format(new Date())}
+                />
+              </div>
             </div>
-            <div className="divide-y divide-border">
-              {pagedEntries.map((entry) => (
-                <div
-                  className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[120px_minmax(0,1fr)_auto]"
-                  key={entry.id}
-                >
-                  <time className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-                    {formatShortDate(entry.occurredAt)}
-                  </time>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {entry.taskTitle}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {entry.folderName ?? "No folder"} ·{" "}
-                      {stripOneLine(entry.contentMarkdown)}
-                    </p>
-                  </div>
-                  <span className="font-mono text-sm text-foreground">
-                    {formatDuration(entry.durationMinutes)}
-                  </span>
-                </div>
-              ))}
-              {!filteredEntries.length && (
-                <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  No logged time in this range.
-                </div>
-              )}
+            <div className="flex min-w-0 flex-col gap-4">
+              <WorklogTaskBreakdown
+                items={taskTotals}
+                onSelectTask={onSelectTask}
+              />
+              <WorklogLogList
+                activeDay={activeDay}
+                activeDayMinutes={activeDayMinutes}
+                activeDayTaskCount={activeDayTaskCount}
+                entries={pagedEntries}
+                filteredCount={filteredEntries.length}
+                loading={loading}
+                onPageChange={setLogPage}
+                onSelectTask={onSelectTask}
+                page={safeLogPage}
+                pageSize={LOG_PAGE_SIZE}
+                totalPages={totalLogPages}
+              />
+              <WorklogGoalStatus
+                dailyGoalMinutes={dailyGoalMinutes}
+                loggedDays={loggedDays.length}
+                totalMinutes={totalMinutes}
+              />
             </div>
-            <Pager
-              ariaLabel="Worklog entries pagination"
-              className="rounded-b-lg"
-              onPageChange={setLogPage}
-              page={safeLogPage}
-              pageSize={LOG_PAGE_SIZE}
-              totalItems={filteredEntries.length}
-              totalPages={totalLogPages}
-            />
           </div>
         </div>
       </ScrollArea>
@@ -1958,12 +1989,232 @@ function MetricCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
+    <div className="rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
       <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-1.5 text-xl font-semibold tracking-tight">{value}</p>
       {detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
+    </div>
+  );
+}
+
+interface WorklogTaskTotal {
+  taskId: string;
+  taskTitle: string;
+  folderName: string | null;
+  minutes: number;
+}
+
+function WorklogTaskBreakdown({
+  items,
+  onSelectTask,
+}: {
+  items: WorklogTaskTotal[];
+  onSelectTask: (id: string) => void;
+}) {
+  const max = Math.max(1, ...items.map((item) => item.minutes));
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">Time by task</h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Top {Math.min(5, items.length)}
+        </span>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {items.slice(0, 5).map((item) => {
+          const token = taskToken(item.taskTitle);
+          const title = token
+            ? item.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
+            : item.taskTitle;
+          return (
+            <button
+              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
+              key={item.taskId}
+              onClick={() => onSelectTask(item.taskId)}
+              type="button"
+            >
+              <span className="min-w-0">
+                <span className="flex min-w-0 items-center gap-2">
+                  {token && (
+                    <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {token}
+                    </span>
+                  )}
+                  <span className="truncate text-xs font-medium text-foreground">
+                    {title}
+                  </span>
+                </span>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted/45">
+                  <span
+                    className="block h-full rounded-full bg-primary/55"
+                    style={{
+                      width: `${Math.max(4, (item.minutes / max) * 100)}%`,
+                    }}
+                  />
+                </span>
+              </span>
+              <span className="font-mono text-xs text-foreground">
+                {formatDuration(item.minutes)}
+              </span>
+            </button>
+          );
+        })}
+        {items.length === 1 && (
+          <p className="px-2 pt-1 text-xs text-muted-foreground">
+            Only one task has logged time in this range.
+          </p>
+        )}
+        {!items.length && (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            No task time in this range.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WorklogLogList({
+  activeDay,
+  activeDayMinutes,
+  activeDayTaskCount,
+  entries,
+  filteredCount,
+  loading,
+  onPageChange,
+  onSelectTask,
+  page,
+  pageSize,
+  totalPages,
+}: {
+  activeDay: string | null;
+  activeDayMinutes: number;
+  activeDayTaskCount: number;
+  entries: WorklogMetricEntry[];
+  filteredCount: number;
+  loading: boolean;
+  onPageChange: (page: number) => void;
+  onSelectTask: (id: string) => void;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}) {
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3">
+        <div>
+          <h2 className="text-sm font-medium">
+            {activeDay ? formatWorklogLongDate(activeDay) : "Recent worklogs"}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatDuration(activeDayMinutes)} logged · {activeDayTaskCount}{" "}
+            task{activeDayTaskCount === 1 ? "" : "s"} worked on
+          </p>
+        </div>
+        {loading && (
+          <span className="text-xs text-muted-foreground">Loading...</span>
+        )}
+      </div>
+      <div className="divide-y divide-border/70">
+        {entries.map((entry) => {
+          const token = taskToken(entry.taskTitle);
+          const title = token
+            ? entry.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
+            : entry.taskTitle;
+          return (
+            <button
+              className="block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/35"
+              key={entry.id}
+              onClick={() => onSelectTask(entry.taskId)}
+              type="button"
+            >
+              <span className="flex items-center justify-between gap-3">
+                <time className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                  {formatWorklogTime(entry.occurredAt)}
+                </time>
+                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-foreground">
+                  {formatDuration(entry.durationMinutes)}
+                </span>
+              </span>
+              <span className="mt-1.5 block min-w-0">
+                <span className="flex min-w-0 items-center gap-2 text-sm">
+                  {token && (
+                    <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {token}
+                    </span>
+                  )}
+                  <span className="truncate text-sm font-medium">{title}</span>
+                </span>
+                <span className="mt-1 block truncate text-xs text-muted-foreground">
+                  {entry.folderName ?? "No folder"} ·{" "}
+                  {stripOneLine(entry.contentMarkdown)}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+        {!filteredCount && (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            Select a chart point or heatmap day to inspect logs.
+          </div>
+        )}
+      </div>
+      <Pager
+        ariaLabel="Worklog entries pagination"
+        className="rounded-b-lg"
+        onPageChange={onPageChange}
+        page={page}
+        pageSize={pageSize}
+        totalItems={filteredCount}
+        totalPages={totalPages}
+      />
+    </div>
+  );
+}
+
+function WorklogGoalStatus({
+  dailyGoalMinutes,
+  loggedDays,
+  totalMinutes,
+}: {
+  dailyGoalMinutes: number;
+  loggedDays: number;
+  totalMinutes: number;
+}) {
+  const average = loggedDays ? Math.round(totalMinutes / loggedDays) : 0;
+  const goalPercent = dailyGoalMinutes
+    ? Math.min(100, Math.round((average / dailyGoalMinutes) * 100))
+    : 0;
+
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-medium">Goal status</h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Goal {formatDuration(dailyGoalMinutes)}/day
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-muted-foreground">Average logged day</span>
+          <span className="font-mono text-foreground">
+            {formatDuration(average)}
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted/45">
+          <div
+            className="h-full rounded-full bg-primary/55"
+            style={{ width: `${goalPercent}%` }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {loggedDays
+            ? `${goalPercent}% of your daily goal on active days.`
+            : "Log time to start measuring against your daily goal."}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1975,15 +2226,9 @@ const WORKLOG_RANGES: { value: WorklogRange; label: string; days: number }[] = [
   { value: "12m", label: "12M", days: 365 },
 ];
 
-function worklogRangeBounds(range: WorklogRange) {
+function worklogRangeBounds(range: WorklogRange, year?: number) {
   const now = new Date();
-  if (range === "12m") {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const end = new Date(
-      Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999),
-    );
-    return { startAt: start.toISOString(), endAt: end.toISOString() };
-  }
+  if (range === "12m") return worklogCalendarYearBounds(year ?? now);
   const days =
     WORKLOG_RANGES.find((option) => option.value === range)?.days ?? 84;
   const end = new Date();
@@ -1994,11 +2239,22 @@ function worklogRangeBounds(range: WorklogRange) {
   return { startAt: start.toISOString(), endAt: end.toISOString() };
 }
 
+function worklogCalendarYearBounds(reference: Date | number = new Date()) {
+  const year =
+    typeof reference === "number" ? reference : reference.getUTCFullYear();
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(
+    Date.UTC(year, 11, 31, 23, 59, 59, 999),
+  );
+  return { startAt: start.toISOString(), endAt: end.toISOString() };
+}
+
 function buildWorklogDays(
   range: WorklogRange,
   entries: WorklogMetricEntry[],
+  year?: number,
 ): WorklogDay[] {
-  const { startAt, endAt } = worklogRangeBounds(range);
+  const { startAt, endAt } = worklogRangeBounds(range, year);
   const start = new Date(startAt);
   const end = new Date(endAt);
   const minutes = new Map<string, number>();
@@ -2034,6 +2290,71 @@ function monthLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     year: "2-digit",
+  }).format(new Date(value));
+}
+
+function buildTaskWorklogTotals(
+  entries: WorklogMetricEntry[],
+): WorklogTaskTotal[] {
+  const totals = new Map<string, WorklogTaskTotal>();
+  for (const entry of entries) {
+    const current = totals.get(entry.taskId);
+    if (current) {
+      current.minutes += entry.durationMinutes;
+    } else {
+      totals.set(entry.taskId, {
+        taskId: entry.taskId,
+        taskTitle: entry.taskTitle,
+        folderName: entry.folderName,
+        minutes: entry.durationMinutes,
+      });
+    }
+  }
+  return [...totals.values()].sort((a, b) => b.minutes - a.minutes);
+}
+
+function taskToken(value: string) {
+  return value.match(/\b[A-Z]{2,}-\d+\b/)?.[0] ?? null;
+}
+
+function formatWorklogDayShort(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfValue = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const diffDays = Math.round(
+    (startOfToday.getTime() - startOfValue.getTime()) / 86_400_000,
+  );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  const weekday = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+  }).format(date);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${weekday} · ${day}/${month}`;
+}
+
+function formatWorklogLongDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatWorklogTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
   }).format(new Date(value));
 }
 
