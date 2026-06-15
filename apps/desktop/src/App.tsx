@@ -1947,11 +1947,21 @@ function WorklogMetricsView({
       );
   }
 
+  function exportToExcel() {
+    // Excel export is a planned feature; the tauri command + payload
+    // builder will land in a follow-up. For now we surface a toast
+    // so the button is wired and discoverable.
+    toast.info("Excel export coming soon", {
+      description: `Will write worklog-${selectedYear}.xlsx to your downloads folder.`,
+    });
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
       <WorklogMetricsHeader
         loading={loading}
         onCopySummary={copySummaryToClipboard}
+        onExportExcel={exportToExcel}
         onYearChange={(year) => {
           resetSelection();
           onYearChange(year);
@@ -2059,12 +2069,14 @@ function WorklogMetricsView({
 function WorklogMetricsHeader({
   loading,
   onCopySummary,
+  onExportExcel,
   onYearChange,
   selectedYear,
   yearOptions,
 }: {
   loading: boolean;
   onCopySummary: () => void;
+  onExportExcel: () => void;
   onYearChange: (year: number) => void;
   selectedYear: number;
   yearOptions: ReadonlyArray<number>;
@@ -2077,7 +2089,7 @@ function WorklogMetricsHeader({
           WorkLog
         </h1>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         <Select
           onValueChange={(value) => onYearChange(Number.parseInt(value, 10))}
           value={String(selectedYear)}
@@ -2100,18 +2112,38 @@ function WorklogMetricsHeader({
             </SelectGroup>
           </SelectContent>
         </Select>
-        <Button
-          aria-label="Copy worklog summary"
-          className="h-7 gap-1.5 px-2.5 text-xs"
-          disabled={loading}
-          onClick={onCopySummary}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <Download className="size-3.5" />
-          Export
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Copy worklog summary"
+              className="size-7 p-0"
+              disabled={loading}
+              onClick={onCopySummary}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <Copy className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Copy summary</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Export worklog to Excel"
+              className="size-7 p-0"
+              disabled={loading}
+              onClick={onExportExcel}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <Download className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Export to Excel</TooltipContent>
+        </Tooltip>
       </div>
     </header>
   );
@@ -2132,38 +2164,45 @@ function WorklogSummaryStrip({
   totalMinutes: number;
   year: number;
 }) {
+  // Flat row: no card background or outer borders. A single vertical
+  // divider sits between each metric so the eye groups them as a
+  // strip while keeping each value independent.
+  const metrics: { label: string; value: string }[] = [
+    { label: `Total · ${year}`, value: formatDuration(totalMinutes) },
+    {
+      label: "Avg active day",
+      value: formatDuration(
+        loggedDaysCount ? Math.round(totalMinutes / loggedDaysCount) : 0,
+      ),
+    },
+    {
+      label: "Best day",
+      value: bestDay
+        ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
+            bestDay.minutes,
+          )}`
+        : "—",
+    },
+    {
+      label: "Logged",
+      value: `${loggedDaysCount} day${loggedDaysCount === 1 ? "" : "s"} · ${taskCount} task${
+        taskCount === 1 ? "" : "s"
+      }`,
+    },
+  ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <MetricCard
-        label={`Total · ${year}`}
-        value={formatDuration(totalMinutes)}
-      />
-      <MetricCard
-        label="Avg active day"
-        value={formatDuration(
-          loggedDaysCount ? Math.round(totalMinutes / loggedDaysCount) : 0,
-        )}
-      />
-      <MetricCard
-        label="Best day"
-        value={
-          bestDay
-            ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
-                bestDay.minutes,
-              )}`
-            : "—"
-        }
-      />
-      <MetricCard
-        label="Logged"
-        value={`${loggedDaysCount} day${loggedDaysCount === 1 ? "" : "s"} · ${taskCount} task${
-          taskCount === 1 ? "" : "s"
-        }`}
-      />
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+      {metrics.map((metric) => (
+        <MetricCell
+          key={metric.label}
+          label={metric.label}
+          value={metric.value}
+        />
+      ))}
       {/*
         The Goal-hit figure is computed but reserved for the inspector
         goal context. Keeping it out of the summary strip prevents the
-        four metric cards from competing with each other for attention.
+        four metrics from competing with each other for attention.
       */}
       <span className="sr-only">
         {goalHitDays} day{goalHitDays === 1 ? "" : "s"} hit goal
@@ -2172,28 +2211,15 @@ function WorklogSummaryStrip({
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
+function MetricCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-[92px] flex-col justify-center rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="flex min-h-[72px] flex-col justify-center border-l border-border/60 px-4 py-3 first:border-l-0 sm:px-4 lg:px-5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-foreground/70">
         {label}
       </p>
-      <p className="mt-1.5 line-clamp-2 break-words text-xl font-semibold leading-tight tracking-tight">
+      <p className="mt-1.5 line-clamp-2 break-words text-xl font-semibold leading-tight tracking-tight text-foreground">
         {value}
       </p>
-      {detail && (
-        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-          {detail}
-        </p>
-      )}
     </div>
   );
 }
@@ -2238,18 +2264,16 @@ function WorklogGoalRow({
           Goal {formatDuration(dailyGoalMinutes)}/day
         </p>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
+      <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCell
           label="Daily goal"
           value={formatDuration(dailyGoalMinutes)}
-          detail="Target per workday"
         />
-        <MetricCard
+        <MetricCell
           label="Avg active day"
           value={formatDuration(averageActiveDayMinutes)}
-          detail={`${goalCoveragePercent}% of daily goal`}
         />
-        <MetricCard
+        <MetricCell
           label="Best day"
           value={
             bestDay
@@ -2258,20 +2282,10 @@ function WorklogGoalRow({
                 )}`
               : "—"
           }
-          detail={
-            bestDay
-              ? `${Math.round((bestDay.minutes / dailyGoalMinutes) * 100)}% of goal`
-              : "No logs yet"
-          }
         />
-        <MetricCard
+        <MetricCell
           label="Goal hit"
           value={`${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`}
-          detail={
-            loggedDaysCount
-              ? `of ${loggedDaysCount} active day${loggedDaysCount === 1 ? "" : "s"}`
-              : "No active days yet"
-          }
         />
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-4">
