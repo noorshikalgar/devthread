@@ -464,10 +464,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                 ))}
               </SelectContent>
             </Select>
-            <span
-              aria-hidden
-              className="mx-1 h-5 w-px shrink-0 bg-border/60"
-            />
+            <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border/60" />
             <input
               accept="image/*"
               className="sr-only"
@@ -518,11 +515,12 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                 Hint:{" "}
               </span>
               <span>
-                Type <span className="font-mono text-foreground/75">@</span>{" "}
-                to change the content type
+                Type <span className="font-mono text-foreground/75">@</span> to
+                change the content type
               </span>
               <span className="hidden sm:inline">
-                {" "}(progress, blocker, etc)
+                {" "}
+                (progress, blocker, etc)
               </span>
             </span>
           </div>

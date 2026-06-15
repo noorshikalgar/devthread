@@ -226,7 +226,10 @@ export function TaskSidebar({
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
       <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
         <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo className="size-4 shrink-0 text-current" strokeWidth={1.75} />
+          <ListTodo
+            className="size-4 shrink-0 text-current"
+            strokeWidth={1.75}
+          />
           <span className="truncate text-sm font-medium text-current">
             Tasks
           </span>

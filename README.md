@@ -30,8 +30,6 @@ local companion for tracking task-level context:
 The goal is simple: when you return to a task, DevThread should make the context
 feel close again.
 
-
-
 ## Project Status
 
 DevThread is currently **early alpha**.

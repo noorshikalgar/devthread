@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
+  Calendar,
   Check,
   Clock4,
   Copy,
@@ -27,7 +28,14 @@ import {
   type DownloadEvent,
   type Update,
 } from "@tauri-apps/plugin-updater";
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -41,8 +49,6 @@ import { Timeline, type TimelineViewMode } from "@/components/Timeline";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
-import { WorklogBars } from "@/components/WorklogBars";
-import { Pager } from "@/components/Pager";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -153,7 +159,6 @@ type UpdateState =
   | "installed"
   | "error";
 type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases";
-type WorklogRange = "7d" | "4w" | "12w" | "12m";
 interface AppContextMenuState {
   x: number;
   y: number;
@@ -239,7 +244,6 @@ export default function App() {
     const stored = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
     return stored ? Number(stored) : null;
   });
-  const [worklogRange] = useState<WorklogRange>("12m");
   const [worklogYear, setWorklogYear] = useState(() =>
     new Date().getUTCFullYear(),
   );
@@ -394,8 +398,8 @@ export default function App() {
 
   useEffect(() => {
     if (workspaceMode !== "worklog") return;
-    void loadWorklogMetrics(worklogRange, worklogYear);
-  }, [workspaceMode, worklogRange, worklogYear]);
+    void loadWorklogMetrics(worklogYear);
+  }, [workspaceMode, worklogYear]);
 
   const visibleEntries = useMemo(() => {
     const term = timelineSearch.trim();
@@ -516,22 +520,16 @@ export default function App() {
     }
   }
 
-  async function loadWorklogMetrics(range: WorklogRange, year: number) {
+  async function loadWorklogMetrics(year: number) {
     setWorklogLoading(true);
     try {
-      const { startAt, endAt } = worklogRangeBounds(range, year);
       const yearBounds = worklogCalendarYearBounds(year);
-      const [rangeMetrics, heatmapMetrics] =
-        range === "12m"
-          ? await api
-              .listWorklogMetrics(yearBounds.startAt, yearBounds.endAt)
-              .then((metrics) => [metrics, metrics] as const)
-          : await Promise.all([
-              api.listWorklogMetrics(startAt, endAt),
-              api.listWorklogMetrics(yearBounds.startAt, yearBounds.endAt),
-            ]);
-      setWorklogMetrics(rangeMetrics);
-      setWorklogHeatmapMetrics(heatmapMetrics);
+      const metrics = await api.listWorklogMetrics(
+        yearBounds.startAt,
+        yearBounds.endAt,
+      );
+      setWorklogMetrics(metrics);
+      setWorklogHeatmapMetrics(metrics);
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -1191,7 +1189,6 @@ export default function App() {
                 setWorkspaceMode("tasks");
                 setSidebarOpen(true);
               }}
-              range={worklogRange}
               selectedYear={worklogYear}
               onYearChange={setWorklogYear}
               worklogSettings={worklogSettings}
@@ -1796,7 +1793,6 @@ function WorklogMetricsView({
   loading,
   onSelectTask,
   onYearChange,
-  range,
   selectedYear,
   worklogSettings,
 }: {
@@ -1805,18 +1801,39 @@ function WorklogMetricsView({
   loading: boolean;
   onSelectTask: (id: string) => void;
   onYearChange: (year: number) => void;
-  range: WorklogRange;
   selectedYear: number;
   worklogSettings: WorklogSettings;
 }) {
+  // Default the drill-down to the current week so the inspector and
+  // period breakdown are anchored to "now" on first paint. The
+  // inspector further refines to today if today has logs.
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [logPage, setLogPage] = useState(1);
+  const [selectedPeriod, setSelectedPeriod] = useState<{
+    kind: "week" | "month";
+    key: string;
+    label: string;
+  } | null>(() => {
+    const today = new Date().toISOString();
+    const key = weekKeyOf(today);
+    return { kind: "week", key, label: weekLabel(today) };
+  });
+  const [periodMode, setPeriodMode] = useState<"weeks" | "months">("weeks");
+  const [periodExpanded, setPeriodExpanded] = useState(false);
+
+  // Year is a global control. Reset the drill-down selection so the
+  // inspector doesn't keep pointing at a day/week/month that the new
+  // year's data would no longer contain.
+  const resetSelection = useCallback(() => {
+    setSelectedDay(null);
+    setSelectedPeriod(null);
+  }, []);
+
   const days = useMemo(
-    () => buildWorklogDays(range, entries, selectedYear),
-    [entries, range, selectedYear],
+    () => buildWorklogDays(entries, selectedYear),
+    [entries, selectedYear],
   );
   const heatmapDays = useMemo(
-    () => buildWorklogDays("12m", heatmapEntries, selectedYear),
+    () => buildWorklogDays(heatmapEntries, selectedYear),
     [heatmapEntries, selectedYear],
   );
   const totalMinutes = entries.reduce(
@@ -1829,153 +1846,329 @@ function WorklogMetricsView({
     null,
   );
   const latestLoggedDay = loggedDays.at(-1)?.key ?? null;
-  const activeDay = selectedDay ?? latestLoggedDay;
-  const filteredEntries = activeDay
-    ? entries.filter((entry) => dayKey(entry.occurredAt) === activeDay)
-    : entries;
   const dailyGoalMinutes = effectiveDailyGoalMinutes(worklogSettings);
   const taskTotals = buildTaskWorklogTotals(entries);
-  const activeDayMinutes = activeDay
-    ? filteredEntries.reduce((sum, entry) => sum + entry.durationMinutes, 0)
+  const goalHitDays = loggedDays.filter(
+    (day) => day.minutes >= dailyGoalMinutes,
+  ).length;
+  const averageActiveDayMinutes = loggedDays.length
+    ? Math.round(totalMinutes / loggedDays.length)
     : 0;
-  const activeDayTaskCount = new Set(filteredEntries.map((entry) => entry.taskId))
-    .size;
-
-  // Reset to the first page whenever the user picks a new day or
-  // changes the range. Otherwise the pager can get stuck showing
-  // a page that no longer exists.
-  useEffect(() => {
-    setLogPage(1);
-  }, [selectedDay, range]);
-
-  const LOG_PAGE_SIZE = 8;
-  const totalLogPages = Math.max(
-    1,
-    Math.ceil(filteredEntries.length / LOG_PAGE_SIZE),
-  );
-  const safeLogPage = Math.min(logPage, totalLogPages);
-  const pagedEntries = filteredEntries.slice(
-    (safeLogPage - 1) * LOG_PAGE_SIZE,
-    safeLogPage * LOG_PAGE_SIZE,
+  const goalCoveragePercent = dailyGoalMinutes
+    ? Math.min(
+        100,
+        Math.round((averageActiveDayMinutes / dailyGoalMinutes) * 100),
+      )
+    : 0;
+  const remainingGapMinutes = Math.max(
+    0,
+    dailyGoalMinutes - averageActiveDayMinutes,
   );
 
-  // Weekly and monthly bars, one row per bucket with the total
-  // minutes logged in that bucket. Segments and an average line
-  // were tried in an earlier iteration and felt busy for the cards
-  // at this density, so they're out.
-  const weekly = aggregateByBucket(entries, weekLabel);
-  const monthly = aggregateByBucket(entries, monthLabel);
-  const yearOptions = useMemo(
-    () => {
-      const current = new Date().getUTCFullYear();
-      return [current, current - 1, current - 2];
-    },
-    [],
+  const weekly = useMemo(
+    () => aggregateByBucket(entries, weekLabel, weekKeyOf),
+    [entries],
   );
+  const monthly = useMemo(
+    () => aggregateByBucket(entries, monthLabel, monthKeyOf),
+    [entries],
+  );
+
+  // The "active" selection for the inspector: an explicit week/month
+  // selection wins, otherwise the selected day, otherwise the most
+  // recent logged day. Falling back to "no selection" means the
+  // inspector renders an empty hint.
+  const inspector = useMemo(() => {
+    if (selectedPeriod?.kind === "week") {
+      return {
+        kind: "week" as const,
+        key: selectedPeriod.key,
+        label: selectedPeriod.label,
+        entries: entries.filter(
+          (entry) => weekKeyOf(entry.occurredAt) === selectedPeriod.key,
+        ),
+      };
+    }
+    if (selectedPeriod?.kind === "month") {
+      return {
+        kind: "month" as const,
+        key: selectedPeriod.key,
+        label: selectedPeriod.label,
+        entries: entries.filter(
+          (entry) => monthKeyOf(entry.occurredAt) === selectedPeriod.key,
+        ),
+      };
+    }
+    const day = selectedDay ?? latestLoggedDay;
+    return {
+      kind: "day" as const,
+      key: day,
+      label: day ? formatWorklogLongDate(day) : "No day selected",
+      entries: day
+        ? entries.filter((entry) => dayKey(entry.occurredAt) === day)
+        : [],
+    };
+  }, [selectedDay, selectedPeriod, latestLoggedDay, entries]);
+
+  const yearOptions = useMemo(() => {
+    const current = new Date().getUTCFullYear();
+    return [current, current - 1, current - 2];
+  }, []);
+
+  function selectPeriodRow(item: { label: string; key: string }) {
+    setSelectedDay(null);
+    setSelectedPeriod((current) =>
+      current?.key === item.key && current.kind === periodMode.slice(0, -1)
+        ? null
+        : {
+            kind: periodMode === "weeks" ? "week" : "month",
+            key: item.key,
+            label: item.label,
+          },
+    );
+  }
+
+  function copySummaryToClipboard() {
+    const lines = [
+      `Worklog ${selectedYear}`,
+      `Total ${formatDuration(totalMinutes)}`,
+      `Logged days ${loggedDays.length}`,
+      `Avg active day ${formatDuration(averageActiveDayMinutes)}`,
+      bestDay
+        ? `Best day ${formatWorklogDayShort(bestDay.date)} · ${formatDuration(bestDay.minutes)}`
+        : "Best day —",
+      `Goal hit ${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`,
+    ];
+    void navigator.clipboard
+      .writeText(lines.join("\n"))
+      .then(() => toast.success("Worklog summary copied"))
+      .catch((cause) =>
+        toast.error(`Could not copy summary: ${String(cause)}`),
+      );
+  }
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
-      <div className="flex h-10 items-center gap-2 border-b border-border px-8">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          Worklog metrics
-        </span>
-        <span className="text-muted-foreground/60">/</span>
-        <h1 className="text-sm font-medium text-foreground">
-          Time spent across tasks
-        </h1>
-      </div>
+      <WorklogMetricsHeader
+        loading={loading}
+        onCopySummary={copySummaryToClipboard}
+        onYearChange={(year) => {
+          resetSelection();
+          onYearChange(year);
+        }}
+        selectedYear={selectedYear}
+        yearOptions={yearOptions}
+      />
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-4 px-8 py-5 pb-14">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="Total" value={formatDuration(totalMinutes)} />
-            <MetricCard
-              label="Avg/day"
-              value={formatDuration(
-                loggedDays.length
-                  ? Math.round(totalMinutes / loggedDays.length)
-                  : 0,
-              )}
-            />
-            <MetricCard
-              label="Best day"
-              value={
-                bestDay
-                  ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
-                      bestDay.minutes,
-                    )}`
-                  : "0m"
-              }
-            />
-            <MetricCard
-              label="Logged"
-              value={`${loggedDays.length} day${loggedDays.length === 1 ? "" : "s"}`}
-            />
-          </div>
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-8 py-5 pb-16">
+          <WorklogSummaryStrip
+            bestDay={bestDay}
+            goalHitDays={goalHitDays}
+            loggedDaysCount={loggedDays.length}
+            taskCount={taskTotals.length}
+            totalMinutes={totalMinutes}
+            year={selectedYear}
+          />
 
           <WorklogHeatmap
             days={heatmapDays}
             goalMinutes={dailyGoalMinutes}
-            onSelectDay={setSelectedDay}
-            range={range}
-            selectedDay={activeDay}
-            selectedYear={selectedYear}
-            yearOptions={yearOptions}
-            onYearChange={(year) => {
-              setSelectedDay(null);
-              onYearChange(year);
+            onSelectDay={(day) => {
+              setSelectedPeriod(null);
+              setSelectedDay(day);
             }}
+            range="12m"
+            selectedDay={
+              inspector.kind === "day" && inspector.key ? inspector.key : null
+            }
           />
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-            <div className="flex min-w-0 flex-col gap-4">
-              <WorklogHoursChart
-                days={days}
-                onSelectDay={setSelectedDay}
-                settings={worklogSettings}
-              />
-              <div className="grid gap-4 lg:grid-cols-2">
-                <WorklogBars
-                  goalMinutes={dailyGoalMinutes * 5}
-                  items={weekly}
-                  title="This week"
-                />
-                <WorklogBars
-                  goalMinutes={dailyGoalMinutes * 20}
-                  items={monthly}
-                  title={new Intl.DateTimeFormat(undefined, {
-                    month: "long",
-                  }).format(new Date())}
-                />
-              </div>
-            </div>
-            <div className="flex min-w-0 flex-col gap-4">
-              <WorklogTaskBreakdown
-                items={taskTotals}
-                onSelectTask={onSelectTask}
-              />
-              <WorklogLogList
-                activeDay={activeDay}
-                activeDayMinutes={activeDayMinutes}
-                activeDayTaskCount={activeDayTaskCount}
-                entries={pagedEntries}
-                filteredCount={filteredEntries.length}
-                loading={loading}
-                onPageChange={setLogPage}
-                onSelectTask={onSelectTask}
-                page={safeLogPage}
-                pageSize={LOG_PAGE_SIZE}
-                totalPages={totalLogPages}
-              />
-              <WorklogGoalStatus
-                dailyGoalMinutes={dailyGoalMinutes}
-                loggedDays={loggedDays.length}
-                totalMinutes={totalMinutes}
-              />
-            </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+            <WorklogHoursChart
+              days={days}
+              onSelectDay={(day) => {
+                setSelectedPeriod(null);
+                setSelectedDay(day);
+              }}
+              settings={worklogSettings}
+            />
+            <WorklogTaskBreakdown
+              emptyHint="Only one task has logged time this year."
+              items={taskTotals}
+              onSelectTask={onSelectTask}
+            />
           </div>
+
+          <WorklogGoalRow
+            averageActiveDayMinutes={averageActiveDayMinutes}
+            bestDay={bestDay}
+            dailyGoalMinutes={dailyGoalMinutes}
+            goalCoveragePercent={goalCoveragePercent}
+            goalHitDays={goalHitDays}
+            loggedDaysCount={loggedDays.length}
+            remainingGapMinutes={remainingGapMinutes}
+            totalMinutes={totalMinutes}
+          />
+
+          <WorklogPeriodBreakdown
+            dailyGoalMinutes={dailyGoalMinutes}
+            expanded={periodExpanded}
+            mode={periodMode}
+            monthly={monthly}
+            onExpandedChange={setPeriodExpanded}
+            onModeChange={(mode) => {
+              setPeriodExpanded(false);
+              setPeriodMode(mode);
+              // Auto-select the current period of the new mode so the
+              // inspector and the row highlight track the switch
+              // instead of falling back to a stale day selection.
+              const today = new Date().toISOString();
+              setSelectedPeriod(
+                mode === "weeks"
+                  ? {
+                      kind: "week",
+                      key: weekKeyOf(today),
+                      label: weekLabel(today),
+                    }
+                  : {
+                      kind: "month",
+                      key: monthKeyOf(today),
+                      label: monthLabel(today),
+                    },
+              );
+              setSelectedDay(null);
+            }}
+            onSelect={selectPeriodRow}
+            selectedKey={
+              inspector.kind === periodMode.slice(0, -1) ? inspector.key : null
+            }
+            weekly={weekly}
+          />
+
+          <WorklogInspector
+            inspection={inspector}
+            loading={loading}
+            onSelectTask={onSelectTask}
+          />
         </div>
       </ScrollArea>
     </section>
+  );
+}
+
+function WorklogMetricsHeader({
+  loading,
+  onCopySummary,
+  onYearChange,
+  selectedYear,
+  yearOptions,
+}: {
+  loading: boolean;
+  onCopySummary: () => void;
+  onYearChange: (year: number) => void;
+  selectedYear: number;
+  yearOptions: ReadonlyArray<number>;
+}) {
+  return (
+    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-4 bg-card/70 px-6 backdrop-blur supports-[backdrop-filter]:bg-card/55">
+      <div className="flex min-w-0 items-center gap-2">
+        <BarChart3 className="size-4 shrink-0 text-foreground/80" />
+        <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
+          WorkLog
+        </h1>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Select
+          onValueChange={(value) => onYearChange(Number.parseInt(value, 10))}
+          value={String(selectedYear)}
+        >
+          <SelectTrigger
+            aria-label="Select worklog year"
+            className="h-7 w-[96px] text-xs"
+          >
+            <Calendar className="mr-1 size-3.5 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Year</SelectLabel>
+              {yearOptions.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Button
+          aria-label="Copy worklog summary"
+          className="h-7 gap-1.5 px-2.5 text-xs"
+          disabled={loading}
+          onClick={onCopySummary}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Download className="size-3.5" />
+          Export
+        </Button>
+      </div>
+    </header>
+  );
+}
+
+function WorklogSummaryStrip({
+  bestDay,
+  goalHitDays,
+  loggedDaysCount,
+  taskCount,
+  totalMinutes,
+  year,
+}: {
+  bestDay: WorklogDay | null;
+  goalHitDays: number;
+  loggedDaysCount: number;
+  taskCount: number;
+  totalMinutes: number;
+  year: number;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <MetricCard
+        label={`Total · ${year}`}
+        value={formatDuration(totalMinutes)}
+      />
+      <MetricCard
+        label="Avg active day"
+        value={formatDuration(
+          loggedDaysCount ? Math.round(totalMinutes / loggedDaysCount) : 0,
+        )}
+      />
+      <MetricCard
+        label="Best day"
+        value={
+          bestDay
+            ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
+                bestDay.minutes,
+              )}`
+            : "—"
+        }
+      />
+      <MetricCard
+        label="Logged"
+        value={`${loggedDaysCount} day${loggedDaysCount === 1 ? "" : "s"} · ${taskCount} task${
+          taskCount === 1 ? "" : "s"
+        }`}
+      />
+      {/*
+        The Goal-hit figure is computed but reserved for the inspector
+        goal context. Keeping it out of the summary strip prevents the
+        four metric cards from competing with each other for attention.
+      */}
+      <span className="sr-only">
+        {goalHitDays} day{goalHitDays === 1 ? "" : "s"} hit goal
+      </span>
+    </div>
   );
 }
 
@@ -1989,12 +2182,18 @@ function MetricCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
+    <div className="flex min-h-[92px] flex-col justify-center rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
       <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1.5 text-xl font-semibold tracking-tight">{value}</p>
-      {detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
+      <p className="mt-1.5 line-clamp-2 break-words text-xl font-semibold leading-tight tracking-tight">
+        {value}
+      </p>
+      {detail && (
+        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
@@ -2006,24 +2205,123 @@ interface WorklogTaskTotal {
   minutes: number;
 }
 
+function WorklogGoalRow({
+  averageActiveDayMinutes,
+  bestDay,
+  dailyGoalMinutes,
+  goalCoveragePercent,
+  goalHitDays,
+  loggedDaysCount,
+  remainingGapMinutes,
+  totalMinutes,
+}: {
+  averageActiveDayMinutes: number;
+  bestDay: WorklogDay | null;
+  dailyGoalMinutes: number;
+  goalCoveragePercent: number;
+  goalHitDays: number;
+  loggedDaysCount: number;
+  remainingGapMinutes: number;
+  totalMinutes: number;
+}) {
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 p-5 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium">Goal context</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            How the year stacks up against the daily{" "}
+            {formatDuration(dailyGoalMinutes)} target.
+          </p>
+        </div>
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Goal {formatDuration(dailyGoalMinutes)}/day
+        </p>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Daily goal"
+          value={formatDuration(dailyGoalMinutes)}
+          detail="Target per workday"
+        />
+        <MetricCard
+          label="Avg active day"
+          value={formatDuration(averageActiveDayMinutes)}
+          detail={`${goalCoveragePercent}% of daily goal`}
+        />
+        <MetricCard
+          label="Best day"
+          value={
+            bestDay
+              ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
+                  bestDay.minutes,
+                )}`
+              : "—"
+          }
+          detail={
+            bestDay
+              ? `${Math.round((bestDay.minutes / dailyGoalMinutes) * 100)}% of goal`
+              : "No logs yet"
+          }
+        />
+        <MetricCard
+          label="Goal hit"
+          value={`${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`}
+          detail={
+            loggedDaysCount
+              ? `of ${loggedDaysCount} active day${loggedDaysCount === 1 ? "" : "s"}`
+              : "No active days yet"
+          }
+        />
+      </div>
+      <div className="mt-5 flex flex-wrap items-center gap-4">
+        <div className="min-w-[240px] flex-1">
+          <div className="h-2 overflow-hidden rounded-full bg-muted/45">
+            <div
+              className="h-full rounded-full bg-primary/60"
+              style={{ width: `${goalCoveragePercent}%` }}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {loggedDaysCount
+            ? `You average ${goalCoveragePercent}% of your daily goal on active days. Avg gap is ${formatDuration(remainingGapMinutes)}/day.`
+            : "Log time to start measuring against your daily goal."}
+        </p>
+      </div>
+      {totalMinutes > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Total {formatDuration(totalMinutes)} tracked this year.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function WorklogTaskBreakdown({
+  emptyHint,
   items,
   onSelectTask,
 }: {
+  emptyHint: string;
   items: WorklogTaskTotal[];
   onSelectTask: (id: string) => void;
 }) {
+  const visible = items.slice(0, 5);
   const max = Math.max(1, ...items.map((item) => item.minutes));
   return (
-    <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+    <div className="flex h-full min-h-[300px] flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Time by task</h2>
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          Top {Math.min(5, items.length)}
+          Top {visible.length}
         </span>
       </div>
-      <div className="mt-3 space-y-1.5">
-        {items.slice(0, 5).map((item) => {
+      <p className="mt-1 text-xs text-muted-foreground">
+        Tasks consuming the most time this year.
+      </p>
+      <div className="mt-3 flex-1 space-y-1.5">
+        {visible.map((item) => {
           const token = taskToken(item.taskTitle);
           const title = token
             ? item.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
@@ -2061,13 +2359,11 @@ function WorklogTaskBreakdown({
             </button>
           );
         })}
-        {items.length === 1 && (
-          <p className="px-2 pt-1 text-xs text-muted-foreground">
-            Only one task has logged time in this range.
-          </p>
+        {items.length > 1 && items.length <= 5 && (
+          <p className="px-2 pt-1 text-xs text-muted-foreground">{emptyHint}</p>
         )}
         {!items.length && (
-          <p className="py-6 text-center text-xs text-muted-foreground">
+          <p className="grid h-full place-items-center py-6 text-center text-xs text-muted-foreground">
             No task time in this range.
           </p>
         )}
@@ -2076,185 +2372,371 @@ function WorklogTaskBreakdown({
   );
 }
 
-function WorklogLogList({
-  activeDay,
-  activeDayMinutes,
-  activeDayTaskCount,
-  entries,
-  filteredCount,
-  loading,
-  onPageChange,
-  onSelectTask,
-  page,
-  pageSize,
-  totalPages,
+interface WorklogPeriodItem {
+  key: string;
+  label: string;
+  minutes: number;
+}
+
+function WorklogPeriodBreakdown({
+  dailyGoalMinutes,
+  expanded,
+  mode,
+  monthly,
+  onExpandedChange,
+  onModeChange,
+  onSelect,
+  selectedKey,
+  weekly,
 }: {
-  activeDay: string | null;
-  activeDayMinutes: number;
-  activeDayTaskCount: number;
-  entries: WorklogMetricEntry[];
-  filteredCount: number;
-  loading: boolean;
-  onPageChange: (page: number) => void;
-  onSelectTask: (id: string) => void;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+  dailyGoalMinutes: number;
+  expanded: boolean;
+  mode: "weeks" | "months";
+  monthly: WorklogPeriodItem[];
+  onExpandedChange: (expanded: boolean) => void;
+  onModeChange: (mode: "weeks" | "months") => void;
+  onSelect: (item: { key: string; label: string }) => void;
+  selectedKey: string | null;
+  weekly: WorklogPeriodItem[];
 }) {
+  const activeItems = mode === "weeks" ? weekly : monthly;
+
+  // When viewing weeks, default to the weeks that fall inside the
+  // current calendar month (4–6 depending on the month). Every Monday
+  // in that range is rendered even if the week has zero logged
+  // minutes — otherwise the current week disappears until the user
+  // logs their first entry of the week. "View all" shows every
+  // week/month in the year with internal scroll.
+  const visibleItems = useMemo(() => {
+    const today = new Date();
+    const itemsByKey = new Map(activeItems.map((item) => [item.key, item]));
+
+    if (mode === "weeks") {
+      const currentMondayKey = weekKeyOf(today.toISOString());
+
+      if (expanded) {
+        // Walk every Monday from the start of the year up to and
+        // including the current week, newest first, so an empty
+        // current week is never lost when the user expands the list.
+        const yearStart = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+        const cursor = new Date(yearStart);
+        const daysBack = (cursor.getUTCDay() + 6) % 7;
+        cursor.setUTCDate(cursor.getUTCDate() - daysBack);
+        const mondayKeys: string[] = [];
+        while (cursor.toISOString().slice(0, 10) <= currentMondayKey) {
+          mondayKeys.push(cursor.toISOString().slice(0, 10));
+          cursor.setUTCDate(cursor.getUTCDate() + 7);
+        }
+        return mondayKeys.reverse().map((key) => {
+          const existing = itemsByKey.get(key);
+          return existing ?? { key, label: weekLabel(key), minutes: 0 };
+        });
+      }
+
+      // Default: weeks of the current month whose Monday has
+      // already passed, newest first. Future weeks of the month
+      // are hidden — they get added as the week starts.
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth();
+      const monthStart = new Date(Date.UTC(year, month, 1));
+      const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+      const cursor = new Date(monthStart);
+      const daysBack = (cursor.getUTCDay() + 6) % 7;
+      cursor.setUTCDate(cursor.getUTCDate() - daysBack);
+      const mondayKeys: string[] = [];
+      while (cursor <= monthEnd) {
+        const key = cursor.toISOString().slice(0, 10);
+        if (key <= currentMondayKey) mondayKeys.push(key);
+        cursor.setUTCDate(cursor.getUTCDate() + 7);
+      }
+      return mondayKeys.reverse().map((key) => {
+        const existing = itemsByKey.get(key);
+        return existing ?? { key, label: weekLabel(key), minutes: 0 };
+      });
+    }
+
+    // Months: default to the current month and the 4 previous
+    // months (5 rows), newest first. The current month is always
+    // rendered, even if it has no entries yet, so the user can
+    // click into it from the breakdown.
+    const currentMonthKey = monthKeyOf(today.toISOString());
+    const [year, monthNum] = currentMonthKey.split("-").map(Number);
+    const monthKeys: string[] = [];
+    for (let offset = 0; offset < 5; offset += 1) {
+      const d = new Date(Date.UTC(year, monthNum - 1 - offset, 1));
+      monthKeys.push(monthKeyOf(d.toISOString()));
+    }
+    const baseItems = monthKeys
+      .reverse()
+      .map(
+        (key) =>
+          itemsByKey.get(key) ?? { key, label: monthLabel(key), minutes: 0 },
+      );
+
+    if (!expanded) return baseItems;
+
+    // Expanded: every month from January up to and including the
+    // current month, newest first, with synthetic 0-minute rows
+    // for any month that has no entries yet.
+    const allKeys: string[] = [];
+    for (let m = 0; m < monthNum; m += 1) {
+      allKeys.push(monthKeyOf(new Date(Date.UTC(year, m, 1)).toISOString()));
+    }
+    allKeys.push(currentMonthKey);
+    return allKeys.reverse().map((key) => {
+      return itemsByKey.get(key) ?? { key, label: monthLabel(key), minutes: 0 };
+    });
+  }, [activeItems, expanded, mode]);
+
+  // The bar and the percent both measure "share of the
+  // week/month goal". A week counts 5 workdays, a month 20.
+  const goalMinutes =
+    mode === "weeks" ? dailyGoalMinutes * 5 : dailyGoalMinutes * 20;
+
   return (
-    <div className="rounded-md border border-border/55 bg-card/70 shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3">
+    <div className="flex flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium">
-            {activeDay ? formatWorklogLongDate(activeDay) : "Recent worklogs"}
-          </h2>
+          <h2 className="text-sm font-medium">Period breakdown</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {formatDuration(activeDayMinutes)} logged · {activeDayTaskCount}{" "}
-            task{activeDayTaskCount === 1 ? "" : "s"} worked on
+            Logged time per {mode === "weeks" ? "week" : "month"}. The bar shows
+            share of the {formatDuration(goalMinutes)}{" "}
+            {mode === "weeks" ? "weekly" : "monthly"} goal. Click a row to
+            inspect.
           </p>
         </div>
-        {loading && (
-          <span className="text-xs text-muted-foreground">Loading...</span>
+        <div
+          aria-label="Period mode"
+          className="flex rounded-md border border-border/60 bg-muted/20 p-0.5"
+          role="tablist"
+        >
+          {(["weeks", "months"] as const).map((option) => (
+            <button
+              aria-pressed={mode === option}
+              className={cn(
+                "h-7 rounded px-2.5 text-xs capitalize text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground",
+                mode === option && "bg-accent text-foreground shadow-sm",
+              )}
+              key={option}
+              onClick={() => onModeChange(option)}
+              role="tab"
+              type="button"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div
+        className={cn(
+          "mt-3 space-y-1",
+          expanded && "max-h-[260px] overflow-y-auto pr-1",
+        )}
+      >
+        {visibleItems.map((item) => {
+          // Clamp the visual fill at 100% so a week that overshoots
+          // the goal doesn't run off the track, but keep the raw
+          // percent in the label so the user can see they beat it.
+          // Zero minutes = no fill, not the 4% floor — an empty bar
+          // honestly reads as "no progress this week".
+          const rawPercent = goalMinutes
+            ? Math.round((item.minutes / goalMinutes) * 100)
+            : 0;
+          const hasProgress = item.minutes > 0;
+          const fillPercent = hasProgress
+            ? Math.max(4, Math.min(100, rawPercent))
+            : 0;
+          const hitGoal = item.minutes >= goalMinutes && goalMinutes > 0;
+          const selected = item.key === selectedKey;
+          return (
+            <button
+              aria-pressed={selected}
+              className={cn(
+                "grid w-full grid-cols-[132px_minmax(80px,1fr)_84px_44px] items-center gap-3 rounded-md px-2 py-1.5 text-xs transition-colors",
+                selected
+                  ? "bg-accent/45 text-foreground"
+                  : "hover:bg-accent/30",
+                !hasProgress && "text-muted-foreground",
+              )}
+              key={item.key}
+              onClick={() => onSelect(item)}
+              type="button"
+            >
+              <span className="truncate text-left">{item.label}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-muted/45">
+                <span
+                  className={cn(
+                    "block h-full rounded-full",
+                    hitGoal ? "bg-emerald-400/70" : "bg-primary/55",
+                  )}
+                  style={{ width: `${fillPercent}%` }}
+                />
+              </span>
+              <span
+                className={cn(
+                  "whitespace-nowrap text-right font-mono text-xs tabular-nums",
+                  hasProgress ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {formatDuration(item.minutes)}
+              </span>
+              <span
+                className={cn(
+                  "text-right font-mono text-[10px] tabular-nums",
+                  hitGoal
+                    ? "text-emerald-400"
+                    : rawPercent >= 75
+                      ? "text-foreground"
+                      : "text-muted-foreground",
+                )}
+              >
+                {rawPercent}%
+              </span>
+            </button>
+          );
+        })}
+        {!activeItems.length && (
+          <p className="py-8 text-center text-xs text-muted-foreground">
+            No logged time yet.
+          </p>
         )}
       </div>
-      <div className="divide-y divide-border/70">
-        {entries.map((entry) => {
+      {!!activeItems.length && activeItems.length > 5 && (
+        <button
+          className="mt-2 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+          onClick={() => onExpandedChange(!expanded)}
+          type="button"
+        >
+          {expanded
+            ? mode === "weeks"
+              ? "Show this month"
+              : "Show less"
+            : "View all"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface WorklogInspection {
+  kind: "day" | "week" | "month";
+  key: string | null;
+  label: string;
+  entries: WorklogMetricEntry[];
+}
+
+function WorklogInspector({
+  inspection,
+  loading,
+  onSelectTask,
+}: {
+  inspection: WorklogInspection;
+  loading: boolean;
+  onSelectTask: (id: string) => void;
+}) {
+  const { kind, label, entries: scopedEntries } = inspection;
+  const minutes = scopedEntries.reduce(
+    (sum, entry) => sum + entry.durationMinutes,
+    0,
+  );
+  const taskCount = new Set(scopedEntries.map((entry) => entry.taskId)).size;
+  const periodKindLabel =
+    kind === "day" ? "day" : kind === "week" ? "week" : "month";
+
+  // Cap the visible logs so a busy day doesn't push the page
+  // around. Internal scroll takes over beyond 10 rows, matching the
+  // period breakdown's behaviour.
+  const MAX_VISIBLE_LOGS = 10;
+  const visibleLogs = scopedEntries.slice(0, MAX_VISIBLE_LOGS);
+  const logsScrollable = scopedEntries.length > MAX_VISIBLE_LOGS;
+
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/70 px-4 py-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="shrink-0 text-sm font-medium">Inspector</h2>
+          <span className="text-muted-foreground/50">·</span>
+          <p className="truncate text-sm text-foreground">{label}</p>
+        </div>
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          {formatDuration(minutes)} logged · {taskCount} task
+          {taskCount === 1 ? "" : "s"}
+          {loading && " · Loading…"}
+        </p>
+      </div>
+
+      {/* Logs: single-column rows that grow with content and cap at
+          10 before an internal scroll takes over. Each row holds
+          time, task chip, title, folder, and duration on one line. */}
+      <div className={cn(logsScrollable && "max-h-[360px] overflow-y-auto")}>
+        {visibleLogs.map((entry) => {
           const token = taskToken(entry.taskTitle);
           const title = token
             ? entry.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
             : entry.taskTitle;
           return (
             <button
-              className="block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/35"
+              className="grid w-full grid-cols-[68px_minmax(0,1fr)_minmax(0,160px)_72px] items-center gap-3 border-b border-border/60 px-4 py-1.5 text-left text-sm transition-colors hover:bg-accent/35 last:border-b-0"
               key={entry.id}
               onClick={() => onSelectTask(entry.taskId)}
               type="button"
             >
-              <span className="flex items-center justify-between gap-3">
-                <time className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                  {formatWorklogTime(entry.occurredAt)}
-                </time>
-                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-foreground">
-                  {formatDuration(entry.durationMinutes)}
+              <time className="font-mono text-xs tabular-nums text-foreground/70">
+                {formatWorklogTime(entry.occurredAt)}
+              </time>
+              <span className="flex min-w-0 items-center gap-2">
+                {token && (
+                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {token}
+                  </span>
+                )}
+                <span className="truncate text-sm font-medium text-foreground">
+                  {title}
                 </span>
               </span>
-              <span className="mt-1.5 block min-w-0">
-                <span className="flex min-w-0 items-center gap-2 text-sm">
-                  {token && (
-                    <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                      {token}
-                    </span>
-                  )}
-                  <span className="truncate text-sm font-medium">{title}</span>
-                </span>
-                <span className="mt-1 block truncate text-xs text-muted-foreground">
-                  {entry.folderName ?? "No folder"} ·{" "}
-                  {stripOneLine(entry.contentMarkdown)}
-                </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {entry.folderName ?? "No folder"}
+              </span>
+              <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums text-foreground">
+                {formatDuration(entry.durationMinutes)}
               </span>
             </button>
           );
         })}
-        {!filteredCount && (
-          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-            Select a chart point or heatmap day to inspect logs.
+        {!scopedEntries.length && (
+          <div className="grid place-items-center px-4 py-10 text-center text-sm text-muted-foreground">
+            {kind === "day"
+              ? "Select a day from the heatmap or chart to inspect logged work."
+              : `No logged time in this ${periodKindLabel}.`}
           </div>
         )}
       </div>
-      <Pager
-        ariaLabel="Worklog entries pagination"
-        className="rounded-b-lg"
-        onPageChange={onPageChange}
-        page={page}
-        pageSize={pageSize}
-        totalItems={filteredCount}
-        totalPages={totalPages}
-      />
     </div>
   );
 }
 
-function WorklogGoalStatus({
-  dailyGoalMinutes,
-  loggedDays,
-  totalMinutes,
-}: {
-  dailyGoalMinutes: number;
-  loggedDays: number;
-  totalMinutes: number;
-}) {
-  const average = loggedDays ? Math.round(totalMinutes / loggedDays) : 0;
-  const goalPercent = dailyGoalMinutes
-    ? Math.min(100, Math.round((average / dailyGoalMinutes) * 100))
-    : 0;
-
-  return (
-    <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium">Goal status</h2>
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          Goal {formatDuration(dailyGoalMinutes)}/day
-        </span>
-      </div>
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <span className="text-muted-foreground">Average logged day</span>
-          <span className="font-mono text-foreground">
-            {formatDuration(average)}
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted/45">
-          <div
-            className="h-full rounded-full bg-primary/55"
-            style={{ width: `${goalPercent}%` }}
-          />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {loggedDays
-            ? `${goalPercent}% of your daily goal on active days.`
-            : "Log time to start measuring against your daily goal."}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-const WORKLOG_RANGES: { value: WorklogRange; label: string; days: number }[] = [
-  { value: "7d", label: "7D", days: 7 },
-  { value: "4w", label: "4W", days: 28 },
-  { value: "12w", label: "12W", days: 84 },
-  { value: "12m", label: "12M", days: 365 },
-];
-
-function worklogRangeBounds(range: WorklogRange, year?: number) {
-  const now = new Date();
-  if (range === "12m") return worklogCalendarYearBounds(year ?? now);
-  const days =
-    WORKLOG_RANGES.find((option) => option.value === range)?.days ?? 84;
-  const end = new Date();
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - days + 1);
-  start.setUTCHours(0, 0, 0, 0);
-  end.setUTCHours(23, 59, 59, 999);
-  return { startAt: start.toISOString(), endAt: end.toISOString() };
+function daysInMonth(monthKey: string | null): number {
+  if (!monthKey) return 0;
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!match) return 0;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 function worklogCalendarYearBounds(reference: Date | number = new Date()) {
   const year =
     typeof reference === "number" ? reference : reference.getUTCFullYear();
   const start = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(
-    Date.UTC(year, 11, 31, 23, 59, 59, 999),
-  );
+  const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   return { startAt: start.toISOString(), endAt: end.toISOString() };
 }
 
 function buildWorklogDays(
-  range: WorklogRange,
   entries: WorklogMetricEntry[],
-  year?: number,
+  year: number,
 ): WorklogDay[] {
-  const { startAt, endAt } = worklogRangeBounds(range, year);
+  const { startAt, endAt } = worklogCalendarYearBounds(year);
   const start = new Date(startAt);
   const end = new Date(endAt);
   const minutes = new Map<string, number>();
@@ -2278,19 +2760,44 @@ function dayKey(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-function weekLabel(value: string) {
+function weekStart(value: string) {
   const date = new Date(value);
-  const monday = new Date(date);
   const day = (date.getDay() + 6) % 7;
-  monday.setDate(date.getDate() - day);
-  return `${monday.getMonth() + 1}/${monday.getDate()}`;
+  const monday = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() - day,
+    ),
+  );
+  return monday.toISOString().slice(0, 10);
+}
+
+function monthStart(value: string) {
+  const date = new Date(value);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function weekLabel(value: string) {
+  return `Week of ${new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(weekStart(value)))}`;
 }
 
 function monthLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    year: "2-digit",
+    month: "long",
+    year: "numeric",
   }).format(new Date(value));
+}
+
+function weekKeyOf(value: string) {
+  return weekStart(value);
+}
+
+function monthKeyOf(value: string) {
+  return monthStart(value);
 }
 
 function buildTaskWorklogTotals(

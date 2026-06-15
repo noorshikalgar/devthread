@@ -65,7 +65,7 @@ describe("WorklogHeatmap", () => {
     expect(cells[0]!.className).not.toBe(cells[1]!.className);
   });
 
-  it("paints the streak pill with shadcn chart accent tokens", () => {
+  it("surfaces the current streak in the footer insights row", () => {
     render(
       <WorklogHeatmap
         days={DAYS}
@@ -74,25 +74,14 @@ describe("WorklogHeatmap", () => {
         selectedDay={null}
       />,
     );
-    const pill = screen.getByTestId("worklog-streak-pill");
-    expect(pill.className).toMatch(/bg-\[hsl\(var\(--chart-1\)/);
-    expect(pill.className).not.toMatch(/bg-emerald/);
+    // All three test days qualify (≥ 1h), so the current streak
+    // matches the day count. The footer row renders both current and
+    // best, so we read them via their sibling labels.
+    const currentRow = screen.getByText("Current streak").parentElement;
+    expect(currentRow).toHaveTextContent("3d");
   });
 
-  it("renders the current streak in the header pill", () => {
-    render(
-      <WorklogHeatmap
-        days={DAYS}
-        onSelectDay={vi.fn()}
-        range="12w"
-        selectedDay={null}
-      />,
-    );
-    const pill = screen.getByTestId("worklog-streak-pill");
-    expect(pill).toHaveTextContent(/3d/);
-  });
-
-  it("shows 0d when the most recent day has no logged time", () => {
+  it("shows 0d for current streak when the most recent day has no logged time", () => {
     const days: WorklogDay[] = [
       { key: "2026-06-01", date: "2026-06-01", minutes: 4 * 60 },
       { key: "2026-06-02", date: "2026-06-02", minutes: 0 },
@@ -105,7 +94,10 @@ describe("WorklogHeatmap", () => {
         selectedDay={null}
       />,
     );
-    expect(screen.getByTestId("worklog-streak-pill")).toHaveTextContent("0d");
+    expect(screen.getByText("0d")).toBeInTheDocument();
+    // The best streak in range (1 day of 4h followed by 0) is still
+    // 1d, surfaced via the "Best streak" label.
+    expect(screen.getByText(/Best streak/)).toBeInTheDocument();
   });
 
   it("surfaces the longest streak in the range alongside the current", () => {
@@ -125,9 +117,20 @@ describe("WorklogHeatmap", () => {
         selectedDay={null}
       />,
     );
-    const pill = screen.getByTestId("worklog-streak-pill");
-    expect(pill).toHaveTextContent(/1d/);
-    expect(pill).toHaveTextContent(/Best 4d/);
+    expect(screen.getByText("1d")).toBeInTheDocument();
+    expect(screen.getByText("4d")).toBeInTheDocument();
+  });
+
+  it("does not render the old header streak pill", () => {
+    render(
+      <WorklogHeatmap
+        days={DAYS}
+        onSelectDay={vi.fn()}
+        range="12w"
+        selectedDay={null}
+      />,
+    );
+    expect(screen.queryByTestId("worklog-streak-pill")).toBeNull();
   });
 
   it("renders small square cells", () => {
@@ -141,7 +144,7 @@ describe("WorklogHeatmap", () => {
     );
     const cells = screen.getAllByTestId("heatmap-cell");
     cells.forEach((cell) => {
-      expect(cell.className).toContain("size-[clamp(9px,1.08vw,15px)]");
+      expect(cell.className).toContain("size-[clamp(11px,1.05vw,14px)]");
     });
   });
 
@@ -175,18 +178,13 @@ describe("WorklogHeatmap", () => {
         onSelectDay={vi.fn()}
         range="12m"
         selectedDay={null}
-        selectedYear={2026}
-        yearOptions={[2026, 2025, 2024]}
       />,
     );
     const cells = screen.getAllByTestId("heatmap-cell");
     cells.forEach((cell) => {
       expect(cell.className).not.toContain("opacity-25");
     });
-    expect(screen.getByRole("button", { name: "2026" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.getByText(/Year overview/)).toBeInTheDocument();
   });
 
   it("does not render any amber goal overlays", () => {

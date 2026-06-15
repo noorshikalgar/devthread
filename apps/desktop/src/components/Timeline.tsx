@@ -80,10 +80,8 @@ const TYPE_DOT: Record<EntryType, string> = {
 };
 
 const TYPE_TOKEN: Record<EntryType, string> = {
-  progress:
-    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  next_step:
-    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  progress: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  next_step: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
   finding:
     "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   blocker:
@@ -91,10 +89,8 @@ const TYPE_TOKEN: Record<EntryType, string> = {
   decision:
     "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   note: "border-border bg-muted/45 text-muted-foreground",
-  worklog:
-    "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  status:
-    "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  worklog: "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+  status: "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
   estimate:
     "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
 };
@@ -240,7 +236,8 @@ function CompactTimelineEntry({
 }: EntryProps) {
   const [expanded, setExpanded] = useState(false);
   const summary = compactSummary(entry.contentMarkdown, attachments.length);
-  const hasDuration = entry.durationMinutes != null && entry.durationMinutes > 0;
+  const hasDuration =
+    entry.durationMinutes != null && entry.durationMinutes > 0;
 
   return (
     <li

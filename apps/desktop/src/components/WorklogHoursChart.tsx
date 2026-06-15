@@ -62,6 +62,37 @@ export function tooltipValueFormatter(
   return [formatHoursTooltip(Number(value)), String(name)];
 }
 
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; color?: string }>;
+  label?: string | number;
+}
+
+function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/20">
+      <p className="font-medium text-popover-foreground">{String(label)}</p>
+      {payload.map((entry, index) => (
+        <p
+          className="mt-0.5 flex items-center gap-1.5 text-popover-foreground"
+          key={`${entry.name ?? "value"}-${index}`}
+        >
+          <span
+            aria-hidden
+            className="inline-block size-2 rounded-sm"
+            style={{ background: entry.color }}
+          />
+          <span className="text-muted-foreground">{entry.name}</span>
+          <span className="ml-auto font-mono tabular-nums">
+            {formatHoursTooltip(Number(entry.value ?? 0))}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function buildChartData(
   days: ReadonlyArray<WorklogDay>,
   goalHours: number,
@@ -116,11 +147,11 @@ export function WorklogHoursChart({
 
   if (!data.length) {
     return (
-      <div className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex h-full flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">Daily hours</h2>
         </div>
-        <p className="py-8 text-center text-xs text-muted-foreground">
+        <p className="grid flex-1 place-items-center text-center text-xs text-muted-foreground">
           No worklog entries in the selected range.
         </p>
       </div>
@@ -130,15 +161,15 @@ export function WorklogHoursChart({
   return (
     <div
       aria-label={`Daily worklog hours, goal ${formatHoursTooltip(goalHours)} per day`}
-      className="rounded-md border border-border/55 bg-card/70 p-4 shadow-sm"
+      className="flex h-full flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm"
       data-testid="worklog-hours-chart"
       role="figure"
     >
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Daily hours</h2>
           <p className="text-xs text-muted-foreground">
-            Hours logged per day, with a goal line at{" "}
+            Year trend with a goal line at{" "}
             <span className="font-medium text-foreground">
               {formatHoursTooltip(goalHours)}
             </span>{" "}
@@ -150,7 +181,7 @@ export function WorklogHoursChart({
           {aboveDays === 1 ? "" : "s"} above goal
         </p>
       </div>
-      <div className="h-[220px] w-full">
+      <div className="mt-3 h-[240px] w-full min-h-0 flex-1">
         <ResponsiveContainer height="100%" width="100%">
           <ComposedChart
             data={data}
@@ -160,9 +191,7 @@ export function WorklogHoursChart({
                 state as {
                   activePayload?: Array<{ payload?: ChartDatum }>;
                 }
-              )?.activePayload?.[0]?.payload as
-                | ChartDatum
-                | undefined;
+              )?.activePayload?.[0]?.payload as ChartDatum | undefined;
               if (payload) onSelectDay?.(payload.date);
             }}
           >
@@ -213,7 +242,7 @@ export function WorklogHoursChart({
               axisLine={false}
               dataKey="dateLabel"
               interval="preserveStartEnd"
-              minTickGap={32}
+              minTickGap={48}
               stroke={palette.text}
               tick={{ fontSize: 10 }}
               tickLine={false}
@@ -229,20 +258,8 @@ export function WorklogHoursChart({
               width={36}
             />
             <Tooltip
-              contentStyle={{
-                background: "var(--popover)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                color: "var(--popover-foreground)",
-                fontSize: 11,
-              }}
+              content={<ChartTooltip />}
               cursor={{ stroke: palette.text, strokeOpacity: 0.25 }}
-              // Recharts 3's Formatter type is a complex union; the
-              // exported helper has a tighter signature we can test
-              // directly. The `as never` bridges the two without
-              // re-declaring Recharts' full type at the call site.
-              formatter={tooltipValueFormatter as never}
-              labelFormatter={(label) => String(label)}
             />
             <ReferenceLine
               ifOverflow="extendDomain"

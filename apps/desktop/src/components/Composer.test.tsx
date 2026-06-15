@@ -40,9 +40,7 @@ describe("Composer", () => {
   it("keeps the add action compact", () => {
     render(<Composer onSubmit={vi.fn()} taskId="task-add" />);
 
-    expect(
-      screen.getByRole("button", { name: /Add/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add/i })).toBeInTheDocument();
   });
 
   it("keeps entry type menu labels compact", () => {
@@ -177,7 +175,9 @@ describe("Composer", () => {
     expect(
       screen.getByRole("option", { name: /Progress/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Decision/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /Decision/ }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Entry type suggestions")).toHaveClass(
       "absolute",
     );
