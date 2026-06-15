@@ -70,8 +70,12 @@ describe("WorklogHoursChart", () => {
   it("counts days that exceeded the goal", () => {
     render(<WorklogHoursChart days={DAYS} settings={SETTINGS} />);
     // DAYS has 9h (over), 4h, 0h, 7h against an 8h goal. Only the 9h
-    // day is above the goal.
-    expect(screen.getByText(/1 day above goal/i)).toBeInTheDocument();
+    // day is above the goal. The stats paragraph now wraps the
+    // number in a <span>, so we check via container text.
+    const { container } = render(
+      <WorklogHoursChart days={DAYS} settings={SETTINGS} />,
+    );
+    expect(container.textContent).toMatch(/1 day above goal/);
   });
 
   it("passes the series name through to the tooltip (does not collapse 'Logged' and 'Above goal' into one row)", () => {

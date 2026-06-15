@@ -145,14 +145,14 @@ export function WorklogHeatmap({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium">
           Daily heatmap
-          <span className="ml-2 font-normal text-xs text-muted-foreground">
+          <span className="ml-2 text-xs font-normal text-foreground/70">
             Year overview · {loggedDays} logged day
             {loggedDays === 1 ? "" : "s"}
           </span>
         </h2>
         <div
           aria-label="Intensity legend, less to more"
-          className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"
+          className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-foreground/70"
         >
           <span className="mr-0.5">Less</span>
           {HEATMAP_LEVELS.map((level) => (

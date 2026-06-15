@@ -147,11 +147,11 @@ export function WorklogHoursChart({
 
   if (!data.length) {
     return (
-      <div className="flex h-full flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex h-full flex-col">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">Daily hours</h2>
         </div>
-        <p className="grid flex-1 place-items-center text-center text-xs text-muted-foreground">
+        <p className="grid flex-1 place-items-center text-center text-xs text-foreground/70">
           No worklog entries in the selected range.
         </p>
       </div>
@@ -161,23 +161,27 @@ export function WorklogHoursChart({
   return (
     <div
       aria-label={`Daily worklog hours, goal ${formatHoursTooltip(goalHours)} per day`}
-      className="flex h-full flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm"
+      className="flex h-full flex-col"
       data-testid="worklog-hours-chart"
       role="figure"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Daily hours</h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-foreground/70">
             Year trend with a goal line at{" "}
-            <span className="font-medium text-foreground">
+            <span className="font-semibold text-foreground">
               {formatHoursTooltip(goalHours)}
             </span>{" "}
             per workday.
           </p>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {loggedDays.length} logged · {aboveDays} day
+        <p className="text-xs text-foreground/70">
+          <span className="font-semibold text-foreground">
+            {loggedDays.length}
+          </span>{" "}
+          logged ·{" "}
+          <span className="font-semibold text-foreground">{aboveDays}</span> day
           {aboveDays === 1 ? "" : "s"} above goal
         </p>
       </div>

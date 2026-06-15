@@ -2251,17 +2251,24 @@ function WorklogGoalRow({
   totalMinutes: number;
 }) {
   return (
-    <div className="rounded-md border border-border/55 bg-card/70 p-5 shadow-sm">
+    <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Goal context</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-foreground/70">
             How the year stacks up against the daily{" "}
-            {formatDuration(dailyGoalMinutes)} target.
+            <span className="font-semibold text-foreground">
+              {formatDuration(dailyGoalMinutes)}
+            </span>{" "}
+            target.
           </p>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          Goal {formatDuration(dailyGoalMinutes)}/day
+        <p className="text-xs text-foreground/70">
+          Goal{" "}
+          <span className="font-semibold text-foreground">
+            {formatDuration(dailyGoalMinutes)}
+          </span>
+          /day
         </p>
       </div>
       <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4">
@@ -2288,26 +2295,42 @@ function WorklogGoalRow({
           value={`${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`}
         />
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-4">
-        <div className="min-w-[240px] flex-1">
-          <div className="h-2 overflow-hidden rounded-full bg-muted/45">
-            <div
-              className="h-full rounded-full bg-primary/60"
-              style={{ width: `${goalCoveragePercent}%` }}
-            />
-          </div>
+      <div className="mt-5">
+        <div className="h-2 overflow-hidden rounded-full bg-muted/45">
+          <div
+            className="h-full rounded-full bg-primary/60"
+            style={{ width: `${goalCoveragePercent}%` }}
+          />
         </div>
-        <p className="text-xs text-muted-foreground">
-          {loggedDaysCount
-            ? `You average ${goalCoveragePercent}% of your daily goal on active days. Avg gap is ${formatDuration(remainingGapMinutes)}/day.`
-            : "Log time to start measuring against your daily goal."}
-        </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-x-6 gap-y-1">
+          <p className="text-xs text-foreground/70">
+            {loggedDaysCount ? (
+              <>
+                You average{" "}
+                <span className="font-semibold text-foreground">
+                  {goalCoveragePercent}%
+                </span>{" "}
+                of your daily goal on active days. Avg gap is{" "}
+                <span className="font-semibold text-foreground">
+                  {formatDuration(remainingGapMinutes)}/day
+                </span>
+                .
+              </>
+            ) : (
+              "Log time to start measuring against your daily goal."
+            )}
+          </p>
+          {totalMinutes > 0 && (
+            <p className="shrink-0 text-xs text-foreground/70">
+              Total{" "}
+              <span className="font-semibold text-foreground">
+                {formatDuration(totalMinutes)}
+              </span>{" "}
+              tracked this year.
+            </p>
+          )}
+        </div>
       </div>
-      {totalMinutes > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Total {formatDuration(totalMinutes)} tracked this year.
-        </p>
-      )}
     </div>
   );
 }
