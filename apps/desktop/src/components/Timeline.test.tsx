@@ -181,6 +181,13 @@ describe("Timeline", () => {
     expect(screen.queryByText("Private")).not.toBeInTheDocument();
     expect(screen.getByText("[image]")).toBeInTheDocument();
     expect(screen.queryByText("Show more")).not.toBeInTheDocument();
+
+    const imageRow = screen.getByText("[image]").closest("li");
+    expect(imageRow).not.toBeNull();
+    fireEvent.click(imageRow!);
+    expect(
+      screen.getByRole("button", { name: "View capture.png" }),
+    ).toBeInTheDocument();
   });
 
   it("pans the image on mouse drag and resets on the reset button", async () => {

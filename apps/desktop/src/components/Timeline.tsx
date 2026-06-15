@@ -1,5 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
+  ChevronDown,
   Clock4,
   ExternalLink,
   History,
@@ -230,18 +231,36 @@ interface EntryProps {
 function CompactTimelineEntry({
   entry,
   attachments,
+  revisions,
+  historyOpen,
+  onEdit,
   onHistory,
+  onRestoreRevision,
   onTrash,
 }: EntryProps) {
+  const [expanded, setExpanded] = useState(false);
   const summary = compactSummary(entry.contentMarkdown, attachments.length);
-  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
+  const hasDuration = entry.durationMinutes != null && entry.durationMinutes > 0;
 
   return (
     <li
-      className="group relative grid min-h-7 min-w-0 grid-cols-[16px_62px_66px_34px_minmax(0,1fr)_44px] items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/35"
+      className={cn(
+        "group relative grid min-h-7 min-w-0 cursor-pointer gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/35",
+        expanded
+          ? "grid-cols-[16px_62px_minmax(0,1fr)] items-start"
+          : hasDuration
+            ? "grid-cols-[16px_62px_66px_max-content_minmax(0,1fr)_44px] items-center"
+            : "grid-cols-[16px_62px_66px_minmax(0,1fr)_44px] items-center",
+      )}
       data-entry-id={entry.id}
+      onClick={() => setExpanded((current) => !current)}
     >
-      <div className="relative flex h-full items-center justify-center">
+      <div
+        className={cn(
+          "relative flex justify-center",
+          expanded ? "items-start pt-4" : "h-full items-center",
+        )}
+      >
         <span
           aria-hidden
           className={cn(
@@ -251,78 +270,98 @@ function CompactTimelineEntry({
         />
         <span
           aria-hidden
-          className="absolute bottom-[-0.5rem] top-1/2 w-px border-l border-border/35 group-last:hidden"
+          className={cn(
+            "absolute bottom-[-0.5rem] w-px border-l border-border/35 group-last:hidden",
+            expanded ? "top-5" : "top-1/2",
+          )}
         />
       </div>
 
       <time
-        className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground"
+        className={cn(
+          "whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground",
+          expanded && "pt-3",
+        )}
         dateTime={entry.occurredAt}
       >
         {formatMessageTimestamp(entry.occurredAt)}
       </time>
 
-      <span
-        className={cn(
-          "inline-flex h-[17px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.03em]",
-          TYPE_TOKEN[entry.entryType],
-        )}
-      >
-        <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
-      </span>
-
-      <span className="flex min-w-0 items-center justify-start">
-        {entry.durationMinutes != null && entry.durationMinutes > 0 ? (
+      {!expanded && (
+        <>
           <span
-            aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-            className="inline-flex h-4 max-w-full items-center rounded bg-muted/55 px-1.5 font-mono text-[9px] text-foreground/75"
+            className={cn(
+              "inline-flex h-[17px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.03em]",
+              TYPE_TOKEN[entry.entryType],
+            )}
           >
-            {formatDuration(entry.durationMinutes)}
+            <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
           </span>
-        ) : attachments.length > 0 && summary.hasText ? (
-          <span className="font-mono text-[9px] text-muted-foreground">
-            image
-          </span>
-        ) : null}
-      </span>
 
-      <span
-        className={cn(
-          "min-w-0 truncate text-xs leading-5",
-          summary.hasText ? "text-foreground" : "text-muted-foreground",
-        )}
-        title={summary.text}
-      >
-        {summary.text}
-      </span>
+          {hasDuration && (
+            <span className="flex min-w-0 items-center justify-start">
+              <span
+                aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
+                className="inline-flex h-4 max-w-full items-center whitespace-nowrap rounded bg-muted/55 px-1.5 font-mono text-[9px] text-foreground/75"
+              >
+                {formatDuration(entry.durationMinutes)}
+              </span>
+            </span>
+          )}
 
-      <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <Button
-          aria-label="Revision history"
-          className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
-          onClick={() => void onHistory(entry.id)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <History />
-        </Button>
-        {canTrash && (
-          <Button
-            aria-label="Move entry to trash"
-            className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
-            onClick={() => void onTrash(entry.id)}
-            size="icon-sm"
-            variant="ghost"
+          <span
+            className={cn(
+              "min-w-0 truncate text-xs leading-5",
+              summary.hasText ? "text-foreground" : "text-muted-foreground",
+            )}
+            title={summary.text}
           >
-            <Trash2 />
-          </Button>
-        )}
-      </div>
+            {summary.text}
+          </span>
+
+          <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <Button
+              aria-label="Expand entry"
+              className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded(true);
+              }}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronDown className="transition-transform duration-150" />
+            </Button>
+          </div>
+        </>
+      )}
+
+      {expanded && (
+        <TimelineEntryCard
+          attachments={attachments}
+          className="col-start-3 col-end-4"
+          entry={entry}
+          historyOpen={historyOpen}
+          onCollapse={() => setExpanded(false)}
+          onEdit={onEdit}
+          onHistory={onHistory}
+          onRestoreRevision={onRestoreRevision}
+          onTrash={onTrash}
+          revisions={revisions}
+          showRailPointer={false}
+        />
+      )}
     </li>
   );
 }
 
-function TimelineEntry({
+interface TimelineEntryCardProps extends EntryProps {
+  className?: string;
+  onCollapse?: () => void;
+  showRailPointer?: boolean;
+}
+
+function TimelineEntryCard({
   entry,
   attachments,
   revisions,
@@ -331,7 +370,10 @@ function TimelineEntry({
   onHistory,
   onRestoreRevision,
   onTrash,
-}: EntryProps) {
+  className,
+  onCollapse,
+  showRailPointer = true,
+}: TimelineEntryCardProps) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(entry.contentMarkdown);
   const [expanded, setExpanded] = useState(false);
@@ -350,32 +392,16 @@ function TimelineEntry({
   const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
 
   return (
-    <li
-      className={cn(
-        "group relative grid grid-cols-[50px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5",
-      )}
-      data-entry-id={entry.id}
-    >
-      <time
-        className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
-        dateTime={entry.occurredAt}
+    <>
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-col gap-2 rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 group-hover:border-border group-hover:bg-card group-hover:shadow-md",
+          showRailPointer &&
+            "before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70",
+          className,
+        )}
+        onClick={(event) => event.stopPropagation()}
       >
-        <span className="text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground">
-          {formatMessageTimestamp(entry.occurredAt)}
-        </span>
-      </time>
-
-      <div className="relative z-10 flex translate-x-px justify-center pt-4">
-        <span
-          aria-hidden
-          className={cn(
-            "z-10 size-2.5 rounded-full ring-[5px] ring-background transition-transform duration-150 group-hover:scale-125",
-            TYPE_DOT[entry.entryType],
-          )}
-        />
-      </div>
-
-      <div className="relative flex min-w-0 flex-col gap-2 rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70 group-hover:border-border group-hover:bg-card group-hover:shadow-md">
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
           <span
             className={cn(
@@ -526,51 +552,116 @@ function TimelineEntry({
             </CardContent>
           </Card>
         )}
-      </div>
 
-      {!editing && (
-        <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-          {canEdit && (
-            <Button
-              aria-label="Edit entry"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => setEditing(true)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <SquarePen />
-            </Button>
-          )}
-          {canEdit && (
-            <Button
-              aria-label="Revision history"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => void onHistory(entry.id)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <History />
-            </Button>
-          )}
-          {canTrash && (
-            <Button
-              aria-label="Move entry to trash"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => void onTrash(entry.id)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Trash2 />
-            </Button>
-          )}
-        </div>
-      )}
+        {!editing && (
+          <div
+            className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {canEdit && (
+              <Button
+                aria-label="Edit entry"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => setEditing(true)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <SquarePen />
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                aria-label="Revision history"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => void onHistory(entry.id)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <History />
+              </Button>
+            )}
+            {canTrash && (
+              <Button
+                aria-label="Move entry to trash"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => void onTrash(entry.id)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Trash2 />
+              </Button>
+            )}
+            {onCollapse && (
+              <Button
+                aria-label="Collapse entry"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={onCollapse}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronDown className="rotate-180" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       <ImageViewerDialog
         attachment={viewingImage}
         onOpenChange={(open) => {
           if (!open) setViewingImage(null);
         }}
+      />
+    </>
+  );
+}
+
+function TimelineEntry({
+  entry,
+  attachments,
+  revisions,
+  historyOpen,
+  onEdit,
+  onHistory,
+  onRestoreRevision,
+  onTrash,
+}: EntryProps) {
+  return (
+    <li
+      className={cn(
+        "group relative grid grid-cols-[50px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5",
+      )}
+      data-entry-id={entry.id}
+    >
+      <time
+        className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
+        dateTime={entry.occurredAt}
+      >
+        <span className="text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground">
+          {formatMessageTimestamp(entry.occurredAt)}
+        </span>
+      </time>
+
+      <div className="relative z-10 flex translate-x-px justify-center pt-4">
+        <span
+          aria-hidden
+          className={cn(
+            "z-10 size-2.5 rounded-full ring-[5px] ring-background transition-transform duration-150 group-hover:scale-125",
+            TYPE_DOT[entry.entryType],
+          )}
+        />
+      </div>
+
+      <TimelineEntryCard
+        attachments={attachments}
+        entry={entry}
+        historyOpen={historyOpen}
+        onEdit={onEdit}
+        onHistory={onHistory}
+        onRestoreRevision={onRestoreRevision}
+        onTrash={onTrash}
+        revisions={revisions}
+        showRailPointer
       />
     </li>
   );
