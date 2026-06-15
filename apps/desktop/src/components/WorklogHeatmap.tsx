@@ -152,7 +152,7 @@ export function WorklogHeatmap({
         </h2>
         <div
           aria-label="Intensity legend, less to more"
-          className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-foreground/70"
+          className="flex items-center gap-1.5 text-[11px] font-normal text-foreground/70"
         >
           <span className="mr-0.5">Less</span>
           {HEATMAP_LEVELS.map((level) => (

@@ -1980,6 +1980,14 @@ function WorklogMetricsView({
             year={selectedYear}
           />
 
+          <WorklogGoalRow
+            averageActiveDayMinutes={averageActiveDayMinutes}
+            dailyGoalMinutes={dailyGoalMinutes}
+            goalCoveragePercent={goalCoveragePercent}
+            loggedDaysCount={loggedDays.length}
+            remainingGapMinutes={remainingGapMinutes}
+          />
+
           <WorklogHeatmap
             days={heatmapDays}
             goalMinutes={dailyGoalMinutes}
@@ -2008,17 +2016,6 @@ function WorklogMetricsView({
               onSelectTask={onSelectTask}
             />
           </div>
-
-          <WorklogGoalRow
-            averageActiveDayMinutes={averageActiveDayMinutes}
-            bestDay={bestDay}
-            dailyGoalMinutes={dailyGoalMinutes}
-            goalCoveragePercent={goalCoveragePercent}
-            goalHitDays={goalHitDays}
-            loggedDaysCount={loggedDays.length}
-            remainingGapMinutes={remainingGapMinutes}
-            totalMinutes={totalMinutes}
-          />
 
           <WorklogPeriodBreakdown
             dailyGoalMinutes={dailyGoalMinutes}
@@ -2083,11 +2080,15 @@ function WorklogMetricsHeader({
 }) {
   return (
     <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-4 bg-card/70 px-6 backdrop-blur supports-[backdrop-filter]:bg-card/55">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2.5">
         <BarChart3 className="size-4 shrink-0 text-foreground/80" />
         <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
           WorkLog
         </h1>
+        <span className="text-foreground/30">/</span>
+        <span className="truncate text-sm font-normal text-foreground/70">
+          Time spent across tasks
+        </span>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Select
@@ -2098,7 +2099,7 @@ function WorklogMetricsHeader({
             aria-label="Select worklog year"
             className="h-7 w-[96px] text-xs"
           >
-            <Calendar className="mr-1 size-3.5 text-muted-foreground" />
+            <Calendar className="mr-1 size-3.5 text-foreground/70" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -2233,104 +2234,60 @@ interface WorklogTaskTotal {
 
 function WorklogGoalRow({
   averageActiveDayMinutes,
-  bestDay,
   dailyGoalMinutes,
   goalCoveragePercent,
-  goalHitDays,
   loggedDaysCount,
   remainingGapMinutes,
-  totalMinutes,
 }: {
   averageActiveDayMinutes: number;
-  bestDay: WorklogDay | null;
   dailyGoalMinutes: number;
   goalCoveragePercent: number;
-  goalHitDays: number;
   loggedDaysCount: number;
   remainingGapMinutes: number;
-  totalMinutes: number;
 }) {
+  // Compact insight strip: the only data here that isn't already
+  // surfaced above is the coverage bar + the average gap. The
+  // duplicate summary metrics (best day, goal hit, avg active day)
+  // are dropped — they're available in the summary strip and the
+  // heatmap footer, no need to repeat them.
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-medium">Goal context</h2>
-          <p className="mt-1 text-xs text-foreground/70">
-            How the year stacks up against the daily{" "}
-            <span className="font-semibold text-foreground">
-              {formatDuration(dailyGoalMinutes)}
-            </span>{" "}
-            target.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <p className="text-xs text-foreground/70">
-          Goal{" "}
+          <span className="font-normal">Goal context</span>
+          <span className="mx-2 text-foreground/40">·</span>
           <span className="font-semibold text-foreground">
             {formatDuration(dailyGoalMinutes)}
           </span>
-          /day
+          <span className="font-normal">/day</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {formatDuration(averageActiveDayMinutes)}
+          </span>
+          <span className="font-normal"> avg active day</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {goalCoveragePercent}%
+          </span>
+          <span className="font-normal"> coverage</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {formatDuration(remainingGapMinutes)}
+          </span>
+          <span className="font-normal"> avg gap/day</span>
         </p>
       </div>
-      <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCell
-          label="Daily goal"
-          value={formatDuration(dailyGoalMinutes)}
-        />
-        <MetricCell
-          label="Avg active day"
-          value={formatDuration(averageActiveDayMinutes)}
-        />
-        <MetricCell
-          label="Best day"
-          value={
-            bestDay
-              ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
-                  bestDay.minutes,
-                )}`
-              : "—"
-          }
-        />
-        <MetricCell
-          label="Goal hit"
-          value={`${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`}
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/45">
+        <div
+          className="h-full rounded-full bg-primary/60"
+          style={{ width: `${goalCoveragePercent}%` }}
         />
       </div>
-      <div className="mt-5">
-        <div className="h-2 overflow-hidden rounded-full bg-muted/45">
-          <div
-            className="h-full rounded-full bg-primary/60"
-            style={{ width: `${goalCoveragePercent}%` }}
-          />
-        </div>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-x-6 gap-y-1">
-          <p className="text-xs text-foreground/70">
-            {loggedDaysCount ? (
-              <>
-                You average{" "}
-                <span className="font-semibold text-foreground">
-                  {goalCoveragePercent}%
-                </span>{" "}
-                of your daily goal on active days. Avg gap is{" "}
-                <span className="font-semibold text-foreground">
-                  {formatDuration(remainingGapMinutes)}/day
-                </span>
-                .
-              </>
-            ) : (
-              "Log time to start measuring against your daily goal."
-            )}
-          </p>
-          {totalMinutes > 0 && (
-            <p className="shrink-0 text-xs text-foreground/70">
-              Total{" "}
-              <span className="font-semibold text-foreground">
-                {formatDuration(totalMinutes)}
-              </span>{" "}
-              tracked this year.
-            </p>
-          )}
-        </div>
-      </div>
+      {!loggedDaysCount && (
+        <p className="mt-2 text-xs text-foreground/70">
+          Log time to start measuring against your daily goal.
+        </p>
+      )}
     </div>
   );
 }
@@ -2345,19 +2302,38 @@ function WorklogTaskBreakdown({
   onSelectTask: (id: string) => void;
 }) {
   const visible = items.slice(0, 5);
-  const max = Math.max(1, ...items.map((item) => item.minutes));
   return (
-    <div className="flex h-full min-h-[300px] flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+    <div className="flex h-full min-h-[300px] flex-col">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">Time by task</h2>
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-sm font-medium">Time by task</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                aria-label="About Time by task"
+                className="inline-flex size-4 items-center justify-center rounded text-foreground/40 transition-colors hover:bg-accent/40 hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                type="button"
+              >
+                <Info className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              className="max-w-[240px] text-xs leading-relaxed"
+              side="bottom"
+            >
+              The top 5 tasks you've logged time against this year, ranked by
+              total time. Click any row to open the task in the workspace.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <span className="text-[11px] font-normal text-foreground/70">
           Top {visible.length}
         </span>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-xs font-normal text-foreground/70">
         Tasks consuming the most time this year.
       </p>
-      <div className="mt-3 flex-1 space-y-1.5">
+      <div className="mt-3 flex-1 divide-y divide-border/60">
         {visible.map((item) => {
           const token = taskToken(item.taskTitle);
           const title = token
@@ -2365,29 +2341,19 @@ function WorklogTaskBreakdown({
             : item.taskTitle;
           return (
             <button
-              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
+              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
               key={item.taskId}
               onClick={() => onSelectTask(item.taskId)}
               type="button"
             >
-              <span className="min-w-0">
-                <span className="flex min-w-0 items-center gap-2">
-                  {token && (
-                    <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                      {token}
-                    </span>
-                  )}
-                  <span className="truncate text-xs font-medium text-foreground">
-                    {title}
+              <span className="flex min-w-0 items-center gap-2">
+                {token && (
+                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-foreground/70">
+                    {token}
                   </span>
-                </span>
-                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted/45">
-                  <span
-                    className="block h-full rounded-full bg-primary/55"
-                    style={{
-                      width: `${Math.max(4, (item.minutes / max) * 100)}%`,
-                    }}
-                  />
+                )}
+                <span className="truncate text-xs font-medium text-foreground">
+                  {title}
                 </span>
               </span>
               <span className="font-mono text-xs text-foreground">
@@ -2397,14 +2363,16 @@ function WorklogTaskBreakdown({
           );
         })}
         {items.length > 1 && items.length <= 5 && (
-          <p className="px-2 pt-1 text-xs text-muted-foreground">{emptyHint}</p>
-        )}
-        {!items.length && (
-          <p className="grid h-full place-items-center py-6 text-center text-xs text-muted-foreground">
-            No task time in this range.
+          <p className="pt-2 text-xs font-normal text-foreground/70">
+            {emptyHint}
           </p>
         )}
       </div>
+      {!items.length && (
+        <p className="mt-2 grid flex-1 place-items-center py-6 text-center text-xs font-normal text-foreground/70">
+          No task time in this range.
+        </p>
+      )}
     </div>
   );
 }
@@ -2593,7 +2561,7 @@ function WorklogPeriodBreakdown({
                 selected
                   ? "bg-accent/45 text-foreground"
                   : "hover:bg-accent/30",
-                !hasProgress && "text-muted-foreground",
+                !hasProgress && "text-foreground/50",
               )}
               key={item.key}
               onClick={() => onSelect(item)}
@@ -2612,7 +2580,7 @@ function WorklogPeriodBreakdown({
               <span
                 className={cn(
                   "whitespace-nowrap text-right font-mono text-xs tabular-nums",
-                  hasProgress ? "text-foreground" : "text-muted-foreground",
+                  hasProgress ? "text-foreground" : "text-foreground/60",
                 )}
               >
                 {formatDuration(item.minutes)}
@@ -2633,14 +2601,14 @@ function WorklogPeriodBreakdown({
           );
         })}
         {!activeItems.length && (
-          <p className="py-8 text-center text-xs text-muted-foreground">
+          <p className="py-8 text-center text-xs font-normal text-foreground/70">
             No logged time yet.
           </p>
         )}
       </div>
       {!!activeItems.length && activeItems.length > 5 && (
         <button
-          className="mt-2 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="mt-2 self-start text-xs font-normal text-foreground/70 transition-colors hover:text-foreground"
           onClick={() => onExpandedChange(!expanded)}
           type="button"
         >
@@ -2695,10 +2663,21 @@ function WorklogInspector({
           <span className="text-muted-foreground/50">·</span>
           <p className="truncate text-sm text-foreground">{label}</p>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {formatDuration(minutes)} logged · {taskCount} task
+        <p className="text-xs text-foreground/70">
+          <span className="font-semibold text-foreground">
+            {formatDuration(minutes)}
+          </span>{" "}
+          logged ·{" "}
+          <span className="font-semibold text-foreground">{taskCount}</span>{" "}
+          task
           {taskCount === 1 ? "" : "s"}
-          {loading && " · Loading…"}
+          {loading && (
+            <>
+              {" "}
+              <span className="text-foreground/40">·</span>{" "}
+              <span className="font-normal text-foreground/70">Loading…</span>
+            </>
+          )}
         </p>
       </div>
 
@@ -2723,7 +2702,7 @@ function WorklogInspector({
               </time>
               <span className="flex min-w-0 items-center gap-2">
                 {token && (
-                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-foreground/70">
                     {token}
                   </span>
                 )}
@@ -2731,7 +2710,7 @@ function WorklogInspector({
                   {title}
                 </span>
               </span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-xs font-normal text-foreground/70">
                 {entry.folderName ?? "No folder"}
               </span>
               <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums text-foreground">
@@ -2741,7 +2720,7 @@ function WorklogInspector({
           );
         })}
         {!scopedEntries.length && (
-          <div className="grid place-items-center px-4 py-10 text-center text-sm text-muted-foreground">
+          <div className="grid place-items-center px-4 py-10 text-center text-sm font-normal text-foreground/70">
             {kind === "day"
               ? "Select a day from the heatmap or chart to inspect logged work."
               : `No logged time in this ${periodKindLabel}.`}
