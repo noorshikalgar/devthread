@@ -272,7 +272,7 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
   );
-  const selectedTask = useMemo(
+  const rawSelectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
     [selectedId, tasks],
   );
@@ -283,6 +283,13 @@ export default function App() {
   const archivedTasks = useMemo(
     () => tasks.filter((task) => task.status === "archived"),
     [tasks],
+  );
+  const selectedTask = useMemo(
+    () =>
+      workspaceMode === "tasks" && rawSelectedTask?.status !== "archived"
+        ? rawSelectedTask
+        : null,
+    [rawSelectedTask, workspaceMode],
   );
 
   // The archive view mutates `selectedId` so the read-only TaskHeader
@@ -298,14 +305,14 @@ export default function App() {
     const next = workspaceMode;
     if (prev === "tasks" && next !== "tasks") {
       // Heading out of the task view — remember the active pick.
-      if (selectedTask && selectedTask.status !== "archived") {
+      if (rawSelectedTask && rawSelectedTask.status !== "archived") {
         lastActiveSelectedIdRef.current = selectedId;
       }
     } else if (prev !== "tasks" && next === "tasks") {
       // Coming back — clear out any archive selection that bled in
       // and restore the previous active pick (or the first active
       // task as a fallback).
-      if (selectedTask && selectedTask.status === "archived") {
+      if (rawSelectedTask && rawSelectedTask.status === "archived") {
         const remembered = lastActiveSelectedIdRef.current;
         const stillValid =
           remembered &&
@@ -321,7 +328,20 @@ export default function App() {
       }
     }
     previousWorkspaceModeRef.current = next;
-  }, [workspaceMode, selectedId, selectedTask, tasks]);
+  }, [workspaceMode, selectedId, rawSelectedTask, tasks]);
+
+  useEffect(() => {
+    if (workspaceMode !== "tasks") return;
+    if (!rawSelectedTask || rawSelectedTask.status !== "archived") {
+      if (rawSelectedTask) {
+        lastActiveSelectedIdRef.current = rawSelectedTask.id;
+      }
+      return;
+    }
+
+    const firstActive = tasks.find((task) => task.status !== "archived");
+    setSelectedId(firstActive?.id ?? null);
+  }, [workspaceMode, rawSelectedTask, tasks]);
 
   useEffect(() => {
     void loadTasks();
@@ -499,8 +519,11 @@ export default function App() {
       setTasks(next);
       const saved = localStorage.getItem(SELECTED_TASK_KEY);
       if (!selectedId || !next.some((task) => task.id === selectedId)) {
+        const activeTasks = next.filter((task) => task.status !== "archived");
         setSelectedId(
-          next.find((task) => task.id === saved)?.id ?? next[0]?.id ?? null,
+          activeTasks.find((task) => task.id === saved)?.id ??
+            activeTasks[0]?.id ??
+            null,
         );
       }
     } catch (cause) {

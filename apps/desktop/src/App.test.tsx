@@ -294,6 +294,37 @@ describe("TaskHeader", () => {
     );
   });
 
+  it("closes quick link tooltip when the quick link menu opens and closes", async () => {
+    render(
+      <TaskHeader
+        onLogTime={vi.fn()}
+        onUpdate={vi.fn()}
+        quickLinks={[quickLink]}
+        task={task}
+        totalMinutes={0}
+      />,
+    );
+
+    const trigger = screen.getByLabelText("Open quick link: DevThread flow");
+    fireEvent.mouseEnter(trigger);
+    expect(await screen.findByText("DevThread flow")).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("menuitem", { name: /Copy link/ }))
+      .toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("DevThread flow")).not.toBeInTheDocument(),
+    );
+
+    fireEvent.pointerDown(document.body);
+    fireEvent.click(document.body);
+    await waitFor(() =>
+      expect(screen.queryByRole("menuitem", { name: /Copy link/ }))
+        .not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("DevThread flow")).not.toBeInTheDocument();
+  });
+
   it("hides the work-session quick action for done tasks", () => {
     render(
       <TaskHeader
@@ -335,6 +366,7 @@ describe("TaskHeader", () => {
     expect(
       screen.queryByLabelText("Start work session"),
     ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("More task actions")).not.toBeInTheDocument();
   });
 
   it("readOnly mode replaces the status popover with a static chip", () => {
@@ -746,6 +778,55 @@ describe("App workspace mode transitions", () => {
     expect(
       screen.queryByLabelText("Status: Archived."),
     ).not.toBeInTheDocument();
+  });
+
+  it("moves selection off an active-list task after archiving it from task view", async () => {
+    const doneTask: Task = {
+      ...activeTask,
+      id: "done-1",
+      title: "Done pick",
+      status: "done",
+    };
+    vi.mocked(api.listTasks).mockResolvedValue([
+      doneTask,
+      activeTask,
+      archivedTask,
+    ]);
+    vi.mocked(api.updateTask).mockResolvedValue({
+      ...doneTask,
+      status: "archived",
+    });
+    vi.mocked(api.createEntry).mockResolvedValue({
+      id: "status-entry",
+      taskId: doneTask.id,
+      entryType: "status",
+      contentMarkdown: "Status changed from Done to Archived.",
+      visibility: "private",
+      occurredAt: "2026-06-05T00:00:00Z",
+      createdAt: "2026-06-05T00:00:00Z",
+      updatedAt: "2026-06-05T00:00:00Z",
+      durationMinutes: null,
+    });
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Status: Done. Click to change."),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("More task actions"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Archive task/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Status: Active. Click to change."),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByLabelText("Status: Archived. Click to change."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Status: Archived.")).not.toBeInTheDocument();
   });
 
   it("hydrates the active task from the per-task cache without re-fetching", async () => {

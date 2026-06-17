@@ -1,5 +1,6 @@
 import {
   ArchiveRestore,
+  Check,
   ChevronRight,
   Copy,
   FileSpreadsheet,
@@ -400,7 +401,7 @@ function ActiveSidebar({
                           hasDraft={hasDraft(task.id)}
                           status={task.status}
                         />
-                        <span className="w-full truncate text-sm font-normal text-foreground">
+                        <span className="w-full truncate text-sm font-normal text-current">
                           {task.title}
                         </span>
                       </button>
@@ -1269,7 +1270,7 @@ function TaskRow({
           variant="ghost"
         >
           <TaskStatusDot hasDraft={hasDraft} status={task.status} />
-          <span className="w-full flex-1 truncate text-sm font-normal text-foreground select-text">
+          <span className="w-full flex-1 truncate text-sm font-normal text-current select-text">
             {task.title}
           </span>
           <span
@@ -1411,20 +1412,29 @@ function ArchiveRow({
           : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
       )}
     >
-      <input
-        aria-label={`Select ${task.title}`}
-        checked={checked}
-        className="size-3.5 shrink-0 accent-primary"
-        onChange={onToggleChecked}
-        onClick={(event) => event.stopPropagation()}
-        type="checkbox"
-      />
+      <span className="relative grid size-3.5 shrink-0 place-items-center cursor-pointer">
+        <input
+          aria-label={`Select ${task.title}`}
+          checked={checked}
+          className="peer size-3.5 cursor-pointer appearance-none rounded-[3px] border border-border bg-background/60 transition-colors checked:border-primary checked:bg-primary hover:border-ring/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={onToggleChecked}
+          onClick={(event) => event.stopPropagation()}
+          type="checkbox"
+        />
+        {checked && (
+          <Check
+            aria-hidden
+            className="pointer-events-none absolute size-3 text-primary-foreground"
+            strokeWidth={3}
+          />
+        )}
+      </span>
       <button
         className="min-w-0 flex-1 text-left"
         onClick={onSelect}
         type="button"
       >
-        <span className="block w-full truncate text-sm font-normal text-foreground">
+        <span className="block w-full truncate text-sm font-normal text-current">
           {task.title}
         </span>
       </button>

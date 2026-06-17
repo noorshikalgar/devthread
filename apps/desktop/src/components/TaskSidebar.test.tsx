@@ -130,6 +130,38 @@ describe("TaskSidebar", () => {
     expect(screen.getByText("Loose")).toBeInTheDocument();
   });
 
+  it("keeps loose task titles muted unless selected", () => {
+    const tasks: Task[] = [
+      { ...baseTask, id: "t-1", title: "Selected loose", status: "planned" },
+      { ...baseTask, id: "t-2", title: "Quiet loose", status: "planned" },
+    ];
+
+    render(
+      <TaskSidebar mode="active"
+        folders={[]}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        selectedId="t-1"
+        tasks={tasks}
+      />,
+    );
+
+    expect(screen.getByText("Selected loose")).toHaveClass("text-current");
+    expect(screen.getByText("Selected loose").closest("button")).toHaveClass(
+      "text-foreground",
+    );
+    expect(screen.getByText("Quiet loose")).toHaveClass("text-current");
+    expect(screen.getByText("Quiet loose").closest("button")).toHaveClass(
+      "text-muted-foreground",
+    );
+  });
+
   it("hides empty folders and shows a no-match message while searching", () => {
     const folders: Folder[] = [
       {
@@ -569,6 +601,12 @@ describe("TaskSidebar (archive mode)", () => {
     expect(
       screen.getByLabelText("Select Stale exploration"),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Select Old spike")).toHaveClass(
+      "bg-background/60",
+    );
+    expect(screen.getByLabelText("Select Old spike")).toHaveClass(
+      "checked:bg-primary",
+    );
     // The row is a single line: just the title, no folder or
     // archive-date subtitle (mirrors the active TaskRow shape).
     expect(screen.queryByText(/Engineering/)).not.toBeInTheDocument();

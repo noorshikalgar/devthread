@@ -47,6 +47,7 @@ export function CommandPalette({
   const [regex, setRegex] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (open) {
@@ -140,6 +141,14 @@ export function CommandPalette({
 
   useEffect(() => {
     if (selectedIndex >= results.length) setSelectedIndex(0);
+  }, [results, selectedIndex]);
+
+  useEffect(() => {
+    resultRefs.current = resultRefs.current.slice(0, results.length);
+    resultRefs.current[selectedIndex]?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+    });
   }, [results, selectedIndex]);
 
   function handleKeyDown(event: React.KeyboardEvent) {
@@ -243,6 +252,9 @@ export function CommandPalette({
                     key={result.id}
                     onClick={result.onSelect}
                     onMouseEnter={() => setSelectedIndex(index)}
+                    ref={(node) => {
+                      resultRefs.current[index] = node;
+                    }}
                     type="button"
                   >
                     {result.kind === "task" && (

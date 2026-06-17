@@ -365,20 +365,20 @@ export function TaskHeader({
             </TooltipTrigger>
             <TooltipContent>Copy task summary</TooltipContent>
           </Tooltip>
-          <DropdownMenu onOpenChange={setOverflowOpen} open={overflowOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="More task actions"
-                onClick={() => setOverflowOpen(true)}
-                size="icon-sm"
-                variant="ghost"
-                title="More actions"
-              >
-                <Ellipsis />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {!readOnly && (
+          {!readOnly && (
+            <DropdownMenu onOpenChange={setOverflowOpen} open={overflowOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="More task actions"
+                  onClick={() => setOverflowOpen(true)}
+                  size="icon-sm"
+                  variant="ghost"
+                  title="More actions"
+                >
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
                   onSelect={() =>
                     void changeStatus(isArchived ? "planned" : "archived")
@@ -396,18 +396,18 @@ export function TaskHeader({
                     </>
                   )}
                 </DropdownMenuItem>
-              )}
-              {onDelete && !readOnly && (
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => void onDelete(task.id)}
-                >
-                  <Trash2 className="mr-2 size-3.5" />
-                  Delete permanently
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {onDelete && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => void onDelete(task.id)}
+                  >
+                    <Trash2 className="mr-2 size-3.5" />
+                    Delete permanently
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -804,6 +804,7 @@ function QuickLinkButton({
             </p>
           </div>
         }
+        disabled={menuOpen}
       >
         <DropdownMenuTrigger asChild>
           <Button
@@ -881,9 +882,11 @@ function measureTip(): Size {
 function HoverTooltip({
   content,
   children,
+  disabled = false,
 }: {
   content: ReactNode;
   children: ReactElement<Record<string, unknown>>;
+  disabled?: boolean;
 }) {
   const triggerRef = useRef<HTMLElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -894,6 +897,7 @@ function HoverTooltip({
   } | null>(null);
 
   function showTip() {
+    if (disabled) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const anchor = anchorFromRect(rect);
@@ -903,6 +907,10 @@ function HoverTooltip({
   function hideTip() {
     setTip(null);
   }
+
+  useEffect(() => {
+    if (disabled) setTip(null);
+  }, [disabled]);
 
   useLayoutEffect(() => {
     if (!tip || !tipRef.current) return;
@@ -929,14 +937,6 @@ function HoverTooltip({
     ),
     onMouseLeave: composeHover(
       childProps.onMouseLeave as ((event: SyntheticEvent) => void) | undefined,
-      hideTip,
-    ),
-    onFocus: composeHover(
-      childProps.onFocus as ((event: SyntheticEvent) => void) | undefined,
-      showTip,
-    ),
-    onBlur: composeHover(
-      childProps.onBlur as ((event: SyntheticEvent) => void) | undefined,
       hideTip,
     ),
   } as Partial<React.HTMLAttributes<HTMLElement>> & {

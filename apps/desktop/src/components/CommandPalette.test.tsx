@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "./CommandPalette";
 import { renderWithProviders as render } from "../test-utils";
@@ -171,5 +171,53 @@ describe("CommandPalette", () => {
     expect(
       screen.queryByText("Investigate flaky test"),
     ).not.toBeInTheDocument();
+  });
+
+  it("scrolls the active result into view during keyboard navigation", async () => {
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const manyTasks: Task[] = Array.from({ length: 20 }, (_, index) => ({
+      ...tasks[0],
+      id: `scroll-${index}`,
+      title: `Scroll target ${index}`,
+    }));
+
+    try {
+      render(
+        <CommandPalette
+          entries={[]}
+          folders={[]}
+          onOpenChange={() => {}}
+          onSelectEntry={() => {}}
+          onSelectFolder={() => {}}
+          onSelectTask={() => {}}
+          open
+          tasks={manyTasks}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/Search tasks/);
+      fireEvent.change(input, { target: { value: "scroll" } });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      scrollIntoView.mockClear();
+
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+
+      await waitFor(() =>
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          block: "nearest",
+          inline: "nearest",
+        }),
+      );
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+    }
   });
 });
