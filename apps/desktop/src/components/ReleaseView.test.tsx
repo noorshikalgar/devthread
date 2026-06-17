@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReleaseView } from "./ReleaseView";
 import type { Folder, Release, Task } from "@/lib/types";
@@ -336,5 +342,74 @@ describe("ReleaseView tasks tab", () => {
     expect(
       screen.getByLabelText("Save release notes template"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ReleaseView sidebar", () => {
+  it("uses the compact release sidebar shell with searchable rows", () => {
+    const quietRelease: Release = {
+      ...release,
+      name: "Quiet shell",
+      version: "0.4.0",
+    };
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release, quietRelease]}
+        tasks={[]}
+      />,
+    );
+
+    expect(screen.getByLabelText("New release")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search releases")).toBeInTheDocument();
+
+    const nav = screen.getByRole("navigation", { name: "Releases" });
+    expect(within(nav).getByText("All Drafts")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search releases"), {
+      target: { value: "quiet" },
+    });
+
+    expect(within(nav).getByText("Search results")).toBeInTheDocument();
+    expect(within(nav).getByText("Quiet shell")).toBeInTheDocument();
+    expect(within(nav).queryByText("v0.3")).not.toBeInTheDocument();
+  });
+
+  it("resizes and resets the release sidebar width", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        tasks={[]}
+      />,
+    );
+
+    const resizer = screen.getByLabelText("Resize release sidebar");
+    const sidebarShell = resizer.parentElement as HTMLElement;
+    expect(sidebarShell).toHaveStyle({ width: "280px" });
+
+    fireEvent.mouseDown(resizer, { clientX: 280 });
+    fireEvent.mouseMove(window, { clientX: 340 });
+    fireEvent.mouseUp(window);
+
+    expect(sidebarShell).toHaveStyle({ width: "340px" });
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe(
+      "340",
+    );
+
+    fireEvent.doubleClick(resizer);
+
+    expect(sidebarShell).toHaveStyle({ width: "280px" });
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe(
+      "280",
+    );
   });
 });

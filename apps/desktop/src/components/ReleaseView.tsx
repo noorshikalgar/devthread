@@ -15,10 +15,11 @@ import {
   Save,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +61,11 @@ function formatDate(value: string) {
     year: "numeric",
   }).format(new Date(value));
 }
+
+const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
+const DEFAULT_RELEASE_SIDEBAR_WIDTH = 280;
+const MIN_RELEASE_SIDEBAR_WIDTH = 240;
+const MAX_RELEASE_SIDEBAR_WIDTH = 420;
 
 function PlaceholderButton({
   snippet,
@@ -214,11 +220,18 @@ export function ReleaseView({
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
+  const [releaseSearch, setReleaseSearch] = useState("");
   const [tasksSearch, setTasksSearch] = useState("");
   const [tasksUseRegex, setTasksUseRegex] = useState(false);
   const [tasksSearchInvalid, setTasksSearchInvalid] = useState(false);
   const [notesPane, setNotesPane] = useState<"editor" | "preview">("editor");
   const [isWideLayout, setIsWideLayout] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    clampReleaseSidebarWidth(
+      Number(localStorage.getItem(RELEASE_SIDEBAR_WIDTH_KEY)),
+    ),
+  );
+  const [resizingSidebar, setResizingSidebar] = useState(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const templateEditorRef = useRef<HTMLTextAreaElement>(null);
   const newVersionRef = useRef<HTMLInputElement>(null);
@@ -501,78 +514,182 @@ export function ReleaseView({
     }
   }
 
+  function startSidebarResize(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    setResizingSidebar(true);
+
+    function move(pointer: globalThis.MouseEvent) {
+      const nextWidth = clampReleaseSidebarWidth(
+        startWidth + pointer.clientX - startX,
+      );
+      setSidebarWidth(nextWidth);
+      localStorage.setItem(RELEASE_SIDEBAR_WIDTH_KEY, String(nextWidth));
+    }
+
+    function stop() {
+      setResizingSidebar(false);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+    }
+
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+  }
+
   const releasesSorted = useMemo(
     () => [...releases].sort((a, b) => b.name.localeCompare(a.name)),
     [releases],
   );
+  const filteredReleases = useMemo(() => {
+    const term = releaseSearch.trim().toLowerCase();
+    if (!term) return releasesSorted;
+    return releasesSorted.filter((release) =>
+      `${release.name} ${release.version ?? ""} ${
+        release.releasedAt ? "released" : "draft"
+      }`
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [releaseSearch, releasesSorted]);
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] bg-background">
+    <section className="flex min-h-0 flex-1 bg-background">
       {/* Left panel: release list */}
-      <div className="flex min-h-0 flex-col border-r border-border bg-card/60">
-        <div className="border-b border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-semibold">Releases</h1>
-              <p className="text-xs text-muted-foreground">
-                {releases.length}{" "}
-                {releases.length === 1 ? "release" : "releases"}
-              </p>
+      <div
+        className={cn(
+          "relative h-full shrink-0 overflow-hidden border-r border-border",
+          resizingSidebar && "select-none",
+        )}
+        style={{ width: sidebarWidth }}
+      >
+        <aside className="flex h-full min-h-0 flex-col bg-card/95 text-card-foreground">
+          <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
+            <div className="flex min-w-0 items-center gap-2 text-foreground/85">
+              <Calendar
+                className="size-4 shrink-0 text-current"
+                strokeWidth={1.75}
+              />
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-medium text-current">
+                  Releases
+                </h1>
+              </div>
             </div>
             <Button
+              aria-label="New release"
+              className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
               onClick={() => setNewDialogOpen(true)}
-              size="sm"
+              size="icon-sm"
+              title="New release"
               type="button"
-              variant="outline"
+              variant="ghost"
             >
-              <Plus className="size-3.5" />
-              New
+              <Plus strokeWidth={1.75} />
             </Button>
           </div>
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {releasesSorted.map((release) => {
-              const selected = selectedRelease?.name === release.name;
-              const isReleased = !!release.releasedAt;
-              return (
+          <div className="px-3.5 pb-4">
+            <div className="relative">
+              {releaseSearch ? (
                 <button
-                  className={cn(
-                    "flex w-full min-w-0 flex-col gap-0.5 rounded-md border border-transparent px-3 py-2.5 text-left hover:bg-accent/60",
-                    selected &&
-                      "border-border bg-accent text-accent-foreground",
-                  )}
-                  key={release.name}
-                  onClick={() => setSelectedName(release.name)}
+                  aria-label="Clear release search"
+                  className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onClick={() => setReleaseSearch("")}
                   type="button"
                 >
-                  <span className="truncate text-sm font-medium">
-                    {release.name}
-                  </span>
-                  {release.version && (
-                    <span className="truncate text-[11px] text-muted-foreground">
-                      {release.version}
-                    </span>
-                  )}
-                  <span className="text-[11px] text-muted-foreground">
-                    {isReleased
-                      ? formatDate(release.releasedAt!)
-                      : "Draft · not yet released"}
-                  </span>
+                  <X className="size-3.5" strokeWidth={1.75} />
                 </button>
-              );
-            })}
-            {!releasesSorted.length && (
-              <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                No releases yet.
-              </div>
-            )}
+              ) : (
+                <Search
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
+                  strokeWidth={1.75}
+                />
+              )}
+              <Input
+                aria-label="Search releases"
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
+                className="h-9 rounded-md border-border/80 bg-background/35 pl-3 pr-8 text-sm text-foreground shadow-inner shadow-black/5 placeholder:text-muted-foreground/75 focus-visible:border-ring/70"
+                maxLength={80}
+                name="devthread-release-search"
+                onChange={(event) =>
+                  setReleaseSearch(event.target.value.slice(0, 80))
+                }
+                placeholder="Search releases..."
+                spellCheck={false}
+                value={releaseSearch}
+              />
+            </div>
           </div>
-        </ScrollArea>
+          <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <nav
+              aria-label="Releases"
+              className="flex w-full min-w-0 flex-col overflow-hidden px-3.5 pb-3"
+            >
+              <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
+                {releaseSearch.trim() ? "Search results" : "All Drafts"}
+              </div>
+              <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                {filteredReleases.map((release) => {
+                  const selected = selectedRelease?.name === release.name;
+                  const isReleased = !!release.releasedAt;
+                  return (
+                    <button
+                      aria-current={selected ? "page" : undefined}
+                      className={cn(
+                        "group/release flex h-7 w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground",
+                        selected && "bg-accent/70 text-foreground",
+                      )}
+                      key={release.name}
+                      onClick={() => setSelectedName(release.name)}
+                      type="button"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          isReleased ? "bg-emerald-500" : "bg-primary",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
+                        {release.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!filteredReleases.length && (
+                <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
+                  <Calendar className="size-5 opacity-60" strokeWidth={1.75} />
+                  <span>
+                    {releases.length
+                      ? `No releases match “${releaseSearch.trim()}”.`
+                      : "No releases yet."}
+                  </span>
+                </div>
+              )}
+            </nav>
+          </ScrollArea>
+        </aside>
+        <button
+          aria-label="Resize release sidebar"
+          className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
+          onDoubleClick={() => {
+            setSidebarWidth(DEFAULT_RELEASE_SIDEBAR_WIDTH);
+            localStorage.setItem(
+              RELEASE_SIDEBAR_WIDTH_KEY,
+              String(DEFAULT_RELEASE_SIDEBAR_WIDTH),
+            );
+          }}
+          onMouseDown={startSidebarResize}
+          type="button"
+        />
       </div>
 
       {/* Right panel: release detail */}
-      <div className="flex min-h-0 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {selectedRelease ? (
           <>
             <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
@@ -1323,4 +1440,16 @@ export function ReleaseView({
       </Dialog>
     </section>
   );
+}
+
+function clampReleaseSidebarWidth(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_RELEASE_SIDEBAR_WIDTH;
+  const viewportLimit =
+    typeof window === "undefined"
+      ? MAX_RELEASE_SIDEBAR_WIDTH
+      : Math.min(
+          MAX_RELEASE_SIDEBAR_WIDTH,
+          Math.floor(window.innerWidth * 0.42),
+        );
+  return Math.min(Math.max(value, MIN_RELEASE_SIDEBAR_WIDTH), viewportLimit);
 }
