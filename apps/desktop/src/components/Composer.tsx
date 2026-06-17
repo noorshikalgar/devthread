@@ -41,6 +41,7 @@ import {
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -65,6 +66,7 @@ interface Props {
     images: PendingImage[],
   ) => Promise<void>;
   visibilityToggleRef?: { current: (() => void) | null };
+  compact?: boolean;
 }
 
 interface MentionOption {
@@ -127,7 +129,12 @@ function optionMatchesQuery(option: MentionOption, query: string): boolean {
   return option.aliases.some((alias) => alias.startsWith(normalized));
 }
 
-export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
+export function Composer({
+  taskId,
+  onSubmit,
+  visibilityToggleRef,
+  compact = false,
+}: Props) {
   const [content, setContent] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("note");
   const [saving, setSaving] = useState(false);
@@ -170,7 +177,29 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     setImages(draft?.images ?? []);
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
-    requestAnimationFrame(() => textarea.current?.focus());
+    if (!compact) requestAnimationFrame(() => textarea.current?.focus());
+  }, [compact, taskId]);
+
+  useEffect(() => {
+    function hydrateFromStore() {
+      const draft = getComposerDraft(taskId);
+      const nextContent = draft?.content ?? "";
+      const nextEntryType = draft?.entryType ?? "note";
+      const nextImages = draft?.images ?? [];
+      setContent((current) =>
+        current === nextContent ? current : nextContent,
+      );
+      setEntryType((current) =>
+        current === nextEntryType ? current : nextEntryType,
+      );
+      setImages((current) =>
+        samePendingImages(current, nextImages) ? current : nextImages,
+      );
+    }
+
+    window.addEventListener("devthread:composer-drafts", hydrateFromStore);
+    return () =>
+      window.removeEventListener("devthread:composer-drafts", hydrateFromStore);
   }, [taskId]);
 
   // Persist the in-progress draft so it survives task switches.
@@ -339,6 +368,41 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     /Mac|iPhone|iPad/i.test(navigator.platform);
   const metaKey = isMac ? "⌘" : "Ctrl";
   const submitDisabled = saving || (!content.trim() && !images.length);
+
+  if (compact) {
+    return (
+      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card/95 px-2 py-1.5 shadow-sm">
+        <Input
+          aria-label="Add quick update"
+          autoComplete="off"
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
+          onChange={(event) => changeContent(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder="Add update..."
+          value={content}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Add update"
+              className="size-7 shrink-0"
+              disabled={submitDisabled}
+              onClick={() => void submit()}
+              size="icon-sm"
+            >
+              <Send className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{metaKey} + ↵ in full composer</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
 
   return (
     <Card
@@ -580,4 +644,11 @@ function removeMentionTrigger(content: string, anchor: number, cursor: number) {
   const after = content.slice(cursor);
   const joined = `${before}${after}`.replace(/[ \t]{2,}/g, " ");
   return anchor === 0 ? joined.trimStart() : joined;
+}
+
+function samePendingImages(left: PendingImage[], right: PendingImage[]) {
+  return (
+    left.length === right.length &&
+    left.every((image, index) => image.id === right[index]?.id)
+  );
 }

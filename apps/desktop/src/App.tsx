@@ -1,6 +1,7 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowUp,
   BarChart3,
   Calendar,
   Check,
@@ -146,6 +147,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const SELECTED_TASK_KEY = "devthread:selected-task";
+const PINNED_TASKS_KEY = "devthread:pinned-tasks";
 const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
 const THEME_KEY = "devthread:theme";
 const UPDATE_AUTO_CHECK_KEY = "devthread:update-auto-check";
@@ -181,12 +183,25 @@ interface AppContextMenuState {
 
 export { TaskHeader } from "@/components/TaskHeader";
 
+function loadPinnedTaskIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PINNED_TASKS_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(
     localStorage.getItem(SELECTED_TASK_KEY),
   );
+  const [pinnedTaskIds, setPinnedTaskIds] =
+    useState<string[]>(loadPinnedTaskIds);
   const [pendingTitleEdit, setPendingTitleEdit] = useState(false);
   const [entries, setEntries] = useState<WorkLogEntry[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -348,6 +363,16 @@ export default function App() {
     void loadFolders();
     void loadReleases();
   }, []);
+
+  useEffect(() => {
+    const validIds = new Set(sidebarTasks.map((task) => task.id));
+    setPinnedTaskIds((current) => {
+      const next = current.filter((id) => validIds.has(id));
+      if (next.length === current.length) return current;
+      localStorage.setItem(PINNED_TASKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [sidebarTasks]);
 
   useEffect(() => {
     if (!updateAutoCheck) return;
@@ -569,6 +594,16 @@ export default function App() {
       setError(String(cause));
       throw cause;
     }
+  }
+
+  function togglePinnedTask(taskId: string) {
+    setPinnedTaskIds((current) => {
+      const next = current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [taskId, ...current];
+      localStorage.setItem(PINNED_TASKS_KEY, JSON.stringify(next));
+      return next;
+    });
   }
 
   async function handleTagFolderRelease(folderId: string, name: string) {
@@ -1323,8 +1358,10 @@ export default function App() {
                 onRemoveTaskRelease={handleRemoveTaskTag}
                 onRenameFolder={renameFolder}
                 onSelect={setSelectedId}
+                onTogglePin={togglePinnedTask}
                 onTagFolderRelease={handleTagFolderRelease}
                 onTagTaskRelease={handleTagTask}
+                pinnedTaskIds={pinnedTaskIds}
                 releases={releases}
                 selectedId={selectedId}
                 tasks={sidebarTasks}
@@ -1442,9 +1479,11 @@ export default function App() {
                   onEntryTypeFilterChange={setEntryTypeFilter}
                   onRegexChange={setTimelineRegex}
                   onSearchChange={setTimelineSearch}
+                  onSubmit={createEntry}
                   regex={timelineRegex}
                   search={timelineSearch}
                   searchInputRef={timelineSearchInputRef}
+                  taskId={selectedTask.id}
                 >
                   <Composer
                     onSubmit={createEntry}
@@ -3705,6 +3744,8 @@ function clampSidebarWidth(value: number) {
 
 function ThreadColumn({
   children,
+  taskId,
+  onSubmit,
   search,
   regex,
   onSearchChange,
@@ -3714,6 +3755,13 @@ function ThreadColumn({
   searchInputRef,
 }: {
   children: React.ReactNode;
+  taskId: string;
+  onSubmit: (
+    type: EntryType,
+    content: string,
+    visibility: Visibility,
+    images: PendingImage[],
+  ) => Promise<void>;
   search: string;
   regex: boolean;
   onSearchChange: (value: string) => void;
@@ -3722,6 +3770,10 @@ function ThreadColumn({
   onEntryTypeFilterChange: (value: EntryType | "all") => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
+  const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLElement | null>(null);
+  const [compactComposerVisible, setCompactComposerVisible] = useState(false);
+  const [goTopVisible, setGoTopVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -3740,8 +3792,26 @@ function ThreadColumn({
   const regexInvalid =
     regex && !!search.trim() && !safelyCompileRegex(search).valid;
 
+  useEffect(() => {
+    const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+    viewportRef.current = viewport;
+
+    function handleScroll() {
+      const top = viewportRef.current?.scrollTop ?? 0;
+      setCompactComposerVisible(top > 140);
+      setGoTopVisible(top > 700);
+    }
+
+    handleScroll();
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [taskId]);
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-col">
+    <div className="relative flex min-h-0 min-w-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 bg-card/45 px-6 py-2.5">
         <div className="relative min-w-[220px] max-w-xl flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -3848,11 +3918,31 @@ function ThreadColumn({
           </DropdownMenu>
         </div>
       </div>
-      <ScrollArea className="min-h-0 flex-1">
+      {compactComposerVisible && (
+        <div className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[920px]">
+            <Composer compact onSubmit={onSubmit} taskId={taskId} />
+          </div>
+        </div>
+      )}
+      <ScrollArea className="min-h-0 flex-1" ref={scrollRootRef}>
         <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </div>
       </ScrollArea>
+      {goTopVisible && (
+        <Button
+          aria-label="Go to top"
+          className="absolute bottom-4 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
+          onClick={() =>
+            viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+          }
+          size="icon-sm"
+          variant="secondary"
+        >
+          <ArrowUp className="size-4" />
+        </Button>
+      )}
     </div>
   );
 }

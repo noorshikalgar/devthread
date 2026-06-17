@@ -11,6 +11,7 @@ import {
   FolderPlus,
   ListTodo,
   Pencil,
+  Pin,
   Plus,
   Search,
   Tag,
@@ -81,6 +82,8 @@ interface ActiveModeProps extends CommonProps {
   newFolderDialogRef?: { current: (() => void) | null };
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
   onRemoveFolderRelease?: (folderId: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
+  pinnedTaskIds?: string[];
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
   onTagFolderRelease?: (folderId: string, name: string) => Promise<void>;
 }
@@ -140,6 +143,8 @@ function ActiveSidebar({
   newFolderDialogRef,
   onRemoveTaskRelease,
   onRemoveFolderRelease,
+  onTogglePin,
+  pinnedTaskIds = [],
   onTagTaskRelease,
   onTagFolderRelease,
   releases,
@@ -167,6 +172,7 @@ function ActiveSidebar({
   }, [newFolderDialogRef]);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [openActiveTasks, setOpenActiveTasks] = useState(true);
+  const [openPinnedTasks, setOpenPinnedTasks] = useState(true);
   const searchTerm = query.trim();
   const isSearching = searchTerm.length > 0;
 
@@ -266,6 +272,13 @@ function ActiveSidebar({
     () => filtered.filter((task) => task.status === "active"),
     [filtered],
   );
+  const pinnedTasks = useMemo(() => {
+    if (isSearching || !pinnedTaskIds.length) return [];
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    return pinnedTaskIds
+      .map((id) => byId.get(id))
+      .filter((task): task is Task => Boolean(task));
+  }, [isSearching, pinnedTaskIds, tasks]);
   const noResultsQuery = formatSearchMessageQuery(searchTerm);
 
   return (
@@ -411,6 +424,59 @@ function ActiveSidebar({
             </section>
           )}
 
+          {!isSearching && !!pinnedTasks.length && (
+            <section
+              aria-label="Pinned tasks"
+              className="flex min-w-0 flex-col overflow-hidden px-3.5 pb-3"
+            >
+              <button
+                aria-expanded={openPinnedTasks}
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                onClick={() => setOpenPinnedTasks((open) => !open)}
+                type="button"
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 transition-transform duration-150 ease-out",
+                    openPinnedTasks && "rotate-90",
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate">Pinned tasks</span>
+              </button>
+              <div
+                aria-hidden={!openPinnedTasks}
+                className={cn(
+                  "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                  openPinnedTasks
+                    ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                )}
+              >
+                <div className="flex min-w-0 flex-col gap-px overflow-hidden pt-1">
+                  {pinnedTasks.map((task) => (
+                    <TaskRow
+                      compact
+                      folders={folders}
+                      grouped={false}
+                      hasDraft={hasDraft(task.id)}
+                      isPinned={pinnedTaskIds.includes(task.id)}
+                      key={task.id}
+                      onMove={handleMove}
+                      onDeleteTask={setTaskToDelete}
+                      onRemoveTaskRelease={onRemoveTaskRelease}
+                      onSelect={onSelect}
+                      onTagTaskRelease={onTagTaskRelease}
+                      onTogglePin={onTogglePin}
+                      releases={releases}
+                      selected={selectedId === task.id}
+                      task={task}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
             <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
               {isSearching ? "Search results" : "All Tasks"}
@@ -427,6 +493,8 @@ function ActiveSidebar({
                     onRemoveTaskRelease={onRemoveTaskRelease}
                     onSelect={onSelect}
                     onTagTaskRelease={onTagTaskRelease}
+                    onTogglePin={onTogglePin}
+                    isPinned={pinnedTaskIds.includes(task.id)}
                     releases={releases}
                     selected={selectedId === task.id}
                     task={task}
@@ -451,6 +519,8 @@ function ActiveSidebar({
                     onSelect={onSelect}
                     onTagFolderRelease={onTagFolderRelease}
                     onTagTaskRelease={onTagTaskRelease}
+                    onTogglePin={onTogglePin}
+                    pinnedTaskIds={pinnedTaskIds}
                     onToggleFolder={toggleFolder}
                     releases={releases}
                     selectedId={selectedId}
@@ -473,6 +543,8 @@ function ActiveSidebar({
                 onSelect={onSelect}
                 onTagFolderRelease={onTagFolderRelease}
                 onTagTaskRelease={onTagTaskRelease}
+                onTogglePin={onTogglePin}
+                pinnedTaskIds={pinnedTaskIds}
                 onToggleFolder={toggleFolder}
                 releases={releases}
                 selectedId={selectedId}
@@ -758,6 +830,8 @@ function FolderGroup({
   onRemoveTaskRelease,
   onTagFolderRelease,
   onTagTaskRelease,
+  onTogglePin,
+  pinnedTaskIds = [],
   releases,
 }: {
   folder: FolderModel | null;
@@ -781,6 +855,8 @@ function FolderGroup({
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
   onTagFolderRelease?: (folderId: string, name: string) => Promise<void>;
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
+  pinnedTaskIds?: string[];
   releases?: Release[];
 }) {
   if (!tasks.length && !folder) return null;
@@ -995,6 +1071,8 @@ function FolderGroup({
                 onRemoveTaskRelease={onRemoveTaskRelease}
                 onSelect={onSelect}
                 onTagTaskRelease={onTagTaskRelease}
+                onTogglePin={onTogglePin}
+                isPinned={pinnedTaskIds.includes(task.id)}
                 releases={releases}
                 selected={selectedId === task.id}
                 task={task}
@@ -1239,8 +1317,11 @@ function TaskRow({
   hasDraft,
   onTagTaskRelease,
   onRemoveTaskRelease,
+  onTogglePin,
   releases,
   variant = "active",
+  isPinned = false,
+  compact = false,
 }: {
   task: Task;
   selected: boolean;
@@ -1252,8 +1333,11 @@ function TaskRow({
   hasDraft: boolean;
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
   releases?: Release[];
   variant?: "active" | "archive";
+  isPinned?: boolean;
+  compact?: boolean;
 }) {
   return (
     <ContextMenu>
@@ -1261,7 +1345,8 @@ function TaskRow({
         <Button
           aria-current={selected ? "page" : undefined}
           className={cn(
-            "group/task h-7 w-full min-w-0 justify-start gap-2 overflow-hidden rounded px-1.5 text-left text-sm shadow-none",
+            "group/task w-full min-w-0 justify-start gap-2 overflow-hidden rounded px-1.5 text-left text-sm shadow-none",
+            compact ? "h-6" : "h-7",
             selected
               ? "bg-accent/70 text-foreground"
               : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
@@ -1298,6 +1383,12 @@ function TaskRow({
           <Copy className="size-3.5 text-muted-foreground" />
           Copy summary
         </ContextMenuItem>
+        {onTogglePin && (
+          <ContextMenuItem onSelect={() => onTogglePin(task.id)}>
+            <Pin className="size-3.5 text-muted-foreground" />
+            {isPinned ? "Unpin task" : "Pin task"}
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger>

@@ -162,6 +162,48 @@ describe("TaskSidebar", () => {
     );
   });
 
+  it("shows pinned tasks below active tasks and toggles pinning from the row menu", () => {
+    const onTogglePin = vi.fn();
+    const tasks: Task[] = [
+      { ...baseTask, id: "t-active", title: "Current work", status: "active" },
+      { ...baseTask, id: "t-pinned", title: "Pinned reference", status: "planned" },
+    ];
+
+    render(
+      <TaskSidebar mode="active"
+        folders={[]}
+        onCreate={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onCopyFolder={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onMoveTask={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onSelect={() => undefined}
+        onTogglePin={onTogglePin}
+        pinnedTaskIds={["t-pinned"]}
+        selectedId={null}
+        tasks={tasks}
+      />,
+    );
+
+    const active = screen.getByText("Active tasks");
+    const pinned = screen.getByText("Pinned tasks");
+    const all = screen.getByText("All Tasks");
+
+    expect(
+      active.compareDocumentPosition(pinned) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      pinned.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.contextMenu(screen.getAllByText("Pinned reference")[0]!);
+    fireEvent.click(screen.getByText("Unpin task"));
+    expect(onTogglePin).toHaveBeenCalledWith("t-pinned");
+  });
+
   it("hides empty folders and shows a no-match message while searching", () => {
     const folders: Folder[] = [
       {
