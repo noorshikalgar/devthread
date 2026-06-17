@@ -199,7 +199,7 @@ describe("ReleaseView tasks tab", () => {
     addCheckboxes.forEach((box) => expect(box).not.toBeChecked());
   });
 
-  it("filters both lists by the search term", () => {
+  it("filters only available tasks by the search term", () => {
     render(
       <ReleaseView
         folders={[]}
@@ -212,11 +212,17 @@ describe("ReleaseView tasks tab", () => {
       />,
     );
 
-    const search = screen.getByLabelText("Search tasks") as HTMLInputElement;
+    const selectedToggle = screen.getByRole("button", {
+      name: /Selected For Release 01/,
+    });
+    fireEvent.click(selectedToggle);
+
+    const search = screen.getByLabelText(
+      "Search available tasks",
+    ) as HTMLInputElement;
     fireEvent.change(search, { target: { value: "sidebar" } });
 
-    // Only the sidebar task should remain visible in Available Tasks.
-    expect(screen.queryByText("Refine release notes")).not.toBeInTheDocument();
+    expect(screen.getByText("Refine release notes")).toBeInTheDocument();
     expect(screen.getByText("Polish sidebar")).toBeInTheDocument();
     expect(screen.queryByText("Refactor composer")).not.toBeInTheDocument();
   });
@@ -316,7 +322,9 @@ describe("ReleaseView tasks tab", () => {
       screen.getByRole("button", { name: /Enable regex search/ }),
     );
 
-    const search = screen.getByLabelText("Search tasks") as HTMLInputElement;
+    const search = screen.getByLabelText(
+      "Search available tasks",
+    ) as HTMLInputElement;
     fireEvent.change(search, { target: { value: "[unclosed" } });
 
     expect(screen.getByText("Invalid regex pattern.")).toBeInTheDocument();

@@ -135,6 +135,51 @@ interface TasksTabRowProps {
   task: Task;
 }
 
+const RELEASE_STATUS_BADGE: Record<Task["status"], string> = {
+  planned: "border-slate-500/35 bg-slate-500/10 text-slate-500",
+  active: "border-emerald-500/35 bg-emerald-500/10 text-emerald-500",
+  blocked: "border-amber-500/35 bg-amber-500/10 text-amber-500",
+  paused: "border-sky-500/35 bg-sky-500/10 text-sky-500",
+  done: "border-violet-500/35 bg-violet-500/10 text-violet-500",
+  archived: "border-zinc-500/35 bg-zinc-500/10 text-zinc-500",
+};
+
+function TruncatedTaskTitle({ title }: { title: string }) {
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const [tooltip, setTooltip] = useState<string | undefined>();
+
+  useEffect(() => {
+    const element = titleRef.current;
+    if (!element) return;
+
+    const updateTooltip = () => {
+      setTooltip(
+        element.scrollWidth > element.clientWidth ? title : undefined,
+      );
+    };
+
+    updateTooltip();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateTooltip);
+      return () => window.removeEventListener("resize", updateTooltip);
+    }
+
+    const observer = new ResizeObserver(updateTooltip);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [title]);
+
+  return (
+    <span
+      className="min-w-0 flex-1 truncate text-sm font-normal text-current"
+      ref={titleRef}
+      title={tooltip}
+    >
+      {title}
+    </span>
+  );
+}
+
 function TasksTabRow({
   folderName,
   onOpen,
@@ -149,31 +194,40 @@ function TasksTabRow({
         selected && "bg-accent/60 text-foreground",
       )}
     >
-      <span className="relative size-3.5 shrink-0">
+      <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
         <input
           aria-label={selected ? "Remove from release" : "Add to release"}
           checked={selected}
-          className="peer size-3.5 cursor-pointer appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="peer block size-3.5 cursor-pointer appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onChange={onToggle}
           type="checkbox"
         />
         <Check
           aria-hidden
-          className="pointer-events-none absolute left-0.5 top-0.5 size-2.5 text-primary-foreground opacity-0 peer-checked:opacity-100"
+          className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
           strokeWidth={2.5}
         />
       </span>
       <span
-        className="size-1.5 shrink-0 rounded-full"
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          STATUS_DOT[task.status],
+        )}
         aria-hidden
-        style={{ backgroundColor: STATUS_DOT[task.status] }}
       />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="truncate text-sm font-normal text-current">
-          {task.title}
+      <TruncatedTaskTitle title={task.title} />
+      <span className="h-3 w-px shrink-0 bg-border/80" aria-hidden />
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+        <span className="max-w-32 truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {folderName}
         </span>
-        <span className="ml-1.5 text-[10px] text-muted-foreground">
-          {folderName} · {task.status}
+        <span
+          className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium capitalize",
+            RELEASE_STATUS_BADGE[task.status],
+          )}
+        >
+          {task.status}
         </span>
       </span>
       <button
@@ -357,9 +411,8 @@ export function ReleaseView({
     [tasks, selectedName],
   );
 
-  // Tasks tab: candidate set is every non-archived task, with a search/regex
-  // filter on title + folder. The filter is applied to BOTH selected and
-  // available sections so a search acts like "show me only matches here".
+  // Tasks tab: candidate set is every non-archived task. Search only filters
+  // unassigned tasks because selected tasks should remain stable context.
   const candidateTasks = useMemo(
     () => tasks.filter((t) => t.status !== "archived"),
     [tasks],
@@ -385,8 +438,8 @@ export function ReleaseView({
   }, [tasksSearch, tasksUseRegex]);
 
   const filteredSelectedTasks = useMemo(
-    () => taggedTasks.filter((t) => tasksMatcher(t.title)),
-    [taggedTasks, tasksMatcher],
+    () => taggedTasks,
+    [taggedTasks],
   );
   const filteredAvailableTasks = useMemo(
     () => unassignedTasks.filter((t) => tasksMatcher(t.title)),
@@ -925,12 +978,12 @@ export function ReleaseView({
                 {/* Tasks tab */}
                 {activeTab === "tasks" && (
                   <ScrollArea className="flex-1">
-                    <div className="space-y-4 px-6 py-4 pb-8">
-                      <div>
+                    <div className="px-6 pb-8 pt-5">
+                      <div className="mb-4">
                         <div className="relative">
                           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                           <Input
-                            aria-label="Search tasks"
+                            aria-label="Search available tasks"
                             aria-invalid={tasksSearchInvalid || undefined}
                             className="h-8 pl-7 pr-9 text-xs"
                             onChange={(e) => setTasksSearch(e.target.value)}
@@ -943,7 +996,7 @@ export function ReleaseView({
                             placeholder={
                               tasksUseRegex
                                 ? "Regex pattern (case-insensitive)"
-                                : "Search by title…"
+                                : "Search available tasks…"
                             }
                             ref={tasksSearchInputRef}
                             value={tasksSearch}
@@ -981,27 +1034,33 @@ export function ReleaseView({
 
                       <section
                         aria-label="Selected For Release"
-                        className="flex min-w-0 flex-col overflow-hidden"
+                        className="contents"
                       >
-                        <button
-                          aria-expanded={selectedTasksExpanded}
-                          className="flex min-w-0 items-center gap-2 py-1.5 text-left text-[13px] font-semibold text-foreground hover:text-foreground"
-                          onClick={() =>
-                            setSelectedTasksExpanded((expanded) => !expanded)
-                          }
-                          type="button"
-                        >
-                          <ChevronRight
-                            className={cn(
-                              "size-4 transition-transform duration-150 ease-out",
-                              selectedTasksExpanded && "rotate-90",
-                            )}
-                          />
-                          <span className="truncate">Selected For Release</span>
-                          <span className="text-xs font-medium text-muted-foreground/75">
-                            {formatSectionCount(filteredSelectedTasks.length)}
-                          </span>
-                        </button>
+                        <div className="sticky top-0 z-30 flex h-9 w-full bg-background">
+                          <button
+                            aria-expanded={selectedTasksExpanded}
+                            className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
+                            onClick={() =>
+                              setSelectedTasksExpanded((expanded) => !expanded)
+                            }
+                            type="button"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "size-4 transition-transform duration-150 ease-out",
+                                selectedTasksExpanded && "rotate-90",
+                              )}
+                            />
+                            <span className="truncate">
+                              Selected For Release
+                            </span>
+                            <span className="text-xs font-medium text-muted-foreground/75">
+                              {formatSectionCount(
+                                filteredSelectedTasks.length,
+                              )}
+                            </span>
+                          </button>
+                        </div>
                         <div
                           aria-hidden={!selectedTasksExpanded}
                           className={cn(
@@ -1043,27 +1102,33 @@ export function ReleaseView({
 
                       <section
                         aria-label="Available Tasks"
-                        className="flex min-w-0 flex-col overflow-hidden"
+                        className="contents"
                       >
-                        <button
-                          aria-expanded={availableTasksExpanded}
-                          className="flex min-w-0 items-center gap-2 py-1.5 text-left text-[13px] font-semibold text-foreground hover:text-foreground"
-                          onClick={() =>
-                            setAvailableTasksExpanded((expanded) => !expanded)
-                          }
-                          type="button"
-                        >
-                          <ChevronRight
-                            className={cn(
-                              "size-4 transition-transform duration-150 ease-out",
-                              availableTasksExpanded && "rotate-90",
-                            )}
-                          />
-                          <span className="truncate">Available Tasks</span>
-                          <span className="text-xs font-medium text-muted-foreground/75">
-                            {formatSectionCount(filteredAvailableTasks.length)}
-                          </span>
-                        </button>
+                        <div className="sticky top-9 z-20 flex h-9 w-full bg-background">
+                          <button
+                            aria-expanded={availableTasksExpanded}
+                            className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
+                            onClick={() =>
+                              setAvailableTasksExpanded(
+                                (expanded) => !expanded,
+                              )
+                            }
+                            type="button"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "size-4 transition-transform duration-150 ease-out",
+                                availableTasksExpanded && "rotate-90",
+                              )}
+                            />
+                            <span className="truncate">Available Tasks</span>
+                            <span className="text-xs font-medium text-muted-foreground/75">
+                              {formatSectionCount(
+                                filteredAvailableTasks.length,
+                              )}
+                            </span>
+                          </button>
+                        </div>
                         <div
                           aria-hidden={!availableTasksExpanded}
                           className={cn(
