@@ -159,7 +159,7 @@ describe("ReleaseView tasks tab", () => {
     releaseName: null,
   };
 
-  it("lists tagged tasks under Selected and untagged tasks under Other", () => {
+  it("lists tagged tasks under Selected and unassigned tasks under Available", () => {
     const onTagTask = vi.fn().mockResolvedValue(undefined);
     render(
       <ReleaseView
@@ -173,8 +173,16 @@ describe("ReleaseView tasks tab", () => {
       />,
     );
 
-    expect(screen.getByText("Selected for this release")).toBeInTheDocument();
-    expect(screen.getByText("Other tasks")).toBeInTheDocument();
+    const selectedToggle = screen.getByRole("button", {
+      name: /Selected For Release 01/,
+    });
+    const availableToggle = screen.getByRole("button", {
+      name: /Available Tasks 02/,
+    });
+    expect(selectedToggle).toHaveAttribute("aria-expanded", "false");
+    expect(availableToggle).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(selectedToggle);
 
     // The selected (tagged) task is rendered with a checked checkbox.
     const removeCheckboxes = screen.getAllByRole("checkbox", {
@@ -183,7 +191,7 @@ describe("ReleaseView tasks tab", () => {
     expect(removeCheckboxes).toHaveLength(1);
     expect(removeCheckboxes[0]).toBeChecked();
 
-    // The other two tasks are rendered with unchecked add checkboxes.
+    // The two unassigned tasks are rendered with unchecked add checkboxes.
     const addCheckboxes = screen.getAllByRole("checkbox", {
       name: /Add to release/,
     });
@@ -207,13 +215,44 @@ describe("ReleaseView tasks tab", () => {
     const search = screen.getByLabelText("Search tasks") as HTMLInputElement;
     fireEvent.change(search, { target: { value: "sidebar" } });
 
-    // Only the sidebar task should remain visible in "Other tasks".
+    // Only the sidebar task should remain visible in Available Tasks.
     expect(screen.queryByText("Refine release notes")).not.toBeInTheDocument();
     expect(screen.getByText("Polish sidebar")).toBeInTheDocument();
     expect(screen.queryByText("Refactor composer")).not.toBeInTheDocument();
   });
 
-  it("toggles a tag from Other via the add checkbox", async () => {
+  it("does not offer tasks that already belong to another release", () => {
+    const assignedElsewhere: Task = {
+      ...task,
+      id: "task-d",
+      title: "Already in another release",
+      releaseName: "v0.4",
+    };
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release, { ...release, name: "v0.4" }]}
+        tasks={[task, availableTask, assignedElsewhere]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Available Tasks 01/ }));
+    expect(screen.getByText("Polish sidebar")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Already in another release"),
+    ).not.toBeInTheDocument();
+
+    const addCheckboxes = screen.getAllByRole("checkbox", {
+      name: /Add to release/,
+    });
+    expect(addCheckboxes).toHaveLength(1);
+  });
+
+  it("toggles a tag from Available via the add checkbox", async () => {
     const onTagTask = vi.fn().mockResolvedValue(undefined);
     render(
       <ReleaseView
@@ -374,9 +413,40 @@ describe("ReleaseView sidebar", () => {
       target: { value: "quiet" },
     });
 
-    expect(within(nav).getByText("Search results")).toBeInTheDocument();
+    expect(within(nav).getByText("Draft results")).toBeInTheDocument();
     expect(within(nav).getByText("Quiet shell")).toBeInTheDocument();
     expect(within(nav).queryByText("v0.3")).not.toBeInTheDocument();
+  });
+
+  it("keeps released releases collapsed at the bottom until expanded", () => {
+    const releasedRelease: Release = {
+      ...release,
+      name: "Released June 2026",
+      releasedAt: "2026-06-10T00:00:00Z",
+    };
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release, releasedRelease]}
+        tasks={[]}
+      />,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Releases" });
+    expect(within(nav).getByText("v0.3")).toBeInTheDocument();
+    expect(screen.queryByText("Released June 2026")).not.toBeInTheDocument();
+
+    const releasedToggle = screen.getByRole("button", { name: "Released" });
+    expect(releasedToggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(releasedToggle);
+
+    expect(releasedToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Released June 2026")).toBeInTheDocument();
   });
 
   it("resizes and resets the release sidebar width", () => {

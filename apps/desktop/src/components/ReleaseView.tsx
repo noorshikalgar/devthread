@@ -2,6 +2,7 @@ import {
   Braces,
   Calendar,
   Check,
+  ChevronRight,
   Code,
   Copy,
   ExternalLink,
@@ -144,31 +145,40 @@ function TasksTabRow({
   return (
     <label
       className={cn(
-        "group flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-transparent px-3 py-1.5 hover:bg-accent/60",
-        selected && "bg-accent/40",
+        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground",
+        selected && "bg-accent/60 text-foreground",
       )}
     >
-      <input
-        aria-label={selected ? "Remove from release" : "Add to release"}
-        checked={selected}
-        className="size-3.5 shrink-0 accent-primary"
-        onChange={onToggle}
-        type="checkbox"
-      />
+      <span className="relative size-3.5 shrink-0">
+        <input
+          aria-label={selected ? "Remove from release" : "Add to release"}
+          checked={selected}
+          className="peer size-3.5 cursor-pointer appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={onToggle}
+          type="checkbox"
+        />
+        <Check
+          aria-hidden
+          className="pointer-events-none absolute left-0.5 top-0.5 size-2.5 text-primary-foreground opacity-0 peer-checked:opacity-100"
+          strokeWidth={2.5}
+        />
+      </span>
       <span
-        className="mt-0.5 size-1.5 shrink-0 rounded-full"
+        className="size-1.5 shrink-0 rounded-full"
         aria-hidden
         style={{ backgroundColor: STATUS_DOT[task.status] }}
       />
       <span className="min-w-0 flex-1 truncate">
-        <span className="truncate text-xs font-medium">{task.title}</span>
+        <span className="truncate text-sm font-normal text-current">
+          {task.title}
+        </span>
         <span className="ml-1.5 text-[10px] text-muted-foreground">
           {folderName} · {task.status}
         </span>
       </span>
       <button
         aria-label={`Open task: ${task.title}`}
-        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
         data-testid="open-task-link"
         onClick={(e) => {
           // Don't let the surrounding <label> also fire its onChange.
@@ -180,10 +190,23 @@ function TasksTabRow({
         type="button"
       >
         <ExternalLink className="size-3" />
-        Open
       </button>
     </label>
   );
+}
+
+function releaseMatchesSearch(release: Release, search: string) {
+  const term = search.trim().toLowerCase();
+  if (!term) return true;
+  return `${release.name} ${release.version ?? ""} ${
+    release.releasedAt ? "released published" : "draft"
+  }`
+    .toLowerCase()
+    .includes(term);
+}
+
+function formatSectionCount(count: number) {
+  return String(count).padStart(2, "0");
 }
 
 interface ReleaseViewProps {
@@ -221,6 +244,9 @@ export function ReleaseView({
   const [helpOpen, setHelpOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
   const [releaseSearch, setReleaseSearch] = useState("");
+  const [releasedExpanded, setReleasedExpanded] = useState(false);
+  const [selectedTasksExpanded, setSelectedTasksExpanded] = useState(false);
+  const [availableTasksExpanded, setAvailableTasksExpanded] = useState(true);
   const [tasksSearch, setTasksSearch] = useState("");
   const [tasksUseRegex, setTasksUseRegex] = useState(false);
   const [tasksSearchInvalid, setTasksSearchInvalid] = useState(false);
@@ -252,7 +278,9 @@ export function ReleaseView({
       return;
     }
     if (!selectedName || !releases.some((r) => r.name === selectedName)) {
-      setSelectedName(releases[0].name);
+      setSelectedName(
+        (releases.find((release) => !release.releasedAt) ?? releases[0]).name,
+      );
     }
   }, [releases, selectedName]);
 
@@ -329,17 +357,16 @@ export function ReleaseView({
     [tasks, selectedName],
   );
 
-  const currentlyTaggedIds = useMemo(
-    () => new Set(taggedTasks.map((t) => t.id)),
-    [taggedTasks],
-  );
-
   // Tasks tab: candidate set is every non-archived task, with a search/regex
   // filter on title + folder. The filter is applied to BOTH selected and
   // available sections so a search acts like "show me only matches here".
   const candidateTasks = useMemo(
     () => tasks.filter((t) => t.status !== "archived"),
     [tasks],
+  );
+  const unassignedTasks = useMemo(
+    () => candidateTasks.filter((t) => !t.releaseName),
+    [candidateTasks],
   );
 
   const tasksMatcher = useMemo(() => {
@@ -362,11 +389,8 @@ export function ReleaseView({
     [taggedTasks, tasksMatcher],
   );
   const filteredAvailableTasks = useMemo(
-    () =>
-      candidateTasks
-        .filter((t) => !currentlyTaggedIds.has(t.id))
-        .filter((t) => tasksMatcher(t.title)),
-    [candidateTasks, currentlyTaggedIds, tasksMatcher],
+    () => unassignedTasks.filter((t) => tasksMatcher(t.title)),
+    [tasksMatcher, unassignedTasks],
   );
 
   const tableRows = useMemo<TaskTableRow[]>(
@@ -542,17 +566,29 @@ export function ReleaseView({
     () => [...releases].sort((a, b) => b.name.localeCompare(a.name)),
     [releases],
   );
-  const filteredReleases = useMemo(() => {
-    const term = releaseSearch.trim().toLowerCase();
-    if (!term) return releasesSorted;
-    return releasesSorted.filter((release) =>
-      `${release.name} ${release.version ?? ""} ${
-        release.releasedAt ? "released" : "draft"
-      }`
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [releaseSearch, releasesSorted]);
+  const draftReleases = useMemo(
+    () => releasesSorted.filter((release) => !release.releasedAt),
+    [releasesSorted],
+  );
+  const releasedReleases = useMemo(
+    () => releasesSorted.filter((release) => release.releasedAt),
+    [releasesSorted],
+  );
+  const filteredDraftReleases = useMemo(
+    () =>
+      draftReleases.filter((release) =>
+        releaseMatchesSearch(release, releaseSearch),
+      ),
+    [draftReleases, releaseSearch],
+  );
+  const filteredReleasedReleases = useMemo(
+    () =>
+      releasedReleases.filter((release) =>
+        releaseMatchesSearch(release, releaseSearch),
+      ),
+    [releasedReleases, releaseSearch],
+  );
+  const searchActive = releaseSearch.trim().length > 0;
 
   return (
     <section className="flex min-h-0 flex-1 bg-background">
@@ -629,12 +665,11 @@ export function ReleaseView({
               className="flex w-full min-w-0 flex-col overflow-hidden px-3.5 pb-3"
             >
               <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
-                {releaseSearch.trim() ? "Search results" : "All Drafts"}
+                {searchActive ? "Draft results" : "All Drafts"}
               </div>
               <div className="flex min-w-0 flex-col gap-px overflow-hidden">
-                {filteredReleases.map((release) => {
+                {filteredDraftReleases.map((release) => {
                   const selected = selectedRelease?.name === release.name;
-                  const isReleased = !!release.releasedAt;
                   return (
                     <button
                       aria-current={selected ? "page" : undefined}
@@ -648,10 +683,7 @@ export function ReleaseView({
                     >
                       <span
                         aria-hidden
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          isReleased ? "bg-emerald-500" : "bg-primary",
-                        )}
+                        className="size-1.5 shrink-0 rounded-full bg-primary"
                       />
                       <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
                         {release.name}
@@ -660,18 +692,74 @@ export function ReleaseView({
                   );
                 })}
               </div>
-              {!filteredReleases.length && (
+              {!filteredDraftReleases.length && (
                 <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
                   <Calendar className="size-5 opacity-60" strokeWidth={1.75} />
                   <span>
-                    {releases.length
-                      ? `No releases match “${releaseSearch.trim()}”.`
-                      : "No releases yet."}
+                    {draftReleases.length
+                      ? searchActive
+                        ? `No draft releases match “${releaseSearch.trim()}”.`
+                        : "No draft releases yet."
+                      : "No draft releases yet."}
                   </span>
                 </div>
               )}
             </nav>
           </ScrollArea>
+          <div className="shrink-0 border-t border-border/80 px-3.5 py-2">
+            <button
+              aria-expanded={releasedExpanded}
+              className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => setReleasedExpanded((expanded) => !expanded)}
+              type="button"
+            >
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  releasedExpanded && "rotate-90",
+                )}
+                strokeWidth={1.75}
+              />
+              <span className="min-w-0 flex-1 truncate">Released</span>
+            </button>
+            {releasedExpanded && (
+              <ScrollArea className="max-h-[260px] pt-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+                <div className="flex min-w-0 flex-col gap-px overflow-hidden pb-1">
+                  {filteredReleasedReleases.map((release) => {
+                    const selected = selectedRelease?.name === release.name;
+                    return (
+                      <button
+                        aria-current={selected ? "page" : undefined}
+                        className={cn(
+                          "group/release flex h-7 w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-sm text-muted-foreground/65 transition-colors hover:bg-accent/35 hover:text-muted-foreground",
+                          selected && "bg-accent/45 text-muted-foreground",
+                        )}
+                        key={release.name}
+                        onClick={() => setSelectedName(release.name)}
+                        type="button"
+                      >
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full bg-muted-foreground/35"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
+                          {release.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {!filteredReleasedReleases.length && (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                      {releasedReleases.length
+                        ? `No released releases match “${releaseSearch.trim()}”.`
+                        : "No released releases yet."}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </aside>
         <button
           aria-label="Resize release sidebar"
@@ -891,81 +979,132 @@ export function ReleaseView({
                         )}
                       </div>
 
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Selected for this release
-                          </h3>
-                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {filteredSelectedTasks.length}/{taggedTasks.length}
+                      <section
+                        aria-label="Selected For Release"
+                        className="flex min-w-0 flex-col overflow-hidden"
+                      >
+                        <button
+                          aria-expanded={selectedTasksExpanded}
+                          className="flex min-w-0 items-center gap-2 py-1.5 text-left text-[13px] font-semibold text-foreground hover:text-foreground"
+                          onClick={() =>
+                            setSelectedTasksExpanded((expanded) => !expanded)
+                          }
+                          type="button"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "size-4 transition-transform duration-150 ease-out",
+                              selectedTasksExpanded && "rotate-90",
+                            )}
+                          />
+                          <span className="truncate">Selected For Release</span>
+                          <span className="text-xs font-medium text-muted-foreground/75">
+                            {formatSectionCount(filteredSelectedTasks.length)}
                           </span>
-                        </div>
-                        {filteredSelectedTasks.length > 0 ? (
-                          <div className="space-y-1">
-                            {filteredSelectedTasks.map((task) => (
-                              <TasksTabRow
-                                folderName={
-                                  folderNames.get(task.folderId ?? "") ??
-                                  "No folder"
-                                }
-                                key={task.id}
-                                onOpen={() => onSelectTask(task.id)}
-                                onToggle={() => void handleRemoveTag(task.id)}
-                                selected
-                                task={task}
-                              />
-                            ))}
+                        </button>
+                        <div
+                          aria-hidden={!selectedTasksExpanded}
+                          className={cn(
+                            "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                            selectedTasksExpanded
+                              ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                              : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                          )}
+                        >
+                          <div className="min-w-0 overflow-hidden pt-1">
+                            {filteredSelectedTasks.length > 0 ? (
+                              <div className="space-y-1">
+                                {filteredSelectedTasks.map((task) => (
+                                  <TasksTabRow
+                                    folderName={
+                                      folderNames.get(task.folderId ?? "") ??
+                                      "No folder"
+                                    }
+                                    key={task.id}
+                                    onOpen={() => onSelectTask(task.id)}
+                                    onToggle={() =>
+                                      void handleRemoveTag(task.id)
+                                    }
+                                    selected
+                                    task={task}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="px-6 py-5 text-center text-xs text-muted-foreground">
+                                {taggedTasks.length === 0
+                                  ? "No tasks tagged yet. Use the checkboxes below to add some."
+                                  : "No selected tasks match the search."}
+                              </p>
+                            )}
                           </div>
-                        ) : (
-                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                            {taggedTasks.length === 0
-                              ? "No tasks tagged yet. Use the checkboxes below to add some."
-                              : "No selected tasks match the search."}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Other tasks
-                          </h3>
-                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {filteredAvailableTasks.length}/
-                            {candidateTasks.length - taggedTasks.length}
-                          </span>
                         </div>
-                        {filteredAvailableTasks.length > 0 ? (
-                          <ScrollArea className="max-h-[420px]">
-                            <div className="space-y-1 pr-2">
-                              {filteredAvailableTasks.map((task) => (
-                                <TasksTabRow
-                                  folderName={
-                                    folderNames.get(task.folderId ?? "") ??
-                                    "No folder"
-                                  }
-                                  key={task.id}
-                                  onOpen={() => onSelectTask(task.id)}
-                                  onToggle={() =>
-                                    void onTagTask(
-                                      task.id,
-                                      selectedRelease.name,
-                                    )
-                                  }
-                                  selected={false}
-                                  task={task}
-                                />
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        ) : (
-                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                            {tasksSearch.trim() || tasksUseRegex
-                              ? "No tasks match the search."
-                              : "Every task is already in this release."}
-                          </p>
-                        )}
-                      </div>
+                      </section>
+
+                      <section
+                        aria-label="Available Tasks"
+                        className="flex min-w-0 flex-col overflow-hidden"
+                      >
+                        <button
+                          aria-expanded={availableTasksExpanded}
+                          className="flex min-w-0 items-center gap-2 py-1.5 text-left text-[13px] font-semibold text-foreground hover:text-foreground"
+                          onClick={() =>
+                            setAvailableTasksExpanded((expanded) => !expanded)
+                          }
+                          type="button"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "size-4 transition-transform duration-150 ease-out",
+                              availableTasksExpanded && "rotate-90",
+                            )}
+                          />
+                          <span className="truncate">Available Tasks</span>
+                          <span className="text-xs font-medium text-muted-foreground/75">
+                            {formatSectionCount(filteredAvailableTasks.length)}
+                          </span>
+                        </button>
+                        <div
+                          aria-hidden={!availableTasksExpanded}
+                          className={cn(
+                            "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                            availableTasksExpanded
+                              ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                              : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                          )}
+                        >
+                          <div className="min-w-0 overflow-hidden pt-1">
+                            {filteredAvailableTasks.length > 0 ? (
+                              <div className="space-y-1">
+                                {filteredAvailableTasks.map((task) => (
+                                  <TasksTabRow
+                                    folderName={
+                                      folderNames.get(task.folderId ?? "") ??
+                                      "No folder"
+                                    }
+                                    key={task.id}
+                                    onOpen={() => onSelectTask(task.id)}
+                                    onToggle={() =>
+                                      void onTagTask(
+                                        task.id,
+                                        selectedRelease.name,
+                                      )
+                                    }
+                                    selected={false}
+                                    task={task}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="px-6 py-5 text-center text-xs text-muted-foreground">
+                                {tasksSearch.trim() || tasksUseRegex
+                                  ? "No tasks match the search."
+                                  : "No unassigned tasks available."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </section>
                     </div>
                   </ScrollArea>
                 )}
