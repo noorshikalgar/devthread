@@ -3771,8 +3771,11 @@ function ThreadColumn({
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const stickyComposerRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
+  const compactComposerExpandedRef = useRef(false);
   const [compactComposerVisible, setCompactComposerVisible] = useState(false);
+  const [compactComposerExpanded, setCompactComposerExpanded] = useState(false);
   const [goTopVisible, setGoTopVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
@@ -3793,6 +3796,10 @@ function ThreadColumn({
     regex && !!search.trim() && !safelyCompileRegex(search).valid;
 
   useEffect(() => {
+    compactComposerExpandedRef.current = compactComposerExpanded;
+  }, [compactComposerExpanded]);
+
+  useEffect(() => {
     const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
@@ -3802,12 +3809,23 @@ function ThreadColumn({
     function handleScroll() {
       const top = viewportRef.current?.scrollTop ?? 0;
       setCompactComposerVisible(top > 140);
+      if (top <= 140) setCompactComposerExpanded(false);
+      else if (
+        compactComposerExpandedRef.current &&
+        !stickyComposerRef.current?.contains(document.activeElement)
+      ) {
+        setCompactComposerExpanded(false);
+      }
       setGoTopVisible(top > 700);
     }
 
     handleScroll();
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [taskId]);
+
+  useEffect(() => {
+    setCompactComposerExpanded(false);
   }, [taskId]);
 
   return (
@@ -3919,9 +3937,17 @@ function ThreadColumn({
         </div>
       </div>
       {compactComposerVisible && (
-        <div className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8">
+        <div
+          className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8"
+          ref={stickyComposerRef}
+        >
           <div className="mx-auto w-full max-w-[920px]">
-            <Composer compact onSubmit={onSubmit} taskId={taskId} />
+            <Composer
+              compact={!compactComposerExpanded}
+              onCompactExpand={() => setCompactComposerExpanded(true)}
+              onSubmit={onSubmit}
+              taskId={taskId}
+            />
           </div>
         </div>
       )}

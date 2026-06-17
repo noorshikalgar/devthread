@@ -30,6 +30,29 @@ describe("Composer", () => {
     expect(
       screen.queryByText(/Type @ to switch entry type/),
     ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("What happened?")).toHaveClass(
+      "min-h-[84px]",
+    );
+    expect(screen.getByLabelText("What happened?")).toHaveClass(
+      "max-h-[132px]",
+    );
+    expect(screen.getByLabelText("What happened?")).toHaveAttribute("rows", "3");
+  });
+
+  it("expands the compact composer when the user enters it", () => {
+    const onCompactExpand = vi.fn();
+    render(
+      <Composer
+        compact
+        onCompactExpand={onCompactExpand}
+        onSubmit={vi.fn()}
+        taskId="task-compact"
+      />,
+    );
+
+    fireEvent.focus(screen.getByLabelText("Add quick update"));
+
+    expect(onCompactExpand).toHaveBeenCalledOnce();
   });
 
   it("presents image attach as a composer tool", () => {

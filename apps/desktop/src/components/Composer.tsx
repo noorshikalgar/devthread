@@ -15,6 +15,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -67,6 +68,7 @@ interface Props {
   ) => Promise<void>;
   visibilityToggleRef?: { current: (() => void) | null };
   compact?: boolean;
+  onCompactExpand?: () => void;
 }
 
 interface MentionOption {
@@ -134,6 +136,7 @@ export function Composer({
   onSubmit,
   visibilityToggleRef,
   compact = false,
+  onCompactExpand,
 }: Props) {
   const [content, setContent] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("note");
@@ -369,6 +372,15 @@ export function Composer({
   const metaKey = isMac ? "⌘" : "Ctrl";
   const submitDisabled = saving || (!content.trim() && !images.length);
 
+  useLayoutEffect(() => {
+    if (compact) return;
+    const node = textarea.current;
+    if (!node) return;
+    const maxHeight = 132;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, maxHeight)}px`;
+  }, [compact, content]);
+
   if (compact) {
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card/95 px-2 py-1.5 shadow-sm">
@@ -376,7 +388,9 @@ export function Composer({
           aria-label="Add quick update"
           autoComplete="off"
           className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
+          onClick={onCompactExpand}
           onChange={(event) => changeContent(event.target.value)}
+          onFocus={onCompactExpand}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
@@ -392,7 +406,13 @@ export function Composer({
               aria-label="Add update"
               className="size-7 shrink-0"
               disabled={submitDisabled}
-              onClick={() => void submit()}
+              onClick={() => {
+                if (!content.trim() && !images.length) {
+                  onCompactExpand?.();
+                  return;
+                }
+                void submit();
+              }}
               size="icon-sm"
             >
               <Send className="size-3.5" />
@@ -419,7 +439,7 @@ export function Composer({
             <Textarea
               aria-label="What happened?"
               autoFocus
-              className="max-h-[190px] min-h-[64px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
+              className="max-h-[132px] min-h-[84px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
               onBlur={() => setFocused(false)}
               onChange={(event) => changeContent(event.target.value)}
               onFocus={() => setFocused(true)}
@@ -430,7 +450,7 @@ export function Composer({
               }
               placeholder="Type an update, blocker, note, progress..."
               ref={textarea}
-              rows={2}
+              rows={3}
               value={content}
             />
             {mention.active && filteredOptions.length > 0 && (
