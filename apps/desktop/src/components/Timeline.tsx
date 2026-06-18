@@ -152,8 +152,8 @@ export function Timeline({
               <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
             </div>
           ) : (
-            <div className="grid grid-cols-[50px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5">
-              <h2 className="whitespace-nowrap text-right text-[11px] font-semibold leading-4 tracking-[0.02em] text-foreground">
+            <div className="grid grid-cols-[68px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[74px_24px_minmax(0,1fr)] sm:gap-2.5">
+              <h2 className="truncate text-right text-[11px] font-semibold leading-4 tracking-[0.02em] text-foreground">
                 {group.label}
               </h2>
               <div className="flex translate-x-px justify-center">
@@ -172,11 +172,11 @@ export function Timeline({
               <>
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[69px] sm:left-[79px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[87px] sm:left-[97px]"
                 />
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[69px] sm:left-[79px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[87px] sm:left-[97px]"
                 />
               </>
             )}
@@ -638,7 +638,7 @@ function TimelineEntry({
   return (
     <li
       className={cn(
-        "group relative grid grid-cols-[50px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5",
+        "group relative grid grid-cols-[68px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[74px_24px_minmax(0,1fr)] sm:gap-2.5",
       )}
       data-entry-id={entry.id}
     >
@@ -912,14 +912,11 @@ function dateLabel(value: string): string {
   if (diffDays === 1) return "Yesterday";
   return `${new Intl.DateTimeFormat(undefined, {
     weekday: "short",
-  }).format(date)}, ${formatTimelineDayMonth(date, today)}`;
+  }).format(date)}, ${formatTimelineDayMonth(date)}`;
 }
 
-function formatTimelineDayMonth(date: Date, reference = new Date()) {
+function formatTimelineDayMonth(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  if (date.getFullYear() !== reference.getFullYear()) {
-    return `${day}/${month}/${String(date.getFullYear()).slice(-2)}`;
-  }
   return `${day}/${month}`;
 }

@@ -8,23 +8,56 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ReleaseView } from "./ReleaseView";
 import type { Folder, Release, Task } from "@/lib/types";
 import { renderWithProviders as render } from "@/test-utils";
 
 vi.mock("@/lib/api", () => ({
   api: {
+    deleteRelease: vi.fn(),
     updateRelease: vi.fn(),
   },
 }));
 
 import { api } from "@/lib/api";
 
+const zeroRect: DOMRect = {
+  bottom: 0,
+  height: 0,
+  left: 0,
+  right: 0,
+  top: 0,
+  width: 0,
+  x: 0,
+  y: 0,
+  toJSON: () => ({}),
+};
+
+beforeAll(() => {
+  Range.prototype.getBoundingClientRect = () => zeroRect;
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: function* () {
+        return;
+      },
+    }) as DOMRectList;
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+});
+
+function releaseNotesEditor() {
+  return screen.getByLabelText("Release notes");
+}
+
 const release: Release = {
   name: "v0.3",
   version: "0.3.0",
   descriptionMarkdown: "",
+  releaseStatus: "draft",
   releasedAt: null,
   folderId: null,
   createdAt: "2026-06-05T00:00:00Z",
@@ -72,20 +105,15 @@ describe("ReleaseView template persistence", () => {
       />,
     );
 
-    // Default tab is Tasks. Switch to Release notes to access the editor.
-    fireEvent.click(screen.getByRole("tab", { name: /Release notes/ }));
+    // Default tab is Tasks. Switch to Notes to access the editor.
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
 
-    const editor = screen.getByLabelText(
-      "Release notes template",
-    ) as HTMLTextAreaElement;
-    fireEvent.change(editor, { target: { value: "# {{name}}\n\nMy notes" } });
-
-    const saveButton = screen.getByTestId("save-template-button");
-    fireEvent.click(saveButton);
+    fireEvent.click(screen.getByLabelText("Insert release variable"));
+    fireEvent.click(screen.getByText("{{name}}"));
 
     await waitFor(() =>
       expect(api.updateRelease).toHaveBeenCalledWith("v0.3", {
-        descriptionMarkdown: "# {{name}}\n\nMy notes",
+        descriptionMarkdown: "{{name}}",
       }),
     );
     await waitFor(() => expect(onReleasesChanged).toHaveBeenCalled());
@@ -107,12 +135,11 @@ describe("ReleaseView template persistence", () => {
 
     await waitFor(() => expect(onReleasesChanged).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("tab", { name: /Release notes/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
 
-    const editor = screen.getByLabelText(
-      "Release notes template",
-    ) as HTMLTextAreaElement;
-    await waitFor(() => expect(editor.value).toBe("# Saved template"));
+    await waitFor(() =>
+      expect(releaseNotesEditor()).toHaveTextContent("# Saved template"),
+    );
   });
 
   it("loads the saved template content into the editor from release data", async () => {
@@ -134,13 +161,12 @@ describe("ReleaseView template persistence", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: /Release notes/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
 
-    const editor = screen.getByLabelText(
-      "Release notes template",
-    ) as HTMLTextAreaElement;
     await waitFor(() =>
-      expect(editor.value).toBe("# My persistent template\n- Item 1"),
+      expect(releaseNotesEditor()).toHaveTextContent(
+        "# My persistent template- Item 1",
+      ),
     );
   });
 });
@@ -355,6 +381,32 @@ describe("ReleaseView tasks tab", () => {
     expect(onSelectTask).toHaveBeenCalledWith("task-a");
   });
 
+  it("does not show available tasks for a released release", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[
+          {
+            ...release,
+            releaseStatus: "released",
+            releasedAt: "2026-06-10T00:00:00Z",
+          },
+        ]}
+        tasks={[task, availableTask]}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Search available tasks")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Available Tasks/ }),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Add to release/)).toBeNull();
+  });
+
   it("persists the active tab across remounts via localStorage", () => {
     const { unmount } = render(
       <ReleaseView
@@ -368,7 +420,7 @@ describe("ReleaseView tasks tab", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: /Release notes/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
     expect(localStorage.getItem("devthread:release-active-tab")).toBe("notes");
 
     unmount();
@@ -384,10 +436,85 @@ describe("ReleaseView tasks tab", () => {
       />,
     );
 
-    // After remount the Release notes tab should be the active one, so the
-    // save button's aria-label is reachable immediately.
+    expect(screen.getByLabelText("Release notes")).toBeInTheDocument();
+  });
+
+  it("shows release variables only while editing notes", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        tasks={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
+    expect(screen.getByLabelText("Insert release variable")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(screen.queryByLabelText("Insert release variable")).toBeNull();
+  });
+
+  it("shows released notes as preview only and copies markdown", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[
+          {
+            ...release,
+            descriptionMarkdown: "## Released notes\n\nHello",
+            releaseStatus: "released",
+            releasedAt: "2026-06-10T00:00:00Z",
+          },
+        ]}
+        tasks={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
+
+    expect(screen.queryByLabelText("Release notes")).toBeNull();
+    expect(screen.queryByText("Edit")).toBeNull();
+    expect(screen.queryByText("Preview")).toBeNull();
+    expect(screen.getByText("Released notes")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Copy release notes markdown"));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith("## Released notes\n\nHello"),
+    );
+  });
+
+  it("shows why a pre-release cannot be released yet", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[{ ...release, releaseStatus: "pre_release" }]}
+        tasks={[task]}
+      />,
+    );
+
+    expect(screen.getByText("Final review")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Save release notes template"),
+      screen.getByText("Release blocked: 1 task not done"),
     ).toBeInTheDocument();
   });
 });
@@ -430,6 +557,7 @@ describe("ReleaseView sidebar", () => {
     const releasedRelease: Release = {
       ...release,
       name: "Released June 2026",
+      releaseStatus: "released",
       releasedAt: "2026-06-10T00:00:00Z",
     };
     render(
@@ -489,5 +617,84 @@ describe("ReleaseView sidebar", () => {
     expect(localStorage.getItem("devthread:release-sidebar-width")).toBe(
       "280",
     );
+  });
+
+  it("collapses and reopens the release sidebar", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        tasks={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Hide release sidebar"));
+
+    expect(localStorage.getItem("devthread:release-sidebar-open")).toBe(
+      "false",
+    );
+    expect(screen.getByLabelText("Show release sidebar")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Releases" })).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Show release sidebar"));
+
+    expect(localStorage.getItem("devthread:release-sidebar-open")).toBe("true");
+    expect(
+      screen.getByRole("navigation", { name: "Releases" }),
+    ).toBeInTheDocument();
+  });
+
+  it("pins releases into a pinned section", () => {
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        tasks={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Pin v0.3"));
+
+    expect(localStorage.getItem("devthread:pinned-releases")).toBe(
+      JSON.stringify(["v0.3"]),
+    );
+    expect(
+      screen.getByRole("button", { name: /Pinned releases/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("deletes only the release from the sidebar and keeps tasks detached", async () => {
+    const onReleasesChanged = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={onReleasesChanged}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        tasks={[task]}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Delete v0.3"));
+
+    expect(screen.getByText("Delete release")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Tagged tasks will stay in DevThread/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(api.deleteRelease).toHaveBeenCalledWith("v0.3"));
+    await waitFor(() => expect(onReleasesChanged).toHaveBeenCalled());
   });
 });

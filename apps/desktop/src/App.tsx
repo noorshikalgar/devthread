@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   Clock4,
+  ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
@@ -18,11 +19,13 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Scissors,
   Sun,
   Tag,
   Trash2,
   X,
 } from "lucide-react";
+import { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
@@ -179,6 +182,9 @@ interface AppContextMenuState {
   y: number;
   selectedText: string;
   linkUrl: string | null;
+  editableTarget: HTMLElement | null;
+  editorView: CodeMirrorEditorView | null;
+  canPaste: boolean;
 }
 
 export { TaskHeader } from "@/components/TaskHeader";
@@ -439,23 +445,46 @@ export default function App() {
       setContextMenu(null);
     }
 
-    function handleContextMenu(event: globalThis.MouseEvent) {
+    async function handleContextMenu(event: globalThis.MouseEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-radix-popper-content-wrapper]")) return;
-      const selectedText = window.getSelection()?.toString().trim() ?? "";
+      const editorRoot = target?.closest(".cm-editor") as HTMLElement | null;
+      const editorView = editorRoot
+        ? CodeMirrorEditorView.findFromDOM(editorRoot)
+        : null;
+      const editableTarget =
+        editorView?.contentDOM ??
+        ((target?.closest(
+          'input, textarea, [contenteditable="true"]',
+        ) as HTMLElement | null) ||
+          null);
+      const selectedText = editorView
+        ? getCodeMirrorSelectedText(editorView)
+        : getEditableSelectedText(editableTarget);
       const link = target?.closest("a[href]") as HTMLAnchorElement | null;
       const linkUrl = safeExternalUrl(link?.getAttribute("href"));
 
       event.preventDefault();
-      if (!selectedText && !linkUrl) {
+      if (!selectedText && !linkUrl && !editableTarget) {
         setContextMenu(null);
         return;
+      }
+      let canPaste = false;
+      if (editableTarget && navigator.clipboard?.readText) {
+        try {
+          canPaste = (await navigator.clipboard.readText()).length > 0;
+        } catch {
+          canPaste = false;
+        }
       }
       setContextMenu({
         x: event.clientX,
         y: event.clientY,
         selectedText,
         linkUrl,
+        editableTarget,
+        editorView,
+        canPaste,
       });
     }
 
@@ -1674,6 +1703,25 @@ function AppRail({
   );
 }
 
+function getCodeMirrorSelectedText(view: CodeMirrorEditorView) {
+  return view.state.selection.ranges
+    .filter((range) => !range.empty)
+    .map((range) => view.state.sliceDoc(range.from, range.to))
+    .join("\n");
+}
+
+function getEditableSelectedText(target: HTMLElement | null) {
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    return start === end ? "" : target.value.slice(start, end);
+  }
+  return window.getSelection()?.toString() ?? "";
+}
+
 function AppContextMenu({
   menu,
   onClose,
@@ -1683,10 +1731,75 @@ function AppContextMenu({
 }) {
   if (!menu) return null;
 
+  const activeMenu = menu;
+  const hasSelection = activeMenu.selectedText.length > 0;
+
   async function copy(value: string) {
     await navigator.clipboard.writeText(value);
     onClose();
   }
+
+  async function copyFromEditor() {
+    if (activeMenu.editorView) {
+      await navigator.clipboard.writeText(
+        getCodeMirrorSelectedText(activeMenu.editorView),
+      );
+      activeMenu.editorView.focus();
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    document.execCommand("copy");
+    onClose();
+  }
+
+  async function cutFromEditor() {
+    if (activeMenu.editorView) {
+      const view = activeMenu.editorView;
+      const selectedText = getCodeMirrorSelectedText(view);
+      if (selectedText) await navigator.clipboard.writeText(selectedText);
+      if (!view.state.readOnly) view.dispatch(view.state.replaceSelection(""));
+      view.focus();
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    document.execCommand("cut");
+    onClose();
+  }
+
+  async function pasteIntoEditor() {
+    if (activeMenu.editorView) {
+      activeMenu.editorView.focus();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && !activeMenu.editorView.state.readOnly) {
+          activeMenu.editorView.dispatch(
+            activeMenu.editorView.state.replaceSelection(text),
+          );
+        }
+      } catch {
+        // Leave the menu as a no-op when clipboard read is blocked.
+      }
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        document.execCommand("insertText", false, text);
+      } else {
+        document.execCommand("paste");
+      }
+    } catch {
+      document.execCommand("paste");
+    }
+    onClose();
+  }
+
+  const itemClass =
+    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent";
 
   return (
     <div
@@ -1694,12 +1807,46 @@ function AppContextMenu({
       onClick={(event) => event.stopPropagation()}
       style={{ left: menu.x, top: menu.y }}
     >
-      {menu.linkUrl && (
+      {activeMenu.editableTarget && (
         <>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+            className={itemClass}
+            disabled={!hasSelection}
+            onClick={() => void cutFromEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Scissors className="size-3.5 text-muted-foreground" />
+            Cut
+          </button>
+          <button
+            className={itemClass}
+            disabled={!hasSelection}
+            onClick={() => void copyFromEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Copy className="size-3.5 text-muted-foreground" />
+            Copy
+          </button>
+          <button
+            className={itemClass}
+            disabled={!activeMenu.canPaste}
+            onClick={() => void pasteIntoEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <ClipboardPaste className="size-3.5 text-muted-foreground" />
+            Paste
+          </button>
+        </>
+      )}
+      {activeMenu.linkUrl && (
+        <>
+          <button
+            className={itemClass}
             onClick={() => {
-              void openExternalUrl(menu.linkUrl);
+              void openExternalUrl(activeMenu.linkUrl);
               onClose();
             }}
             type="button"
@@ -1708,8 +1855,8 @@ function AppContextMenu({
             Open link
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
-            onClick={() => void copy(menu.linkUrl!)}
+            className={itemClass}
+            onClick={() => void copy(activeMenu.linkUrl!)}
             type="button"
           >
             <Copy className="size-3.5 text-muted-foreground" />
@@ -1717,10 +1864,10 @@ function AppContextMenu({
           </button>
         </>
       )}
-      {menu.selectedText && (
+      {activeMenu.selectedText && !activeMenu.editableTarget && (
         <button
-          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
-          onClick={() => void copy(menu.selectedText)}
+          className={itemClass}
+          onClick={() => void copy(activeMenu.selectedText)}
           type="button"
         >
           <Copy className="size-3.5 text-muted-foreground" />

@@ -39,7 +39,10 @@ ${"Long context. ".repeat(80)}`,
   durationMinutes: null,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("Timeline", () => {
   it("renders Markdown, link previews, images, and inline long-entry expansion", async () => {
@@ -142,6 +145,34 @@ describe("Timeline", () => {
     );
 
     expect(screen.getByLabelText("Time spent 1d 3h 15m")).toBeInTheDocument();
+  });
+
+  it("keeps timeline rail dates compact without a year", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T12:00:00Z"));
+
+    render(
+      <Timeline
+        attachments={[]}
+        entries={[
+          {
+            ...entry,
+            occurredAt: "2025-11-25T12:00:00Z",
+          },
+        ]}
+        hasMore={false}
+        historyEntryId={null}
+        onEdit={vi.fn()}
+        onHistory={vi.fn()}
+        onLoadMore={vi.fn()}
+        onRestoreRevision={vi.fn()}
+        onTrash={vi.fn()}
+        revisions={[]}
+      />,
+    );
+
+    expect(screen.getByText(/25\/11$/)).toBeInTheDocument();
+    expect(screen.queryByText(/25\/11\/25/)).not.toBeInTheDocument();
   });
 
   it("toggles to a compact git-log style timeline with image markers", () => {

@@ -458,11 +458,6 @@ export const RELEASE_TEMPLATE_PLACEHOLDERS = [
     description: "Name of the release",
   },
   {
-    label: "Version",
-    snippet: "{{version}}",
-    description: "Optional version string",
-  },
-  {
     label: "Release status",
     snippet: "{{releasedAt}}",
     description: "Released <date> or Draft",
@@ -471,11 +466,6 @@ export const RELEASE_TEMPLATE_PLACEHOLDERS = [
     label: "Release date",
     snippet: "{{releasedAtDate}}",
     description: "Just the date",
-  },
-  {
-    label: "Notes",
-    snippet: "{{notes}}",
-    description: "Free-form notes (the Notes textarea content)",
   },
   {
     label: "Tasks table",
@@ -491,21 +481,6 @@ export const RELEASE_TEMPLATE_PLACEHOLDERS = [
     label: "Generated at",
     snippet: "{{generatedAt}}",
     description: "Current timestamp",
-  },
-  {
-    label: "If has tasks",
-    snippet: "{{#if taskList}}## Tasks\n\n{{tasks}}{{/if}}",
-    description: "Show section only when tasks exist",
-  },
-  {
-    label: "If has version",
-    snippet: "{{#if version}} ({{version}}){{/if}}",
-    description: "Show inline only when version is set",
-  },
-  {
-    label: "If has notes",
-    snippet: "{{#if notes}}## Notes\n\n{{notes}}{{/if}}",
-    description: "Show section only when notes are non-empty",
   },
   {
     label: "Each task",

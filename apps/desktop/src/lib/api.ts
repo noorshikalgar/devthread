@@ -128,8 +128,10 @@ export const api = {
   updateRelease: (
     name: string,
     input: {
+      newName?: string;
       version?: string | null;
       descriptionMarkdown?: string;
+      releaseStatus?: Release["releaseStatus"];
       releasedAt?: string | null;
     },
   ) =>

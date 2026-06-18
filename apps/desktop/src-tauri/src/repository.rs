@@ -259,6 +259,7 @@ pub struct Release {
     pub name: String,
     pub version: Option<String>,
     pub description_markdown: String,
+    pub release_status: String,
     pub released_at: Option<String>,
     pub folder_id: Option<String>,
     pub created_at: String,
@@ -271,6 +272,7 @@ pub struct CreateReleaseInput {
     pub name: String,
     pub version: Option<String>,
     pub description_markdown: Option<String>,
+    pub release_status: Option<String>,
     pub folder_id: Option<String>,
 }
 
@@ -278,8 +280,10 @@ pub struct CreateReleaseInput {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateReleaseInput {
     pub name: String,
+    pub new_name: Option<String>,
     pub version: Option<String>,
     pub description_markdown: Option<String>,
+    pub release_status: Option<String>,
     pub released_at: Option<Option<String>>,
 }
 
@@ -334,6 +338,7 @@ impl Database {
         connection.execute_batch(QUICK_LINK_MIGRATION)?;
         connection.execute_batch(RELEASE_MIGRATION)?;
         Self::migrate_releases_to_name_key(connection)?;
+        Self::ensure_release_status_column(connection)?;
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
         Ok(())
     }
@@ -416,6 +421,26 @@ impl Database {
         }
         connection.execute(
             "ALTER TABLE work_log_entries ADD COLUMN duration_minutes INTEGER",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_release_status_column(connection: &Connection) -> Result<()> {
+        let mut pragma_columns = connection.prepare("PRAGMA table_info(releases)")?;
+        let names: Vec<String> = pragma_columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .map(|entry| entry.map_err(RepositoryError::Database))
+            .collect::<Result<Vec<_>>>()?;
+        if names.iter().any(|name| name == "release_status") {
+            return Ok(());
+        }
+        connection.execute(
+            "ALTER TABLE releases ADD COLUMN release_status TEXT NOT NULL DEFAULT 'draft'",
+            [],
+        )?;
+        connection.execute(
+            "UPDATE releases SET release_status = 'released' WHERE released_at IS NOT NULL",
             [],
         )?;
         Ok(())
@@ -831,7 +856,7 @@ impl Database {
     pub fn list_releases(&self) -> Result<Vec<Release>> {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
-            "SELECT name, version, description_markdown, released_at, folder_id, created_at, updated_at
+            "SELECT name, version, description_markdown, release_status, released_at, folder_id, created_at, updated_at
              FROM releases ORDER BY released_at DESC NULLS LAST, created_at DESC",
         )?;
         let releases = statement
@@ -840,10 +865,11 @@ impl Database {
                     name: row.get(0)?,
                     version: row.get(1)?,
                     description_markdown: row.get(2)?,
-                    released_at: row.get(3)?,
-                    folder_id: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    release_status: row.get(3)?,
+                    released_at: row.get(4)?,
+                    folder_id: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
                 })
             })?
             .map(|entry| entry.map_err(RepositoryError::Database))
@@ -854,14 +880,16 @@ impl Database {
     pub fn create_release(&self, input: CreateReleaseInput) -> Result<Release> {
         let connection = self.connection()?;
         let description_markdown = input.description_markdown.unwrap_or_default();
+        let release_status = input.release_status.unwrap_or_else(|| "draft".into());
         let stamp = now();
         connection.execute(
-            "INSERT INTO releases (name, version, description_markdown, folder_id, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            "INSERT INTO releases (name, version, description_markdown, release_status, folder_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
             params![
                 input.name,
                 input.version,
                 description_markdown,
+                release_status,
                 input.folder_id,
                 stamp,
             ],
@@ -870,6 +898,7 @@ impl Database {
             name: input.name,
             version: input.version,
             description_markdown,
+            release_status,
             released_at: None,
             folder_id: input.folder_id,
             created_at: stamp.clone(),
@@ -881,7 +910,7 @@ impl Database {
         let connection = self.connection()?;
         let existing = connection
             .query_row(
-                "SELECT name, version, description_markdown, released_at, folder_id, created_at, updated_at
+                "SELECT name, version, description_markdown, release_status, released_at, folder_id, created_at, updated_at
                  FROM releases WHERE name = ?1",
                 [&input.name],
                 |row| {
@@ -889,10 +918,11 @@ impl Database {
                         name: row.get(0)?,
                         version: row.get(1)?,
                         description_markdown: row.get(2)?,
-                        released_at: row.get(3)?,
-                        folder_id: row.get(4)?,
-                        created_at: row.get(5)?,
-                        updated_at: row.get(6)?,
+                        release_status: row.get(3)?,
+                        released_at: row.get(4)?,
+                        folder_id: row.get(5)?,
+                        created_at: row.get(6)?,
+                        updated_at: row.get(7)?,
                     })
                 },
             )
@@ -900,18 +930,34 @@ impl Database {
             .ok_or_else(|| RepositoryError::NotFound("Release"))?;
 
         let stamp = now();
+        let name = input.new_name.unwrap_or_else(|| input.name.clone());
         let version = input.version.or(existing.version);
         let description_markdown = input.description_markdown.unwrap_or(existing.description_markdown);
+        let release_status = input.release_status.unwrap_or(existing.release_status);
         let released_at = input.released_at.unwrap_or(existing.released_at);
-        connection.execute(
-            "UPDATE releases SET version = ?1, description_markdown = ?2, released_at = ?3, updated_at = ?4
-             WHERE name = ?5",
-            params![version, description_markdown, released_at, stamp, input.name],
+        let transaction = connection.unchecked_transaction()?;
+        transaction.execute("PRAGMA defer_foreign_keys = ON", [])?;
+        transaction.execute(
+            "UPDATE releases SET name = ?1, version = ?2, description_markdown = ?3, release_status = ?4, released_at = ?5, updated_at = ?6
+             WHERE name = ?7",
+            params![name, version, description_markdown, release_status, released_at, stamp, input.name],
         )?;
+        if name != input.name {
+            transaction.execute(
+                "UPDATE tasks SET release_name = ?1, updated_at = ?2 WHERE release_name = ?3",
+                params![name, stamp, input.name],
+            )?;
+            transaction.execute(
+                "UPDATE folders SET release_name = ?1, updated_at = ?2 WHERE release_name = ?3",
+                params![name, stamp, input.name],
+            )?;
+        }
+        transaction.commit()?;
         Ok(Release {
-            name: input.name,
+            name,
             version,
             description_markdown,
+            release_status,
             released_at,
             folder_id: existing.folder_id,
             created_at: existing.created_at,
@@ -2035,6 +2081,7 @@ mod tests {
             name: "v0.3".into(),
             version: Some("0.3.0".into()),
             description_markdown: "## Saved template".into(),
+            release_status: "draft".into(),
             released_at: None,
             folder_id: None,
             created_at: "2026-06-05T00:00:00Z".into(),
