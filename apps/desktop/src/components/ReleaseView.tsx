@@ -8,8 +8,6 @@ import {
   ExternalLink,
   FileText,
   ListChecks,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pin,
   Plus,
   Regex,
@@ -59,7 +57,6 @@ function formatDate(value: string) {
 }
 
 const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
-const RELEASE_SIDEBAR_OPEN_KEY = "devthread:release-sidebar-open";
 const PINNED_RELEASES_KEY = "devthread:pinned-releases";
 const DEFAULT_RELEASE_SIDEBAR_WIDTH = 280;
 const MIN_RELEASE_SIDEBAR_WIDTH = 240;
@@ -375,6 +372,7 @@ interface ReleaseViewProps {
   onSelectTask: (id: string) => void;
   onTagTask: (taskId: string, name: string) => Promise<void>;
   releases: Release[];
+  sidebarOpen?: boolean;
   tasks: Task[];
 }
 
@@ -385,6 +383,7 @@ export function ReleaseView({
   onSelectTask,
   onTagTask,
   releases,
+  sidebarOpen = true,
   tasks,
 }: ReleaseViewProps) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -416,9 +415,6 @@ export function ReleaseView({
     clampReleaseSidebarWidth(
       Number(localStorage.getItem(RELEASE_SIDEBAR_WIDTH_KEY)),
     ),
-  );
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => localStorage.getItem(RELEASE_SIDEBAR_OPEN_KEY) !== "false",
   );
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const templateEditorRef = useRef<ReactCodeMirrorRef>(null);
@@ -912,26 +908,12 @@ export function ReleaseView({
 
   return (
     <section className="flex min-h-0 flex-1 bg-background">
-      {!sidebarOpen && (
-        <button
-          aria-label="Show release sidebar"
-          className="m-2 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => {
-            setSidebarOpen(true);
-            localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "true");
-          }}
-          title="Show release sidebar"
-          type="button"
-        >
-          <PanelLeftOpen className="size-4" />
-        </button>
-      )}
       {/* Left panel: release list */}
       <div
         className={cn(
           "relative h-full shrink-0 overflow-hidden border-r border-border transition-[width] duration-200 ease-out",
           !sidebarOpen && "border-r-0",
-          resizingSidebar && "select-none",
+          resizingSidebar && "select-none transition-none",
         )}
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
@@ -953,20 +935,6 @@ export function ReleaseView({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Button
-                aria-label="Hide release sidebar"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                onClick={() => {
-                  setSidebarOpen(false);
-                  localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "false");
-                }}
-                size="icon-sm"
-                title="Hide release sidebar"
-                type="button"
-                variant="ghost"
-              >
-                <PanelLeftClose strokeWidth={1.75} />
-              </Button>
               <Button
                 aria-label="New release"
                 className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"

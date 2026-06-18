@@ -152,6 +152,7 @@ import { cn } from "@/lib/utils";
 const SELECTED_TASK_KEY = "devthread:selected-task";
 const PINNED_TASKS_KEY = "devthread:pinned-tasks";
 const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
+const RELEASE_SIDEBAR_OPEN_KEY = "devthread:release-sidebar-open";
 const THEME_KEY = "devthread:theme";
 const UPDATE_AUTO_CHECK_KEY = "devthread:update-auto-check";
 const UPDATE_CHECK_INTERVAL_KEY = "devthread:update-check-interval";
@@ -228,6 +229,9 @@ export default function App() {
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [releaseSidebarOpen, setReleaseSidebarOpen] = useState(
+    () => localStorage.getItem(RELEASE_SIDEBAR_OPEN_KEY) !== "false",
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     clampSidebarWidth(Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))),
   );
@@ -1325,7 +1329,19 @@ export default function App() {
             }
             setSidebarOpen((open) => !open);
           }}
-          onReleasesOpen={() => setWorkspaceMode("releases")}
+          onReleasesToggle={() => {
+            if (workspaceMode !== "releases") {
+              setWorkspaceMode("releases");
+              setReleaseSidebarOpen(true);
+              localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "true");
+              return;
+            }
+            setReleaseSidebarOpen((open) => {
+              const next = !open;
+              localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, String(next));
+              return next;
+            });
+          }}
           onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
@@ -1338,6 +1354,7 @@ export default function App() {
           }}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
+          releasesOpen={releaseSidebarOpen}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
           updateAvailable={updateState === "available"}
@@ -1469,6 +1486,7 @@ export default function App() {
               }}
               onTagTask={handleTagTask}
               releases={releases}
+              sidebarOpen={releaseSidebarOpen}
               tasks={sidebarTasks}
             />
           ) : selectedTask ? (
@@ -1593,12 +1611,13 @@ function AppRail({
   archiveActive,
   archiveOpen,
   onArchiveToggle,
-  onReleasesOpen,
+  onReleasesToggle,
   onSearchOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
   releasesActive,
+  releasesOpen,
   tasksActive,
   tasksOpen,
   updateAvailable,
@@ -1607,12 +1626,13 @@ function AppRail({
   archiveActive: boolean;
   archiveOpen: boolean;
   onArchiveToggle: () => void;
-  onReleasesOpen: () => void;
+  onReleasesToggle: () => void;
   onSearchOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
   releasesActive: boolean;
+  releasesOpen: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
   updateAvailable: boolean;
@@ -1620,38 +1640,32 @@ function AppRail({
 }) {
   return (
     <aside className="flex h-full w-12 shrink-0 select-none flex-col items-center border-r border-border bg-card py-3 text-card-foreground">
-      <RailButton
-        active={tasksActive}
-        icon={ListTodo}
-        label={
-          tasksActive && tasksOpen ? "Hide task sidebar" : "Show task sidebar"
-        }
-        onClick={onTaskToggle}
-        tooltip="Tasks"
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            aria-label="Open global search"
-            className="mt-1 rounded-md"
-            onClick={onSearchOpen}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <Search />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">Search</TooltipContent>
-      </Tooltip>
-
-      <div className="mt-auto flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <RailButton
-          active={releasesActive}
-          icon={Tag}
-          label="Open releases"
-          onClick={onReleasesOpen}
-          tooltip="Releases"
+          active={tasksActive}
+          icon={ListTodo}
+          label={
+            tasksActive && tasksOpen
+              ? "Hide task sidebar"
+              : "Show task sidebar"
+          }
+          onClick={onTaskToggle}
+          tooltip="Tasks"
         />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Open global search"
+              className="rounded-md"
+              onClick={onSearchOpen}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <Search />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Search</TooltipContent>
+        </Tooltip>
         <RailButton
           active={worklogActive}
           icon={BarChart3}
@@ -1659,6 +1673,22 @@ function AppRail({
           onClick={onWorklogOpen}
           tooltip="Worklog"
         />
+        <RailButton
+          active={releasesActive}
+          icon={Tag}
+          label={
+            releasesActive
+              ? releasesOpen
+                ? "Hide release sidebar"
+                : "Show release sidebar"
+              : "Open releases"
+          }
+          onClick={onReleasesToggle}
+          tooltip="Releases"
+        />
+      </div>
+
+      <div className="mt-auto flex flex-col gap-1">
         <RailButton
           active={archiveActive}
           icon={Archive}

@@ -677,7 +677,7 @@ function TimelineEntry({
         <span
           aria-hidden
           className={cn(
-            "z-10 size-2.5 rounded-full ring-[5px] ring-background transition-transform duration-150 group-hover:scale-125",
+            "z-10 size-2 rounded-full ring-[4px] ring-background transition-transform duration-150 group-hover:scale-125",
             TYPE_DOT[entry.entryType],
           )}
         />

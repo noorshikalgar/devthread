@@ -619,8 +619,8 @@ describe("ReleaseView sidebar", () => {
     );
   });
 
-  it("collapses and reopens the release sidebar", () => {
-    render(
+  it("honors shell-controlled release sidebar visibility", () => {
+    const { rerender } = render(
       <ReleaseView
         folders={[]}
         onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
@@ -628,21 +628,26 @@ describe("ReleaseView sidebar", () => {
         onSelectTask={vi.fn()}
         onTagTask={vi.fn()}
         releases={[release]}
+        sidebarOpen={false}
         tasks={[]}
       />,
     );
 
-    fireEvent.click(screen.getByLabelText("Hide release sidebar"));
-
-    expect(localStorage.getItem("devthread:release-sidebar-open")).toBe(
-      "false",
-    );
-    expect(screen.getByLabelText("Show release sidebar")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Releases" })).toBeNull();
 
-    fireEvent.click(screen.getByLabelText("Show release sidebar"));
+    rerender(
+      <ReleaseView
+        folders={[]}
+        onReleasesChanged={vi.fn().mockResolvedValue(undefined)}
+        onRemoveTaskTag={vi.fn()}
+        onSelectTask={vi.fn()}
+        onTagTask={vi.fn()}
+        releases={[release]}
+        sidebarOpen
+        tasks={[]}
+      />,
+    );
 
-    expect(localStorage.getItem("devthread:release-sidebar-open")).toBe("true");
     expect(
       screen.getByRole("navigation", { name: "Releases" }),
     ).toBeInTheDocument();
