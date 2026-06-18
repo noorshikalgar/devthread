@@ -147,7 +147,7 @@ describe("Timeline", () => {
     expect(screen.getByLabelText("Time spent 1d 3h 15m")).toBeInTheDocument();
   });
 
-  it("keeps timeline rail dates compact without a year", () => {
+  it("renders timeline rail dates as readable full labels without a year", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-18T12:00:00Z"));
 
@@ -171,8 +171,8 @@ describe("Timeline", () => {
       />,
     );
 
-    expect(screen.getByText(/25\/11$/)).toBeInTheDocument();
-    expect(screen.queryByText(/25\/11\/25/)).not.toBeInTheDocument();
+    expect(screen.getByText(/November 25$/)).toBeInTheDocument();
+    expect(screen.queryByText(/2025/)).not.toBeInTheDocument();
   });
 
   it("toggles to a compact git-log style timeline with image markers", () => {

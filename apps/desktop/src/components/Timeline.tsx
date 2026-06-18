@@ -152,13 +152,10 @@ export function Timeline({
               <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
             </div>
           ) : (
-            <div className="grid grid-cols-[68px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[74px_24px_minmax(0,1fr)] sm:gap-2.5">
-              <h2 className="truncate text-right text-[11px] font-semibold leading-4 tracking-[0.02em] text-foreground">
+            <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-2">
+              <h2 className="whitespace-nowrap text-left text-[11px] font-semibold leading-4 tracking-[0.02em] text-muted-foreground">
                 {group.label}
               </h2>
-              <div className="flex translate-x-px justify-center">
-                <span className="size-2 rounded-full border border-border bg-background shadow-[0_0_0_4px_hsl(var(--background))]" />
-              </div>
               <div className="min-w-0 border-t border-dashed border-border/80" />
             </div>
           )}
@@ -172,11 +169,11 @@ export function Timeline({
               <>
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[87px] sm:left-[97px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[9px]"
                 />
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[87px] sm:left-[97px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[9px]"
                 />
               </>
             )}
@@ -364,8 +361,11 @@ function CompactTimelineEntry({
 
 interface TimelineEntryCardProps extends EntryProps {
   className?: string;
+  hideMeta?: boolean;
+  inlineTimestamp?: string;
   onCollapse?: () => void;
   showRailPointer?: boolean;
+  surface?: "card" | "inline";
 }
 
 function TimelineEntryCard({
@@ -378,8 +378,11 @@ function TimelineEntryCard({
   onRestoreRevision,
   onTrash,
   className,
+  hideMeta = false,
+  inlineTimestamp,
   onCollapse,
   showRailPointer = true,
+  surface = "card",
 }: TimelineEntryCardProps) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(entry.contentMarkdown);
@@ -404,32 +407,32 @@ function TimelineEntryCard({
     <>
       <div
         className={cn(
-          "relative flex min-w-0 flex-col gap-2 rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 group-hover:border-border group-hover:bg-card group-hover:shadow-md",
+          "relative flex min-w-0 flex-col gap-2 transition-[background-color,border-color,box-shadow] duration-150",
+          surface === "card" &&
+            "rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm group-hover:border-border group-hover:bg-card group-hover:shadow-md",
+          surface === "inline" && "py-1.5",
           showRailPointer &&
+            surface === "card" &&
             "before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70",
           className,
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span
-            className={cn(
-              "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
-              TYPE_TOKEN[entry.entryType],
-            )}
-          >
-            {ENTRY_LABELS[entry.entryType]}
-          </span>
-          {entry.durationMinutes != null && entry.durationMinutes > 0 && (
-            <span
-              aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-              className="inline-flex h-5 min-w-[48px] items-center justify-center gap-1 rounded bg-muted/60 px-2 font-mono text-[10px] text-foreground"
-            >
-              <Clock4 className="size-2.5 text-muted-foreground" />
-              {formatDuration(entry.durationMinutes)}
-            </span>
-          )}
-        </div>
+        {surface === "inline" && inlineTimestamp ? (
+          <div className="flex min-h-6 min-w-0 items-center justify-between gap-3 pr-20">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <time
+                className="font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-semibold leading-4 tabular-nums tracking-[0.02em] text-muted-foreground"
+                dateTime={entry.occurredAt}
+              >
+                {inlineTimestamp}
+              </time>
+              <EntryMetaChips entry={entry} />
+            </div>
+          </div>
+        ) : (
+          !hideMeta && <EntryMetaChips entry={entry} />
+        )}
 
         {editing ? (
           <div className="space-y-2">
@@ -464,7 +467,8 @@ function TimelineEntryCard({
           <>
             <div
               className={cn(
-                "markdown max-w-[78ch] select-text",
+                "markdown select-text",
+                surface === "card" && "max-w-[78ch]",
                 long && !expanded && "markdown--collapsed",
               )}
             >
@@ -564,7 +568,10 @@ function TimelineEntryCard({
 
         {!editing && (
           <div
-            className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+            className={cn(
+              "absolute flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+              surface === "card" ? "right-1.5 top-2" : "right-0 top-1.5",
+            )}
             onClick={(event) => event.stopPropagation()}
           >
             {canEdit && (
@@ -625,6 +632,30 @@ function TimelineEntryCard({
   );
 }
 
+function EntryMetaChips({ entry }: { entry: WorkLogEntry }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span
+        className={cn(
+          "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
+          TYPE_TOKEN[entry.entryType],
+        )}
+      >
+        {ENTRY_LABELS[entry.entryType]}
+      </span>
+      {entry.durationMinutes != null && entry.durationMinutes > 0 && (
+        <span
+          aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
+          className="inline-flex h-5 min-w-[48px] items-center justify-center gap-1 rounded bg-muted/60 px-2 font-mono text-[10px] text-foreground"
+        >
+          <Clock4 className="size-2.5 text-muted-foreground" />
+          {formatDuration(entry.durationMinutes)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function TimelineEntry({
   entry,
   attachments,
@@ -638,20 +669,11 @@ function TimelineEntry({
   return (
     <li
       className={cn(
-        "group relative grid grid-cols-[68px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[74px_24px_minmax(0,1fr)] sm:gap-2.5",
+        "group relative grid grid-cols-[20px_minmax(0,1fr)] gap-2 rounded-md py-2 transition-colors hover:bg-accent/20",
       )}
       data-entry-id={entry.id}
     >
-      <time
-        className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
-        dateTime={entry.occurredAt}
-      >
-        <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground">
-          {formatMessageTimestamp(entry.occurredAt)}
-        </span>
-      </time>
-
-      <div className="relative z-10 flex translate-x-px justify-center pt-4">
+      <div className="relative z-10 flex h-9 items-center justify-center">
         <span
           aria-hidden
           className={cn(
@@ -661,17 +683,22 @@ function TimelineEntry({
         />
       </div>
 
-      <TimelineEntryCard
-        attachments={attachments}
-        entry={entry}
-        historyOpen={historyOpen}
-        onEdit={onEdit}
-        onHistory={onHistory}
-        onRestoreRevision={onRestoreRevision}
-        onTrash={onTrash}
-        revisions={revisions}
-        showRailPointer
-      />
+      <div className="min-w-0">
+        <TimelineEntryCard
+          attachments={attachments}
+          entry={entry}
+          hideMeta
+          historyOpen={historyOpen}
+          inlineTimestamp={formatMessageTimestamp(entry.occurredAt)}
+          onEdit={onEdit}
+          onHistory={onHistory}
+          onRestoreRevision={onRestoreRevision}
+          onTrash={onTrash}
+          revisions={revisions}
+          showRailPointer={false}
+          surface="inline"
+        />
+      </div>
     </li>
   );
 }
@@ -828,7 +855,10 @@ function formatMessageTimestamp(value: string) {
 }
 
 function formatCompactGroupDate(value: string) {
-  return formatTimelineDayMonth(new Date(value));
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function compactDateGroupLabel(group: DateGroup) {
@@ -910,13 +940,9 @@ function dateLabel(value: string): string {
   );
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
-  return `${new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
-  }).format(date)}, ${formatTimelineDayMonth(date)}`;
-}
-
-function formatTimelineDayMonth(date: Date) {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}`;
+    month: "long",
+    day: "numeric",
+  }).format(date);
 }
