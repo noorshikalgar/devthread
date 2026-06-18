@@ -1,25 +1,37 @@
 import type { WorklogMetricEntry } from "@/lib/types";
 
 export interface WorklogBarItem {
+  key: string;
   label: string;
   minutes: number;
 }
 
 /**
- * Buckets entries by a caller-provided label (e.g. week-of or
- * month-name) and returns the total minutes per bucket, newest first.
- * Used by the Weekly and Monthly totals cards.
+ * Buckets entries by a caller-provided key + label (e.g. the
+ * ISO Monday for a week, or "2026-06" for a month) and returns the
+ * total minutes per bucket, newest first. The `key` is a stable
+ * identifier used to filter the inspector and the `label` is what
+ * gets shown to the user ("Week of Jun 8" or "June 2026").
  */
 export function aggregateByBucket(
   entries: ReadonlyArray<WorklogMetricEntry>,
   bucketLabel: (value: string) => string,
+  bucketKey: (value: string) => string,
 ): WorklogBarItem[] {
-  const buckets = new Map<string, number>();
+  const buckets = new Map<
+    string,
+    { key: string; label: string; minutes: number }
+  >();
   for (const entry of entries) {
+    const key = bucketKey(entry.occurredAt);
     const label = bucketLabel(entry.occurredAt);
-    buckets.set(label, (buckets.get(label) ?? 0) + entry.durationMinutes);
+    const compositeKey = `${key}::${label}`;
+    const current = buckets.get(compositeKey);
+    if (current) {
+      current.minutes += entry.durationMinutes;
+    } else {
+      buckets.set(compositeKey, { key, label, minutes: entry.durationMinutes });
+    }
   }
-  return [...buckets.entries()]
-    .map(([label, minutes]) => ({ label, minutes }))
-    .reverse();
+  return [...buckets.values()].sort((a, b) => b.key.localeCompare(a.key));
 }

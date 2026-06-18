@@ -39,7 +39,10 @@ ${"Long context. ".repeat(80)}`,
   durationMinutes: null,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("Timeline", () => {
   it("renders Markdown, link previews, images, and inline long-entry expansion", async () => {
@@ -144,6 +147,34 @@ describe("Timeline", () => {
     expect(screen.getByLabelText("Time spent 1d 3h 15m")).toBeInTheDocument();
   });
 
+  it("renders timeline rail dates as readable full labels without a year", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T12:00:00Z"));
+
+    render(
+      <Timeline
+        attachments={[]}
+        entries={[
+          {
+            ...entry,
+            occurredAt: "2025-11-25T12:00:00Z",
+          },
+        ]}
+        hasMore={false}
+        historyEntryId={null}
+        onEdit={vi.fn()}
+        onHistory={vi.fn()}
+        onLoadMore={vi.fn()}
+        onRestoreRevision={vi.fn()}
+        onTrash={vi.fn()}
+        revisions={[]}
+      />,
+    );
+
+    expect(screen.getByText(/November 25$/)).toBeInTheDocument();
+    expect(screen.queryByText(/2025/)).not.toBeInTheDocument();
+  });
+
   it("toggles to a compact git-log style timeline with image markers", () => {
     const imageOnlyEntry: WorkLogEntry = {
       ...entry,
@@ -181,6 +212,13 @@ describe("Timeline", () => {
     expect(screen.queryByText("Private")).not.toBeInTheDocument();
     expect(screen.getByText("[image]")).toBeInTheDocument();
     expect(screen.queryByText("Show more")).not.toBeInTheDocument();
+
+    const imageRow = screen.getByText("[image]").closest("li");
+    expect(imageRow).not.toBeNull();
+    fireEvent.click(imageRow!);
+    expect(
+      screen.getByRole("button", { name: "View capture.png" }),
+    ).toBeInTheDocument();
   });
 
   it("pans the image on mouse drag and resets on the reset button", async () => {

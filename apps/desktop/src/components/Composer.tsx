@@ -15,6 +15,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -23,10 +24,15 @@ import { fileToPendingImage } from "@/lib/content";
 import { extractLinkPreviews } from "@/lib/content";
 import {
   detectMention,
-  draftKey,
   parseSlashCommand,
   resolveMentionsInContent,
 } from "@/lib/composer";
+import {
+  clearComposerDraft as clearComposerDraftStore,
+  getComposerDraft,
+  setComposerDraft,
+  type ComposerDraft,
+} from "@/lib/composerDraftStore";
 import {
   ENTRY_TYPES,
   type EntryType,
@@ -36,6 +42,7 @@ import {
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -60,6 +67,8 @@ interface Props {
     images: PendingImage[],
   ) => Promise<void>;
   visibilityToggleRef?: { current: (() => void) | null };
+  compact?: boolean;
+  onCompactExpand?: () => void;
 }
 
 interface MentionOption {
@@ -122,7 +131,13 @@ function optionMatchesQuery(option: MentionOption, query: string): boolean {
   return option.aliases.some((alias) => alias.startsWith(normalized));
 }
 
-export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
+export function Composer({
+  taskId,
+  onSubmit,
+  visibilityToggleRef,
+  compact = false,
+  onCompactExpand,
+}: Props) {
   const [content, setContent] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("note");
   const [saving, setSaving] = useState(false);
@@ -156,18 +171,54 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     [mention.query],
   );
 
+  // Hydrate the draft from the per-task store so switching away
+  // and back preserves what the user was typing.
   useEffect(() => {
-    setContent(localStorage.getItem(draftKey(taskId)) ?? "");
-    setImages([]);
+    const draft = getComposerDraft(taskId);
+    setContent(draft?.content ?? "");
+    setEntryType(draft?.entryType ?? "note");
+    setImages(draft?.images ?? []);
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
-    requestAnimationFrame(() => textarea.current?.focus());
-  }, [taskId]);
+    if (!compact) requestAnimationFrame(() => textarea.current?.focus());
+  }, [compact, taskId]);
 
   useEffect(() => {
-    if (content) localStorage.setItem(draftKey(taskId), content);
-    else localStorage.removeItem(draftKey(taskId));
-  }, [content, taskId]);
+    function hydrateFromStore() {
+      const draft = getComposerDraft(taskId);
+      const nextContent = draft?.content ?? "";
+      const nextEntryType = draft?.entryType ?? "note";
+      const nextImages = draft?.images ?? [];
+      setContent((current) =>
+        current === nextContent ? current : nextContent,
+      );
+      setEntryType((current) =>
+        current === nextEntryType ? current : nextEntryType,
+      );
+      setImages((current) =>
+        samePendingImages(current, nextImages) ? current : nextImages,
+      );
+    }
+
+    window.addEventListener("devthread:composer-drafts", hydrateFromStore);
+    return () =>
+      window.removeEventListener("devthread:composer-drafts", hydrateFromStore);
+  }, [taskId]);
+
+  // Persist the in-progress draft so it survives task switches.
+  // We only update the store when the user has actually entered
+  // something (content, images, or a non-default entry type) —
+  // an empty draft doesn't deserve a ring on the sidebar dot.
+  useEffect(() => {
+    const trimmed = content.trim();
+    const hasContent = trimmed.length > 0 || images.length > 0;
+    if (!hasContent && entryType === "note") {
+      clearComposerDraftStore(taskId);
+      return;
+    }
+    const draft: ComposerDraft = { content, entryType, images };
+    setComposerDraft(taskId, draft);
+  }, [content, entryType, images, taskId]);
 
   useEffect(() => {
     if (!mention.active) return;
@@ -199,11 +250,13 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
     updateMention(value);
   }
 
-  function clearComposerDraft() {
+  function resetComposer() {
     setContent("");
     setImages([]);
+    setEntryType("note");
     setError("");
     setMention({ active: false, query: "", anchor: 0 });
+    clearComposerDraftStore(taskId);
     requestAnimationFrame(() => textarea.current?.focus());
   }
 
@@ -247,6 +300,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
       setImages([]);
       setEntryType("note");
       setMention({ active: false, query: "", anchor: 0 });
+      clearComposerDraftStore(taskId);
       requestAnimationFrame(() => textarea.current?.focus());
     } catch (cause) {
       setError(String(cause));
@@ -318,6 +372,58 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
   const metaKey = isMac ? "⌘" : "Ctrl";
   const submitDisabled = saving || (!content.trim() && !images.length);
 
+  useLayoutEffect(() => {
+    if (compact) return;
+    const node = textarea.current;
+    if (!node) return;
+    const maxHeight = 132;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, maxHeight)}px`;
+  }, [compact, content]);
+
+  if (compact) {
+    return (
+      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card/95 px-2 py-1.5 shadow-sm">
+        <Input
+          aria-label="Add quick update"
+          autoComplete="off"
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
+          onClick={onCompactExpand}
+          onChange={(event) => changeContent(event.target.value)}
+          onFocus={onCompactExpand}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder="Add update..."
+          value={content}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Add update"
+              className="size-7 shrink-0"
+              disabled={submitDisabled}
+              onClick={() => {
+                if (!content.trim() && !images.length) {
+                  onCompactExpand?.();
+                  return;
+                }
+                void submit();
+              }}
+              size="icon-sm"
+            >
+              <Send className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{metaKey} + ↵ in full composer</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
     <Card
       aria-label="Add work update"
@@ -333,7 +439,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
             <Textarea
               aria-label="What happened?"
               autoFocus
-              className="max-h-[190px] min-h-[64px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
+              className="max-h-[132px] min-h-[84px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
               onBlur={() => setFocused(false)}
               onChange={(event) => changeContent(event.target.value)}
               onFocus={() => setFocused(true)}
@@ -344,7 +450,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
               }
               placeholder="Type an update, blocker, note, progress..."
               ref={textarea}
-              rows={2}
+              rows={3}
               value={content}
             />
             {mention.active && filteredOptions.length > 0 && (
@@ -464,10 +570,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                 ))}
               </SelectContent>
             </Select>
-            <span
-              aria-hidden
-              className="mx-1 h-5 w-px shrink-0 bg-border/60"
-            />
+            <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border/60" />
             <input
               accept="image/*"
               className="sr-only"
@@ -485,7 +588,7 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                   <Button
                     aria-label="Clear draft"
                     className="text-muted-foreground hover:text-foreground"
-                    onClick={clearComposerDraft}
+                    onClick={resetComposer}
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -518,11 +621,12 @@ export function Composer({ taskId, onSubmit, visibilityToggleRef }: Props) {
                 Hint:{" "}
               </span>
               <span>
-                Type <span className="font-mono text-foreground/75">@</span>{" "}
-                to change the content type
+                Type <span className="font-mono text-foreground/75">@</span> to
+                change the content type
               </span>
               <span className="hidden sm:inline">
-                {" "}(progress, blocker, etc)
+                {" "}
+                (progress, blocker, etc)
               </span>
             </span>
           </div>
@@ -560,4 +664,11 @@ function removeMentionTrigger(content: string, anchor: number, cursor: number) {
   const after = content.slice(cursor);
   const joined = `${before}${after}`.replace(/[ \t]{2,}/g, " ");
   return anchor === 0 ? joined.trimStart() : joined;
+}
+
+function samePendingImages(left: PendingImage[], right: PendingImage[]) {
+  return (
+    left.length === right.length &&
+    left.every((image, index) => image.id === right[index]?.id)
+  );
 }

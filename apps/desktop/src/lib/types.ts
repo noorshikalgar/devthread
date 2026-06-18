@@ -22,6 +22,7 @@ export const TASK_STATUSES = [
 export type EntryType = (typeof ENTRY_TYPES)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type Visibility = "private" | "report";
+export type ReleaseStatus = "draft" | "pre_release" | "released";
 
 export interface Task {
   id: string;
@@ -48,6 +49,7 @@ export interface Release {
   name: string;
   version: string | null;
   descriptionMarkdown: string;
+  releaseStatus: ReleaseStatus;
   releasedAt: string | null;
   folderId: string | null;
   createdAt: string;

@@ -1,24 +1,26 @@
 import {
+  AlertTriangle,
   Braces,
   Calendar,
   Check,
-  Code,
+  ChevronRight,
   Copy,
   ExternalLink,
   FileText,
-  Info,
   ListChecks,
-  Pencil,
+  Pin,
   Plus,
   Regex,
-  RotateCcw,
-  Save,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
+import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { markdown } from "@codemirror/lang-markdown";
+import { EditorView } from "@codemirror/view";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,19 +40,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/lib/api";
 import {
   buildReleaseContext,
-  defaultReleaseTemplate,
-  RELEASE_TASK_FIELDS,
-  RELEASE_TEMPLATE_BLOCKS,
-  RELEASE_TEMPLATE_EXAMPLES,
-  RELEASE_TEMPLATE_FILTERS,
   RELEASE_TEMPLATE_PLACEHOLDERS,
-  RELEASE_TEMPLATE_TASK_VARIABLES,
-  RELEASE_TEMPLATE_VARIABLES,
   renderReleaseTemplate,
 } from "@/lib/releaseTemplate";
 import { formatTaskTable, type TaskTableRow } from "@/lib/taskTable";
 import { STATUS_DOT } from "@/lib/status";
-import type { Folder, Release, Task } from "@/lib/types";
+import type { Folder, Release, ReleaseStatus, Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function formatDate(value: string) {
@@ -59,6 +54,40 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
+const PINNED_RELEASES_KEY = "devthread:pinned-releases";
+const DEFAULT_RELEASE_SIDEBAR_WIDTH = 280;
+const MIN_RELEASE_SIDEBAR_WIDTH = 240;
+const MAX_RELEASE_SIDEBAR_WIDTH = 420;
+const RELEASE_STATUS_ORDER: ReleaseStatus[] = [
+  "draft",
+  "pre_release",
+  "released",
+];
+const RELEASE_STATUS_LABEL: Record<ReleaseStatus, string> = {
+  draft: "Draft",
+  pre_release: "Pre-release",
+  released: "Released",
+};
+const RELEASE_STATUS_DOT: Record<ReleaseStatus, string> = {
+  draft: "bg-slate-400",
+  pre_release: "bg-amber-500",
+  released: "bg-emerald-500",
+};
+
+function loadPinnedReleaseNames(): string[] {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PINNED_RELEASES_KEY) ?? "[]",
+    );
+    return Array.isArray(parsed)
+      ? parsed.filter((name): name is string => typeof name === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function PlaceholderButton({
@@ -80,6 +109,77 @@ function PlaceholderButton({
         {snippet.length > 40 ? `${snippet.slice(0, 40)}…` : snippet}
       </span>
       <span className="text-[10px] text-muted-foreground">{description}</span>
+    </button>
+  );
+}
+
+function ReleaseSidebarRow({
+  dimmed = false,
+  isPinned,
+  onDelete,
+  onPin,
+  onSelect,
+  release,
+  selected,
+}: {
+  dimmed?: boolean;
+  isPinned: boolean;
+  onDelete: (release: Release) => void;
+  onPin: (name: string) => void;
+  onSelect: (name: string) => void;
+  release: Release;
+  selected: boolean;
+}) {
+  return (
+    <button
+      aria-current={selected ? "page" : undefined}
+      className={cn(
+        "group/release flex h-7 w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground",
+        selected && "bg-accent/70 text-foreground",
+        dimmed &&
+          "text-muted-foreground/65 hover:bg-accent/35 hover:text-muted-foreground",
+        dimmed && selected && "bg-accent/45 text-muted-foreground",
+      )}
+      onClick={() => onSelect(release.name)}
+      type="button"
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          dimmed ? "bg-muted-foreground/35" : "bg-primary",
+        )}
+      />
+      <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
+        {release.name}
+      </span>
+      <span
+        aria-label={isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`}
+        className={cn(
+          "hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100",
+          isPinned && "flex opacity-80 text-primary",
+        )}
+        onClick={(event) => {
+          event.stopPropagation();
+          onPin(release.name);
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <Pin className="size-3.5" />
+      </span>
+      <span
+        aria-label={`Delete ${release.name}`}
+        className="hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete(release);
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <Trash2 className="size-3.5" />
+      </span>
     </button>
   );
 }
@@ -121,6 +221,7 @@ function HelpSection({ title, entries }: HelpSectionProps) {
 }
 
 interface TasksTabRowProps {
+  disabled?: boolean;
   folderName: string;
   onOpen: () => void;
   onToggle: () => void;
@@ -128,7 +229,51 @@ interface TasksTabRowProps {
   task: Task;
 }
 
+const RELEASE_STATUS_BADGE: Record<Task["status"], string> = {
+  planned: "border-slate-500/35 bg-slate-500/10 text-slate-500",
+  active: "border-emerald-500/35 bg-emerald-500/10 text-emerald-500",
+  blocked: "border-amber-500/35 bg-amber-500/10 text-amber-500",
+  paused: "border-sky-500/35 bg-sky-500/10 text-sky-500",
+  done: "border-violet-500/35 bg-violet-500/10 text-violet-500",
+  archived: "border-zinc-500/35 bg-zinc-500/10 text-zinc-500",
+};
+
+function TruncatedTaskTitle({ title }: { title: string }) {
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const [tooltip, setTooltip] = useState<string | undefined>();
+
+  useEffect(() => {
+    const element = titleRef.current;
+    if (!element) return;
+
+    const updateTooltip = () => {
+      setTooltip(element.scrollWidth > element.clientWidth ? title : undefined);
+    };
+
+    updateTooltip();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateTooltip);
+      return () => window.removeEventListener("resize", updateTooltip);
+    }
+
+    const observer = new ResizeObserver(updateTooltip);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [title]);
+
+  return (
+    <span
+      className="min-w-0 flex-1 truncate text-sm font-normal text-current"
+      ref={titleRef}
+      title={tooltip}
+    >
+      {title}
+    </span>
+  );
+}
+
 function TasksTabRow({
+  disabled = false,
   folderName,
   onOpen,
   onToggle,
@@ -138,31 +283,52 @@ function TasksTabRow({
   return (
     <label
       className={cn(
-        "group flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-transparent px-3 py-1.5 hover:bg-accent/60",
-        selected && "bg-accent/40",
+        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/60 hover:bg-accent/60 hover:text-foreground [&_*]:cursor-pointer",
+        selected && "bg-accent/60 text-foreground",
+        disabled &&
+          "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground [&_*]:cursor-default",
       )}
     >
-      <input
-        aria-label={selected ? "Remove from release" : "Add to release"}
-        checked={selected}
-        className="size-3.5 shrink-0 accent-primary"
-        onChange={onToggle}
-        type="checkbox"
-      />
+      <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+        <input
+          aria-label={selected ? "Remove from release" : "Add to release"}
+          checked={selected}
+          disabled={disabled}
+          className="peer block size-3.5 appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={onToggle}
+          type="checkbox"
+        />
+        <Check
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
+          strokeWidth={2.5}
+        />
+      </span>
       <span
-        className="mt-0.5 size-1.5 shrink-0 rounded-full"
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          STATUS_DOT[task.status],
+        )}
         aria-hidden
-        style={{ backgroundColor: STATUS_DOT[task.status] }}
       />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="truncate text-xs font-medium">{task.title}</span>
-        <span className="ml-1.5 text-[10px] text-muted-foreground">
-          {folderName} · {task.status}
+      <TruncatedTaskTitle title={task.title} />
+      <span className="h-3 w-px shrink-0 bg-border/80" aria-hidden />
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+        <span className="max-w-32 truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {folderName}
+        </span>
+        <span
+          className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium capitalize",
+            RELEASE_STATUS_BADGE[task.status],
+          )}
+        >
+          {task.status}
         </span>
       </span>
       <button
         aria-label={`Open task: ${task.title}`}
-        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
         data-testid="open-task-link"
         onClick={(e) => {
           // Don't let the surrounding <label> also fire its onChange.
@@ -174,10 +340,27 @@ function TasksTabRow({
         type="button"
       >
         <ExternalLink className="size-3" />
-        Open
       </button>
     </label>
   );
+}
+
+function releaseMatchesSearch(release: Release, search: string) {
+  const term = search.trim().toLowerCase();
+  if (!term) return true;
+  return `${release.name} ${
+    getReleaseStatus(release) === "released" ? "released published" : "draft"
+  }`
+    .toLowerCase()
+    .includes(term);
+}
+
+function getReleaseStatus(release: Release): ReleaseStatus {
+  return release.releaseStatus ?? (release.releasedAt ? "released" : "draft");
+}
+
+function formatSectionCount(count: number) {
+  return String(count).padStart(2, "0");
 }
 
 interface ReleaseViewProps {
@@ -187,6 +370,7 @@ interface ReleaseViewProps {
   onSelectTask: (id: string) => void;
   onTagTask: (taskId: string, name: string) => Promise<void>;
   releases: Release[];
+  sidebarOpen?: boolean;
   tasks: Task[];
 }
 
@@ -197,31 +381,41 @@ export function ReleaseView({
   onSelectTask,
   onTagTask,
   releases,
+  sidebarOpen = true,
   tasks,
 }: ReleaseViewProps) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
-  const [editVersionDialogOpen, setEditVersionDialogOpen] = useState(false);
-  const [editVersion, setEditVersion] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
+  const [confirmReleaseOpen, setConfirmReleaseOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [templateDraft, setTemplateDraft] = useState("");
   const [templateDirty, setTemplateDirty] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [previewTab, setPreviewTab] = useState<"preview" | "source" | "editor">(
-    "preview",
-  );
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
+  const [notesPane, setNotesPane] = useState<"editor" | "preview">("editor");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [releaseSearch, setReleaseSearch] = useState("");
+  const [releasedExpanded, setReleasedExpanded] = useState(false);
+  const [pinnedExpanded, setPinnedExpanded] = useState(true);
+  const [pinnedReleaseNames, setPinnedReleaseNames] = useState<string[]>(
+    loadPinnedReleaseNames,
+  );
+  const [selectedTasksExpanded, setSelectedTasksExpanded] = useState(false);
+  const [availableTasksExpanded, setAvailableTasksExpanded] = useState(true);
   const [tasksSearch, setTasksSearch] = useState("");
   const [tasksUseRegex, setTasksUseRegex] = useState(false);
   const [tasksSearchInvalid, setTasksSearchInvalid] = useState(false);
-  const [notesPane, setNotesPane] = useState<"editor" | "preview">("editor");
-  const [isWideLayout, setIsWideLayout] = useState(true);
-  const tabBarRef = useRef<HTMLDivElement>(null);
-  const templateEditorRef = useRef<HTMLTextAreaElement>(null);
-  const newVersionRef = useRef<HTMLInputElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    clampReleaseSidebarWidth(
+      Number(localStorage.getItem(RELEASE_SIDEBAR_WIDTH_KEY)),
+    ),
+  );
+  const [resizingSidebar, setResizingSidebar] = useState(false);
+  const templateEditorRef = useRef<ReactCodeMirrorRef>(null);
   const newNameRef = useRef<HTMLInputElement>(null);
   const tasksSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -239,9 +433,21 @@ export function ReleaseView({
       return;
     }
     if (!selectedName || !releases.some((r) => r.name === selectedName)) {
-      setSelectedName(releases[0].name);
+      setSelectedName(
+        (releases.find((release) => !release.releasedAt) ?? releases[0]).name,
+      );
     }
   }, [releases, selectedName]);
+
+  useEffect(() => {
+    setPinnedReleaseNames((current) => {
+      const releaseNames = new Set(releases.map((release) => release.name));
+      const next = current.filter((name) => releaseNames.has(name));
+      if (next.length === current.length) return current;
+      localStorage.setItem(PINNED_RELEASES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [releases]);
 
   useEffect(() => {
     void reloadReleases();
@@ -259,7 +465,15 @@ export function ReleaseView({
   useEffect(() => {
     setTemplateDraft(selectedRelease?.descriptionMarkdown ?? "");
     setTemplateDirty(false);
+    setNameDraft(selectedRelease?.name ?? "");
+    setEditingName(false);
   }, [selectedRelease?.name]);
+
+  useEffect(() => {
+    if (selectedRelease && getReleaseStatus(selectedRelease) === "released") {
+      setNotesPane("preview");
+    }
+  }, [selectedRelease]);
 
   // Restore the last-used tab so the user lands where they left off.
   useEffect(() => {
@@ -275,21 +489,14 @@ export function ReleaseView({
     window.localStorage.setItem("devthread:release-active-tab", activeTab);
   }, [activeTab]);
 
-  // Watch the tab bar (or the right panel as a fallback) to decide whether
-  // the notes tab has enough horizontal room to render editor + preview
-  // side-by-side. Below ~720px the preview/editor become a toggle.
   useEffect(() => {
-    if (typeof window === "undefined" || typeof ResizeObserver === "undefined")
-      return;
-    const target = tabBarRef.current;
-    if (!target) return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      setIsWideLayout(width >= 720);
-    });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, []);
+    if (!selectedRelease || !templateDirty || savingTemplate) return;
+    const timer = window.setTimeout(() => {
+      void saveTemplate({ quiet: true });
+    }, 700);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRelease?.name, templateDraft, templateDirty, savingTemplate]);
 
   // Validate regex input as the user types so we can show an error chip and
   // keep the available/selected lists unfiltered (rather than blanking out).
@@ -316,17 +523,15 @@ export function ReleaseView({
     [tasks, selectedName],
   );
 
-  const currentlyTaggedIds = useMemo(
-    () => new Set(taggedTasks.map((t) => t.id)),
-    [taggedTasks],
-  );
-
-  // Tasks tab: candidate set is every non-archived task, with a search/regex
-  // filter on title + folder. The filter is applied to BOTH selected and
-  // available sections so a search acts like "show me only matches here".
+  // Tasks tab: candidate set is every non-archived task. Search only filters
+  // unassigned tasks because selected tasks should remain stable context.
   const candidateTasks = useMemo(
     () => tasks.filter((t) => t.status !== "archived"),
     [tasks],
+  );
+  const unassignedTasks = useMemo(
+    () => candidateTasks.filter((t) => !t.releaseName),
+    [candidateTasks],
   );
 
   const tasksMatcher = useMemo(() => {
@@ -344,17 +549,42 @@ export function ReleaseView({
     return (title: string) => title.toLowerCase().includes(lower);
   }, [tasksSearch, tasksUseRegex]);
 
-  const filteredSelectedTasks = useMemo(
-    () => taggedTasks.filter((t) => tasksMatcher(t.title)),
-    [taggedTasks, tasksMatcher],
-  );
+  const filteredSelectedTasks = useMemo(() => taggedTasks, [taggedTasks]);
   const filteredAvailableTasks = useMemo(
-    () =>
-      candidateTasks
-        .filter((t) => !currentlyTaggedIds.has(t.id))
-        .filter((t) => tasksMatcher(t.title)),
-    [candidateTasks, currentlyTaggedIds, tasksMatcher],
+    () => unassignedTasks.filter((t) => tasksMatcher(t.title)),
+    [tasksMatcher, unassignedTasks],
   );
+  const selectedReleaseStatus = selectedRelease
+    ? getReleaseStatus(selectedRelease)
+    : "draft";
+  const releaseLocked = selectedReleaseStatus === "released";
+  const effectiveNotesPane = releaseLocked ? "preview" : notesPane;
+  const incompleteTaskCount = taggedTasks.filter(
+    (task) => task.status !== "done",
+  ).length;
+  const canPublishRelease = taggedTasks.length > 0 && incompleteTaskCount === 0;
+  const releaseBlockedReason =
+    taggedTasks.length === 0
+      ? "Release blocked: no tasks selected"
+      : incompleteTaskCount > 0
+        ? `Release blocked: ${incompleteTaskCount} task${
+            incompleteTaskCount === 1 ? "" : "s"
+          } not done`
+        : null;
+  const releaseStatusHint =
+    selectedReleaseStatus === "released"
+      ? selectedRelease?.releasedAt
+        ? `Published ${formatDate(selectedRelease.releasedAt)}`
+        : "Published and locked"
+      : selectedReleaseStatus === "pre_release"
+        ? "Final review"
+        : "Collecting tasks";
+
+  useEffect(() => {
+    if (releaseLocked) {
+      setSelectedTasksExpanded(true);
+    }
+  }, [releaseLocked]);
 
   const tableRows = useMemo<TaskTableRow[]>(
     () => taggedTasks.map((task) => ({ task })),
@@ -377,18 +607,82 @@ export function ReleaseView({
     });
     return renderReleaseTemplate(templateDraft, ctx);
   }, [selectedRelease, templateDraft, taskTableMd, taggedTasks, folderNames]);
+  const editorExtensions = useMemo(
+    () => [
+      markdown(),
+      EditorView.lineWrapping,
+      EditorView.theme(
+        {
+          "&": {
+            backgroundColor: "hsl(var(--background))",
+            color: "hsl(var(--foreground))",
+            height: "100%",
+            fontSize: "14px",
+            userSelect: "text",
+          },
+          "&.cm-editor": {
+            backgroundColor: "hsl(var(--background))",
+            userSelect: "text",
+          },
+          ".cm-scroller": {
+            backgroundColor: "hsl(var(--background))",
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+            lineHeight: "1.5rem",
+            userSelect: "text",
+          },
+          ".cm-content": {
+            backgroundColor: "transparent",
+            caretColor: "hsl(var(--primary))",
+            color: "hsl(var(--foreground))",
+            minHeight: "100%",
+            padding: "20px 16px 20px 8px",
+            userSelect: "text",
+            WebkitUserSelect: "text",
+          },
+          ".cm-line": {
+            padding: "0 2px",
+          },
+          ".cm-gutters": {
+            backgroundColor: "hsl(var(--card))",
+            borderRight: "1px solid hsl(var(--border) / 0.7)",
+            color: "hsl(var(--muted-foreground) / 0.65)",
+          },
+          ".cm-gutter": {
+            backgroundColor: "hsl(var(--card))",
+          },
+          ".cm-lineNumbers .cm-gutterElement": {
+            minWidth: "2.25rem",
+            padding: "0 8px 0 6px",
+          },
+          ".cm-activeLine, .cm-activeLineGutter": {
+            backgroundColor: "transparent",
+          },
+          ".cm-cursor": {
+            borderLeftColor: "hsl(var(--primary))",
+          },
+          ".cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground":
+            {
+              backgroundColor: "rgba(75, 105, 165, 0.38) !important",
+            },
+          "&.cm-focused .cm-selectionBackground, &.cm-focused .cm-selectionLayer .cm-selectionBackground":
+            {
+              backgroundColor: "rgba(75, 105, 165, 0.55) !important",
+            },
+          ".cm-placeholder": {
+            color: "hsl(var(--muted-foreground) / 0.7)",
+          },
+          "&.cm-focused": {
+            outline: "none",
+          },
+        },
+        { dark: true },
+      ),
+    ],
+    [],
+  );
 
-  async function copySummary() {
-    if (!selectedRelease) return;
-    try {
-      await navigator.clipboard.writeText(fullSummaryMd);
-      toast.success("Release summary copied");
-    } catch (cause) {
-      toast.error(String(cause));
-    }
-  }
-
-  async function saveTemplate() {
+  async function saveTemplate(options: { quiet?: boolean } = {}) {
     if (!selectedRelease || savingTemplate) return;
     setSavingTemplate(true);
     try {
@@ -397,7 +691,7 @@ export function ReleaseView({
       });
       setTemplateDirty(false);
       await reloadReleases();
-      toast.success("Template saved");
+      if (!options.quiet) toast.success("Release notes saved");
     } catch (cause) {
       toast.error(String(cause));
     } finally {
@@ -405,38 +699,40 @@ export function ReleaseView({
     }
   }
 
+  async function copyReleaseMarkdown() {
+    try {
+      await navigator.clipboard.writeText(fullSummaryMd);
+      toast.success("Release notes copied");
+    } catch (cause) {
+      toast.error(String(cause));
+    }
+  }
+
   function insertPlaceholder(snippet: string) {
-    const textarea = templateEditorRef.current;
-    if (!textarea) {
+    const view = templateEditorRef.current?.view;
+    if (!view) {
       setTemplateDraft((current) =>
         current.length > 0 ? `${current}\n${snippet}` : snippet,
       );
       setTemplateDirty(true);
       return;
     }
-    const start = textarea.selectionStart ?? templateDraft.length;
-    const end = textarea.selectionEnd ?? templateDraft.length;
-    const next =
-      templateDraft.slice(0, start) + snippet + templateDraft.slice(end);
-    setTemplateDraft(next);
-    setTemplateDirty(true);
-    // Restore the caret after React commits the new value.
-    requestAnimationFrame(() => {
-      const el = templateEditorRef.current;
-      if (!el) return;
-      const caret = start + snippet.length;
-      el.focus();
-      el.setSelectionRange(caret, caret);
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: snippet },
+      selection: { anchor: from + snippet.length },
     });
+    setTemplateDraft(view.state.doc.toString());
+    setTemplateDirty(true);
+    view.focus();
   }
 
   async function handleCreate() {
     const name = newNameRef.current?.value.trim();
-    const version = newVersionRef.current?.value.trim() || null;
     if (!name) return;
     setBusy(true);
     try {
-      await api.createRelease(name, version);
+      await api.createRelease(name, null);
       setNewDialogOpen(false);
       await reloadReleases();
       setSelectedName(name);
@@ -447,15 +743,22 @@ export function ReleaseView({
     }
   }
 
-  async function handleSaveVersion() {
-    if (!selectedRelease) return;
+  async function handleRename() {
+    if (!selectedRelease || getReleaseStatus(selectedRelease) === "released") {
+      return;
+    }
+    const nextName = nameDraft.trim();
+    if (!nextName || nextName === selectedRelease.name) {
+      setEditingName(false);
+      setNameDraft(selectedRelease.name);
+      return;
+    }
     setBusy(true);
     try {
-      const trimmed = editVersion?.trim();
-      const newVersion = trimmed ? trimmed : null;
-      await api.updateRelease(selectedRelease.name, { version: newVersion });
-      setEditVersionDialogOpen(false);
+      await api.updateRelease(selectedRelease.name, { newName: nextName });
       await reloadReleases();
+      setSelectedName(nextName);
+      setEditingName(false);
     } catch (cause) {
       toast.error(String(cause));
     } finally {
@@ -464,11 +767,17 @@ export function ReleaseView({
   }
 
   async function handleDelete() {
-    if (!selectedRelease) return;
+    if (!releaseToDelete) return;
+    const deletedName = releaseToDelete.name;
     setBusy(true);
     try {
-      await api.deleteRelease(selectedRelease.name);
-      setDeleteDialogOpen(false);
+      await api.deleteRelease(deletedName);
+      setReleaseToDelete(null);
+      setPinnedReleaseNames((current) => {
+        const next = current.filter((name) => name !== deletedName);
+        localStorage.setItem(PINNED_RELEASES_KEY, JSON.stringify(next));
+        return next;
+      });
       await reloadReleases();
     } catch (cause) {
       toast.error(String(cause));
@@ -477,20 +786,49 @@ export function ReleaseView({
     }
   }
 
-  async function handleMarkReleased() {
+  function togglePinnedRelease(name: string) {
+    setPinnedReleaseNames((current) => {
+      const next = current.includes(name)
+        ? current.filter((item) => item !== name)
+        : [name, ...current];
+      localStorage.setItem(PINNED_RELEASES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  async function updateReleaseStatus(nextStatus: ReleaseStatus) {
     if (!selectedRelease) return;
+    if (nextStatus === "released" && !canPublishRelease) {
+      toast.error("All selected tasks must be done before release.");
+      return;
+    }
     setBusy(true);
     try {
-      const releasedAt = selectedRelease.releasedAt
-        ? null
-        : new Date().toISOString();
-      await api.updateRelease(selectedRelease.name, { releasedAt });
+      await api.updateRelease(selectedRelease.name, {
+        releaseStatus: nextStatus,
+        releasedAt: nextStatus === "released" ? new Date().toISOString() : null,
+      });
       await reloadReleases();
     } catch (cause) {
       toast.error(String(cause));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleReleaseStatusChange(nextStatus: ReleaseStatus) {
+    if (!selectedRelease) return;
+    const current = getReleaseStatus(selectedRelease);
+    if (current === "released" || nextStatus === current) return;
+    if (nextStatus === "released") {
+      if (!canPublishRelease) {
+        toast.error("All selected tasks must be done before release.");
+        return;
+      }
+      setConfirmReleaseOpen(true);
+      return;
+    }
+    await updateReleaseStatus(nextStatus);
   }
 
   async function handleRemoveTag(taskId: string) {
@@ -501,151 +839,446 @@ export function ReleaseView({
     }
   }
 
+  function startSidebarResize(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    setResizingSidebar(true);
+
+    function move(pointer: globalThis.MouseEvent) {
+      const nextWidth = clampReleaseSidebarWidth(
+        startWidth + pointer.clientX - startX,
+      );
+      setSidebarWidth(nextWidth);
+      localStorage.setItem(RELEASE_SIDEBAR_WIDTH_KEY, String(nextWidth));
+    }
+
+    function stop() {
+      setResizingSidebar(false);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+    }
+
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+  }
+
   const releasesSorted = useMemo(
     () => [...releases].sort((a, b) => b.name.localeCompare(a.name)),
     [releases],
   );
+  const draftReleases = useMemo(
+    () =>
+      releasesSorted.filter(
+        (release) => getReleaseStatus(release) !== "released",
+      ),
+    [releasesSorted],
+  );
+  const releasedReleases = useMemo(
+    () =>
+      releasesSorted.filter(
+        (release) => getReleaseStatus(release) === "released",
+      ),
+    [releasesSorted],
+  );
+  const searchActive = releaseSearch.trim().length > 0;
+  const pinnedReleases = useMemo(() => {
+    if (searchActive || !pinnedReleaseNames.length) return [];
+    const releasesByName = new Map(
+      releases.map((release) => [release.name, release]),
+    );
+    return pinnedReleaseNames
+      .map((name) => releasesByName.get(name))
+      .filter((release): release is Release => Boolean(release));
+  }, [pinnedReleaseNames, releases, searchActive]);
+  const filteredDraftReleases = useMemo(
+    () =>
+      draftReleases.filter((release) =>
+        releaseMatchesSearch(release, releaseSearch),
+      ),
+    [draftReleases, releaseSearch],
+  );
+  const filteredReleasedReleases = useMemo(
+    () =>
+      releasedReleases.filter((release) =>
+        releaseMatchesSearch(release, releaseSearch),
+      ),
+    [releasedReleases, releaseSearch],
+  );
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] bg-background">
+    <section className="flex min-h-0 flex-1 bg-background">
       {/* Left panel: release list */}
-      <div className="flex min-h-0 flex-col border-r border-border bg-card/60">
-        <div className="border-b border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-semibold">Releases</h1>
-              <p className="text-xs text-muted-foreground">
-                {releases.length}{" "}
-                {releases.length === 1 ? "release" : "releases"}
-              </p>
+      <div
+        className={cn(
+          "relative h-full shrink-0 overflow-hidden border-r border-border transition-[width] duration-200 ease-out",
+          !sidebarOpen && "border-r-0",
+          resizingSidebar && "select-none transition-none",
+        )}
+        style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+      >
+        <aside
+          aria-hidden={!sidebarOpen}
+          className="flex h-full min-h-0 flex-col bg-card/95 text-card-foreground"
+          style={{ width: sidebarWidth }}
+        >
+          <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
+            <div className="flex min-w-0 items-center gap-2 text-foreground/85">
+              <Calendar
+                className="size-4 shrink-0 text-current"
+                strokeWidth={1.75}
+              />
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-medium text-current">
+                  Releases
+                </h1>
+              </div>
             </div>
-            <Button
-              onClick={() => setNewDialogOpen(true)}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <Plus className="size-3.5" />
-              New
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                aria-label="New release"
+                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                onClick={() => setNewDialogOpen(true)}
+                size="icon-sm"
+                title="New release"
+                type="button"
+                variant="ghost"
+              >
+                <Plus strokeWidth={1.75} />
+              </Button>
+            </div>
           </div>
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {releasesSorted.map((release) => {
-              const selected = selectedRelease?.name === release.name;
-              const isReleased = !!release.releasedAt;
-              return (
+          <div className="px-3.5 pb-4">
+            <div className="relative">
+              {releaseSearch ? (
                 <button
-                  className={cn(
-                    "flex w-full min-w-0 flex-col gap-0.5 rounded-md border border-transparent px-3 py-2.5 text-left hover:bg-accent/60",
-                    selected &&
-                      "border-border bg-accent text-accent-foreground",
-                  )}
-                  key={release.name}
-                  onClick={() => setSelectedName(release.name)}
+                  aria-label="Clear release search"
+                  className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onClick={() => setReleaseSearch("")}
                   type="button"
                 >
-                  <span className="truncate text-sm font-medium">
-                    {release.name}
-                  </span>
-                  {release.version && (
-                    <span className="truncate text-[11px] text-muted-foreground">
-                      {release.version}
-                    </span>
-                  )}
-                  <span className="text-[11px] text-muted-foreground">
-                    {isReleased
-                      ? formatDate(release.releasedAt!)
-                      : "Draft · not yet released"}
-                  </span>
+                  <X className="size-3.5" strokeWidth={1.75} />
                 </button>
-              );
-            })}
-            {!releasesSorted.length && (
-              <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                No releases yet.
+              ) : (
+                <Search
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
+                  strokeWidth={1.75}
+                />
+              )}
+              <Input
+                aria-label="Search releases"
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
+                className="h-9 rounded-md border-border/80 bg-background/35 pl-3 pr-8 text-sm text-foreground shadow-inner shadow-black/5 placeholder:text-muted-foreground/75 focus-visible:border-ring/70"
+                maxLength={80}
+                name="devthread-release-search"
+                onChange={(event) =>
+                  setReleaseSearch(event.target.value.slice(0, 80))
+                }
+                placeholder="Search releases..."
+                spellCheck={false}
+                value={releaseSearch}
+              />
+            </div>
+          </div>
+          <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <nav
+              aria-label="Releases"
+              className="flex w-full min-w-0 flex-col overflow-hidden px-3.5 pb-3"
+            >
+              {!searchActive && pinnedReleases.length > 0 && (
+                <section aria-label="Pinned releases" className="mb-3">
+                  <button
+                    aria-expanded={pinnedExpanded}
+                    className="mb-1 flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    onClick={() => setPinnedExpanded((open) => !open)}
+                    type="button"
+                  >
+                    <ChevronRight
+                      aria-hidden
+                      className={cn(
+                        "size-3.5 shrink-0 transition-transform",
+                        pinnedExpanded && "rotate-90",
+                      )}
+                      strokeWidth={1.75}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      Pinned releases
+                    </span>
+                  </button>
+                  {pinnedExpanded && (
+                    <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                      {pinnedReleases.map((release) => (
+                        <ReleaseSidebarRow
+                          dimmed={getReleaseStatus(release) === "released"}
+                          isPinned={pinnedReleaseNames.includes(release.name)}
+                          key={release.name}
+                          onDelete={setReleaseToDelete}
+                          onPin={togglePinnedRelease}
+                          onSelect={setSelectedName}
+                          release={release}
+                          selected={selectedRelease?.name === release.name}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+              <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
+                {searchActive ? "Draft results" : "All Drafts"}
               </div>
+              <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                {filteredDraftReleases.map((release) => (
+                  <ReleaseSidebarRow
+                    isPinned={pinnedReleaseNames.includes(release.name)}
+                    key={release.name}
+                    onDelete={setReleaseToDelete}
+                    onPin={togglePinnedRelease}
+                    onSelect={setSelectedName}
+                    release={release}
+                    selected={selectedRelease?.name === release.name}
+                  />
+                ))}
+              </div>
+              {!filteredDraftReleases.length && (
+                <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
+                  <Calendar className="size-5 opacity-60" strokeWidth={1.75} />
+                  <span>
+                    {draftReleases.length
+                      ? searchActive
+                        ? `No draft releases match “${releaseSearch.trim()}”.`
+                        : "No draft releases yet."
+                      : "No draft releases yet."}
+                  </span>
+                </div>
+              )}
+            </nav>
+          </ScrollArea>
+          <div className="shrink-0 border-t border-border/80 px-3.5 py-2">
+            <button
+              aria-expanded={releasedExpanded}
+              className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => setReleasedExpanded((expanded) => !expanded)}
+              type="button"
+            >
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  releasedExpanded && "rotate-90",
+                )}
+                strokeWidth={1.75}
+              />
+              <span className="min-w-0 flex-1 truncate">Released</span>
+            </button>
+            {releasedExpanded && (
+              <ScrollArea className="max-h-[260px] pt-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+                <div className="flex min-w-0 flex-col gap-px overflow-hidden pb-1">
+                  {filteredReleasedReleases.map((release) => (
+                    <ReleaseSidebarRow
+                      dimmed
+                      isPinned={pinnedReleaseNames.includes(release.name)}
+                      key={release.name}
+                      onDelete={setReleaseToDelete}
+                      onPin={togglePinnedRelease}
+                      onSelect={setSelectedName}
+                      release={release}
+                      selected={selectedRelease?.name === release.name}
+                    />
+                  ))}
+                  {!filteredReleasedReleases.length && (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                      {releasedReleases.length
+                        ? `No released releases match “${releaseSearch.trim()}”.`
+                        : "No released releases yet."}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
             )}
           </div>
-        </ScrollArea>
+        </aside>
+        {sidebarOpen && (
+          <button
+            aria-label="Resize release sidebar"
+            className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
+            onDoubleClick={() => {
+              setSidebarWidth(DEFAULT_RELEASE_SIDEBAR_WIDTH);
+              localStorage.setItem(
+                RELEASE_SIDEBAR_WIDTH_KEY,
+                String(DEFAULT_RELEASE_SIDEBAR_WIDTH),
+              );
+            }}
+            onMouseDown={startSidebarResize}
+            type="button"
+          />
+        )}
       </div>
 
       {/* Right panel: release detail */}
-      <div className="flex min-h-0 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {selectedRelease ? (
           <>
-            <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold">
-                  {selectedRelease.name}
-                </h2>
-                {selectedRelease.version && (
-                  <p className="truncate text-sm text-muted-foreground">
-                    {selectedRelease.version}
-                  </p>
+            <div className="border-b border-border px-6 py-4">
+              <div className="min-w-0 space-y-1.5">
+                {editingName ? (
+                  <Input
+                    aria-label="Release name"
+                    className="h-8 w-full text-base font-semibold"
+                    disabled={busy}
+                    onBlur={() => void handleRename()}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setNameDraft(selectedRelease.name);
+                        setEditingName(false);
+                      }
+                    }}
+                    value={nameDraft}
+                  />
+                ) : (
+                  <button
+                    className={cn(
+                      "block w-full truncate text-left text-base font-semibold text-foreground",
+                      !releaseLocked && "hover:text-primary",
+                    )}
+                    disabled={releaseLocked}
+                    onClick={() => {
+                      if (releaseLocked) return;
+                      setEditingName(true);
+                    }}
+                    title={
+                      releaseLocked
+                        ? "Released releases are locked"
+                        : "Rename release"
+                    }
+                    type="button"
+                  >
+                    {selectedRelease.name}
+                  </button>
                 )}
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {selectedRelease.releasedAt ? (
-                    <>
-                      <Calendar className="mr-1 inline size-3 align-text-top" />
-                      Released {formatDate(selectedRelease.releasedAt)}
-                    </>
+                <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  {releaseLocked ? (
+                    <span
+                      aria-label={`Release status: ${RELEASE_STATUS_LABEL[selectedReleaseStatus]}.`}
+                      className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          RELEASE_STATUS_DOT[selectedReleaseStatus],
+                        )}
+                      />
+                      <span className="font-medium">
+                        {RELEASE_STATUS_LABEL[selectedReleaseStatus]}
+                      </span>
+                    </span>
                   ) : (
-                    "Draft · not yet released"
+                    <Popover onOpenChange={setStatusOpen} open={statusOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          aria-label={`Release status: ${RELEASE_STATUS_LABEL[selectedReleaseStatus]}. Click to change.`}
+                          className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                          disabled={busy}
+                          title={
+                            !canPublishRelease
+                              ? "Release requires all selected tasks to be done"
+                              : undefined
+                          }
+                          type="button"
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              RELEASE_STATUS_DOT[selectedReleaseStatus],
+                            )}
+                          />
+                          <span className="font-medium">
+                            {RELEASE_STATUS_LABEL[selectedReleaseStatus]}
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-44 p-1">
+                        <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Status
+                        </p>
+                        {RELEASE_STATUS_ORDER.map((status) => {
+                          const active = selectedReleaseStatus === status;
+                          const disabled =
+                            status === "released" && !canPublishRelease;
+                          return (
+                            <button
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0",
+                                active && "bg-accent",
+                                disabled &&
+                                  "cursor-not-allowed opacity-45 hover:bg-transparent",
+                              )}
+                              disabled={disabled}
+                              key={status}
+                              onClick={() => {
+                                setStatusOpen(false);
+                                void handleReleaseStatusChange(status);
+                              }}
+                              title={
+                                disabled
+                                  ? "All selected tasks must be done before release"
+                                  : undefined
+                              }
+                              type="button"
+                            >
+                              <span
+                                aria-hidden
+                                className={cn(
+                                  "size-1.5 rounded-full",
+                                  RELEASE_STATUS_DOT[status],
+                                )}
+                              />
+                              {RELEASE_STATUS_LABEL[status]}
+                            </button>
+                          );
+                        })}
+                      </PopoverContent>
+                    </Popover>
                   )}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  aria-label="Copy release summary"
-                  disabled={!taggedTasks.length}
-                  onClick={() => void copySummary()}
-                  size="icon-sm"
-                  title="Copy release summary"
-                  type="button"
-                  variant="outline"
-                >
-                  <Copy className="size-3.5" />
-                </Button>
-                <Button
-                  aria-label="Edit version"
-                  onClick={() => {
-                    setEditVersion(selectedRelease.version);
-                    setEditVersionDialogOpen(true);
-                  }}
-                  size="icon-sm"
-                  title="Edit version"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button
-                  aria-label="Delete release"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  size="icon-sm"
-                  title="Delete release"
-                  type="button"
-                  variant="outline"
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                  <span aria-hidden>·</span>
+                  <span className="truncate">
+                    {selectedReleaseStatus === "released" && (
+                      <Calendar className="mr-1 inline size-3 align-text-top" />
+                    )}
+                    {releaseStatusHint}
+                  </span>
+                  {selectedReleaseStatus === "pre_release" &&
+                    releaseBlockedReason && (
+                      <span className="inline-flex min-w-0 items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                        <AlertTriangle
+                          aria-hidden
+                          className="size-3 shrink-0"
+                        />
+                        <span className="truncate">{releaseBlockedReason}</span>
+                      </span>
+                    )}
+                </div>
               </div>
             </div>
 
             {/* Tab bar + tab content */}
             <div className="flex min-h-0 flex-1 flex-col">
-              <div
-                className="flex shrink-0 items-end gap-2 border-b border-border bg-card/30 px-6"
-                ref={tabBarRef}
-              >
-                <div className="flex items-end gap-1" role="tablist">
+              <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-card/30 px-6">
+                <div className="flex h-full items-center gap-1" role="tablist">
                   <button
                     aria-controls="release-tab-panel-tasks"
                     aria-selected={activeTab === "tasks"}
                     className={cn(
-                      "relative inline-flex h-9 items-center gap-1.5 px-3 text-xs font-medium transition-colors",
+                      "relative inline-flex h-full items-center gap-1.5 px-3 text-xs font-medium transition-colors",
                       "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:rounded-full after:transition-colors",
                       activeTab === "tasks"
                         ? "text-foreground after:bg-primary"
@@ -674,7 +1307,7 @@ export function ReleaseView({
                     aria-controls="release-tab-panel-notes"
                     aria-selected={activeTab === "notes"}
                     className={cn(
-                      "relative inline-flex h-9 items-center gap-1.5 px-3 text-xs font-medium transition-colors",
+                      "relative inline-flex h-full items-center gap-1.5 px-3 text-xs font-medium transition-colors",
                       "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:rounded-full after:transition-colors",
                       activeTab === "notes"
                         ? "text-foreground after:bg-primary"
@@ -685,7 +1318,7 @@ export function ReleaseView({
                     type="button"
                   >
                     <FileText className="size-3.5" />
-                    Release notes
+                    Notes
                     {templateDirty && (
                       <span
                         aria-label="Unsaved changes"
@@ -694,25 +1327,95 @@ export function ReleaseView({
                     )}
                   </button>
                 </div>
-                <div className="ml-auto flex items-center gap-2 pb-1.5 pt-1.5">
-                  {templateDirty && activeTab !== "notes" && (
-                    <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                      Unsaved changes
+                <div className="ml-auto flex h-full items-center gap-1.5">
+                  {activeTab === "notes" && (
+                    <>
+                      {!releaseLocked && effectiveNotesPane === "editor" && (
+                        <Popover
+                          onOpenChange={setPlaceholderOpen}
+                          open={placeholderOpen}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              aria-label="Insert release variable"
+                              className="h-7 px-2 text-[11px]"
+                              size="sm"
+                              title="Insert release variable"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Braces className="size-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-72 p-1">
+                            <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Insert variable
+                            </p>
+                            <div className="space-y-0.5">
+                              {RELEASE_TEMPLATE_PLACEHOLDERS.map((p) => (
+                                <PlaceholderButton
+                                  description={p.description}
+                                  key={p.snippet}
+                                  onClick={() => {
+                                    insertPlaceholder(p.snippet);
+                                    setPlaceholderOpen(false);
+                                  }}
+                                  snippet={p.snippet}
+                                />
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      <Button
+                        aria-label="Copy release notes markdown"
+                        className="h-7 px-2 text-[11px]"
+                        disabled={!fullSummaryMd.trim()}
+                        onClick={() => void copyReleaseMarkdown()}
+                        size="sm"
+                        title="Copy markdown"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Copy className="size-3.5" />
+                      </Button>
+                      {!releaseLocked && (
+                        <div className="inline-flex h-7 items-center rounded-md border border-border bg-card/40 p-0.5 text-[11px]">
+                          <button
+                            aria-pressed={notesPane === "editor"}
+                            className={cn(
+                              "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                              notesPane === "editor"
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                            onClick={() => setNotesPane("editor")}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            aria-pressed={notesPane === "preview"}
+                            className={cn(
+                              "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
+                              notesPane === "preview"
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                            onClick={() => setNotesPane("preview")}
+                            type="button"
+                          >
+                            Preview
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {templateDirty && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {savingTemplate ? "Saving" : "Unsaved"}
                     </span>
                   )}
-                  <Button
-                    aria-label="Save release notes template"
-                    className="h-7 px-2.5 text-[11px]"
-                    data-testid="save-template-button"
-                    disabled={!templateDirty || savingTemplate}
-                    onClick={() => void saveTemplate()}
-                    size="sm"
-                    type="button"
-                    variant={templateDirty ? "default" : "outline"}
-                  >
-                    <Save className="size-3.5" />
-                    {savingTemplate ? "Saving…" : "Save"}
-                  </Button>
                 </div>
               </div>
 
@@ -720,459 +1423,250 @@ export function ReleaseView({
                 {/* Tasks tab */}
                 {activeTab === "tasks" && (
                   <ScrollArea className="flex-1">
-                    <div className="space-y-4 px-6 py-4 pb-8">
-                      <div>
-                        <div className="relative">
-                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            aria-label="Search tasks"
-                            aria-invalid={tasksSearchInvalid || undefined}
-                            className="h-8 pl-7 pr-9 text-xs"
-                            onChange={(e) => setTasksSearch(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape" && tasksSearch) {
-                                e.preventDefault();
-                                setTasksSearch("");
+                    <div className="px-6 pb-8 pt-5">
+                      {!releaseLocked && (
+                        <div className="mb-4">
+                          <div className="relative">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              aria-label="Search available tasks"
+                              aria-invalid={tasksSearchInvalid || undefined}
+                              className="h-8 pl-7 pr-9 text-xs"
+                              onChange={(e) => setTasksSearch(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape" && tasksSearch) {
+                                  e.preventDefault();
+                                  setTasksSearch("");
+                                }
+                              }}
+                              placeholder={
+                                tasksUseRegex
+                                  ? "Regex pattern (case-insensitive)"
+                                  : "Search available tasks…"
                               }
-                            }}
-                            placeholder={
-                              tasksUseRegex
-                                ? "Regex pattern (case-insensitive)"
-                                : "Search by title…"
-                            }
-                            ref={tasksSearchInputRef}
-                            value={tasksSearch}
-                          />
+                              ref={tasksSearchInputRef}
+                              value={tasksSearch}
+                            />
+                            <button
+                              aria-label={
+                                tasksUseRegex
+                                  ? "Disable regex search"
+                                  : "Enable regex search"
+                              }
+                              aria-pressed={tasksUseRegex}
+                              className={cn(
+                                "absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                                tasksUseRegex &&
+                                  "bg-primary/15 text-primary hover:bg-primary/20",
+                                tasksSearchInvalid && "text-destructive",
+                              )}
+                              onClick={() => setTasksUseRegex((v) => !v)}
+                              title={
+                                tasksUseRegex
+                                  ? "Disable regex search"
+                                  : "Enable regex search"
+                              }
+                              type="button"
+                            >
+                              <Regex className="size-3.5" />
+                            </button>
+                          </div>
+                          {tasksSearchInvalid && (
+                            <p className="mt-1 text-[10px] text-destructive">
+                              Invalid regex pattern.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <section
+                        aria-label="Selected For Release"
+                        className="contents"
+                      >
+                        <div className="sticky top-0 z-30 flex h-9 w-full bg-background">
                           <button
-                            aria-label={
-                              tasksUseRegex
-                                ? "Disable regex search"
-                                : "Enable regex search"
-                            }
-                            aria-pressed={tasksUseRegex}
-                            className={cn(
-                              "absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                              tasksUseRegex &&
-                                "bg-primary/15 text-primary hover:bg-primary/20",
-                              tasksSearchInvalid && "text-destructive",
-                            )}
-                            onClick={() => setTasksUseRegex((v) => !v)}
-                            title={
-                              tasksUseRegex
-                                ? "Disable regex search"
-                                : "Enable regex search"
+                            aria-expanded={selectedTasksExpanded}
+                            className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
+                            onClick={() =>
+                              setSelectedTasksExpanded((expanded) => !expanded)
                             }
                             type="button"
                           >
-                            <Regex className="size-3.5" />
+                            <ChevronRight
+                              className={cn(
+                                "size-4 transition-transform duration-150 ease-out",
+                                selectedTasksExpanded && "rotate-90",
+                              )}
+                            />
+                            <span className="truncate">
+                              Selected For Release
+                            </span>
+                            <span className="text-xs font-medium text-muted-foreground/75">
+                              {formatSectionCount(filteredSelectedTasks.length)}
+                            </span>
                           </button>
                         </div>
-                        {tasksSearchInvalid && (
-                          <p className="mt-1 text-[10px] text-destructive">
-                            Invalid regex pattern.
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Selected for this release
-                          </h3>
-                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {filteredSelectedTasks.length}/{taggedTasks.length}
-                          </span>
-                        </div>
-                        {filteredSelectedTasks.length > 0 ? (
-                          <div className="space-y-1">
-                            {filteredSelectedTasks.map((task) => (
-                              <TasksTabRow
-                                folderName={
-                                  folderNames.get(task.folderId ?? "") ??
-                                  "No folder"
-                                }
-                                key={task.id}
-                                onOpen={() => onSelectTask(task.id)}
-                                onToggle={() => void handleRemoveTag(task.id)}
-                                selected
-                                task={task}
-                              />
-                            ))}
+                        <div
+                          aria-hidden={!selectedTasksExpanded}
+                          className={cn(
+                            "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                            selectedTasksExpanded
+                              ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                              : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                          )}
+                        >
+                          <div className="min-w-0 overflow-hidden pt-1">
+                            {filteredSelectedTasks.length > 0 ? (
+                              <div className="space-y-1">
+                                {filteredSelectedTasks.map((task) => (
+                                  <TasksTabRow
+                                    folderName={
+                                      folderNames.get(task.folderId ?? "") ??
+                                      "No folder"
+                                    }
+                                    key={task.id}
+                                    onOpen={() => onSelectTask(task.id)}
+                                    onToggle={() =>
+                                      void handleRemoveTag(task.id)
+                                    }
+                                    selected
+                                    disabled={releaseLocked}
+                                    task={task}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="px-6 py-5 text-center text-xs text-muted-foreground">
+                                {taggedTasks.length === 0
+                                  ? "No tasks tagged yet. Use the checkboxes below to add some."
+                                  : "No selected tasks match the search."}
+                              </p>
+                            )}
                           </div>
-                        ) : (
-                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                            {taggedTasks.length === 0
-                              ? "No tasks tagged yet. Use the checkboxes below to add some."
-                              : "No selected tasks match the search."}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Other tasks
-                          </h3>
-                          <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {filteredAvailableTasks.length}/
-                            {candidateTasks.length - taggedTasks.length}
-                          </span>
                         </div>
-                        {filteredAvailableTasks.length > 0 ? (
-                          <ScrollArea className="max-h-[420px]">
-                            <div className="space-y-1 pr-2">
-                              {filteredAvailableTasks.map((task) => (
-                                <TasksTabRow
-                                  folderName={
-                                    folderNames.get(task.folderId ?? "") ??
-                                    "No folder"
-                                  }
-                                  key={task.id}
-                                  onOpen={() => onSelectTask(task.id)}
-                                  onToggle={() =>
-                                    void onTagTask(
-                                      task.id,
-                                      selectedRelease.name,
-                                    )
-                                  }
-                                  selected={false}
-                                  task={task}
-                                />
-                              ))}
+                      </section>
+
+                      {!releaseLocked && (
+                        <section
+                          aria-label="Available Tasks"
+                          className="contents"
+                        >
+                          <div className="sticky top-9 z-20 flex h-9 w-full bg-background">
+                            <button
+                              aria-expanded={availableTasksExpanded}
+                              className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
+                              onClick={() =>
+                                setAvailableTasksExpanded(
+                                  (expanded) => !expanded,
+                                )
+                              }
+                              type="button"
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  "size-4 transition-transform duration-150 ease-out",
+                                  availableTasksExpanded && "rotate-90",
+                                )}
+                              />
+                              <span className="truncate">Available Tasks</span>
+                              <span className="text-xs font-medium text-muted-foreground/75">
+                                {formatSectionCount(
+                                  filteredAvailableTasks.length,
+                                )}
+                              </span>
+                            </button>
+                          </div>
+                          <div
+                            aria-hidden={!availableTasksExpanded}
+                            className={cn(
+                              "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                              availableTasksExpanded
+                                ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                                : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                            )}
+                          >
+                            <div className="min-w-0 overflow-hidden pt-1">
+                              {filteredAvailableTasks.length > 0 ? (
+                                <div className="space-y-1">
+                                  {filteredAvailableTasks.map((task) => (
+                                    <TasksTabRow
+                                      folderName={
+                                        folderNames.get(task.folderId ?? "") ??
+                                        "No folder"
+                                      }
+                                      key={task.id}
+                                      onOpen={() => onSelectTask(task.id)}
+                                      onToggle={() =>
+                                        void onTagTask(
+                                          task.id,
+                                          selectedRelease.name,
+                                        )
+                                      }
+                                      selected={false}
+                                      disabled={releaseLocked}
+                                      task={task}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="px-6 py-5 text-center text-xs text-muted-foreground">
+                                  {tasksSearch.trim() || tasksUseRegex
+                                    ? "No tasks match the search."
+                                    : "No unassigned tasks available."}
+                                </p>
+                              )}
                             </div>
-                          </ScrollArea>
-                        ) : (
-                          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                            {tasksSearch.trim() || tasksUseRegex
-                              ? "No tasks match the search."
-                              : "Every task is already in this release."}
-                          </p>
-                        )}
-                      </div>
+                          </div>
+                        </section>
+                      )}
                     </div>
                   </ScrollArea>
                 )}
 
                 {/* Notes tab */}
                 {activeTab === "notes" && (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4 pb-6">
-                    {/* Editor / preview toggle for narrow layouts */}
-                    {!isWideLayout && (
-                      <div className="inline-flex h-7 w-fit items-center rounded-md border border-border bg-card/40 p-0.5 text-[11px]">
-                        <button
-                          aria-pressed={notesPane === "editor"}
-                          className={cn(
-                            "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
-                            notesPane === "editor"
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground",
-                          )}
-                          onClick={() => setNotesPane("editor")}
-                          type="button"
-                        >
-                          <Pencil className="size-3" />
-                          Editor
-                        </button>
-                        <button
-                          aria-pressed={notesPane === "preview"}
-                          className={cn(
-                            "inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors",
-                            notesPane === "preview"
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground",
-                          )}
-                          onClick={() => setNotesPane("preview")}
-                          type="button"
-                        >
-                          <FileText className="size-3" />
-                          Preview
-                        </button>
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    {effectiveNotesPane === "editor" ? (
+                      <div className="min-h-0 flex-1 select-text overflow-hidden bg-background">
+                        <CodeMirror
+                          aria-label="Release notes"
+                          basicSetup={{
+                            bracketMatching: true,
+                            closeBrackets: true,
+                            foldGutter: false,
+                            highlightActiveLine: false,
+                            highlightActiveLineGutter: false,
+                            lineNumbers: true,
+                          }}
+                          className="h-full select-text"
+                          editable={!releaseLocked}
+                          extensions={editorExtensions}
+                          height="100%"
+                          onChange={(value) => {
+                            setTemplateDraft(value);
+                            setTemplateDirty(true);
+                          }}
+                          readOnly={releaseLocked}
+                          ref={templateEditorRef}
+                          theme="dark"
+                          value={templateDraft}
+                        />
                       </div>
+                    ) : (
+                      <ScrollArea className="min-h-0 flex-1">
+                        <div className="markdown px-6 py-5">
+                          {fullSummaryMd.trim() ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {fullSummaryMd}
+                            </ReactMarkdown>
+                          ) : (
+                            <p className="text-muted-foreground">
+                              Empty release notes.
+                            </p>
+                          )}
+                        </div>
+                      </ScrollArea>
                     )}
-
-                    <div
-                      className={cn(
-                        "flex min-h-0 flex-1 gap-3",
-                        isWideLayout ? "flex-row" : "flex-col",
-                      )}
-                    >
-                      {/* Editor pane */}
-                      {(isWideLayout || notesPane === "editor") && (
-                        <div
-                          className={cn(
-                            "flex min-w-0 min-h-0 flex-col",
-                            isWideLayout ? "flex-1" : "w-full",
-                          )}
-                        >
-                          <div className="mb-1.5 flex items-center gap-1">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Editor
-                            </h3>
-                            <Popover onOpenChange={setHelpOpen} open={helpOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  aria-label="Template help"
-                                  size="icon-sm"
-                                  title="Template help"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <Info className="size-3.5" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                align="start"
-                                className="w-[420px] p-0"
-                                sideOffset={4}
-                              >
-                                <div className="border-b border-border px-3 py-2">
-                                  <p className="text-xs font-semibold">
-                                    Template syntax
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    Hover over the editor for tooltips. Insert
-                                    via the{" "}
-                                    <span className="inline-flex items-center gap-0.5 align-middle">
-                                      <Braces className="size-3" />
-                                    </span>{" "}
-                                    button.
-                                  </p>
-                                </div>
-                                <ScrollArea className="h-[420px]">
-                                  <div className="space-y-3 p-3 pr-1">
-                                    <HelpSection
-                                      entries={RELEASE_TEMPLATE_VARIABLES}
-                                      title="Release variables"
-                                    />
-                                    <HelpSection
-                                      entries={RELEASE_TEMPLATE_BLOCKS}
-                                      title="Blocks"
-                                    />
-                                    <HelpSection
-                                      entries={RELEASE_TEMPLATE_FILTERS}
-                                      title="Filters"
-                                    />
-                                    <HelpSection
-                                      entries={RELEASE_TEMPLATE_TASK_VARIABLES}
-                                      title="Per-task variables (use inside #each)"
-                                    />
-                                    <div>
-                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Examples
-                                      </p>
-                                      <div className="space-y-2">
-                                        {RELEASE_TEMPLATE_EXAMPLES.map((ex) => (
-                                          <div
-                                            className="rounded border border-border bg-muted/30 p-2"
-                                            key={ex.title}
-                                          >
-                                            <p className="mb-1 text-[11px] font-medium">
-                                              {ex.title}
-                                            </p>
-                                            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-foreground/90">
-                                              {ex.template}
-                                            </pre>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </ScrollArea>
-                              </PopoverContent>
-                            </Popover>
-                            <Popover
-                              onOpenChange={setPlaceholderOpen}
-                              open={placeholderOpen}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  size="icon-sm"
-                                  title="Insert placeholder"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <Braces className="size-3.5" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                align="start"
-                                className="w-80 p-1"
-                                sideOffset={4}
-                              >
-                                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Insert placeholder
-                                </p>
-                                <ScrollArea className="h-80">
-                                  <div className="space-y-2 pr-1">
-                                    <div>
-                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Release
-                                      </p>
-                                      <div className="space-y-0.5">
-                                        {RELEASE_TEMPLATE_PLACEHOLDERS.map(
-                                          (p) => (
-                                            <PlaceholderButton
-                                              description={p.description}
-                                              key={p.snippet}
-                                              onClick={() => {
-                                                insertPlaceholder(p.snippet);
-                                                setPlaceholderOpen(false);
-                                              }}
-                                              snippet={p.snippet}
-                                            />
-                                          ),
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Per-task field
-                                      </p>
-                                      <p className="px-2 pb-1 text-[10px] text-muted-foreground/80">
-                                        Use inside{" "}
-                                        <span className="font-mono">
-                                          {"{{#each taskList}}"}
-                                        </span>
-                                      </p>
-                                      <div className="space-y-0.5">
-                                        {RELEASE_TASK_FIELDS.map((p) => (
-                                          <PlaceholderButton
-                                            description={p.description}
-                                            key={p.snippet}
-                                            onClick={() => {
-                                              insertPlaceholder(p.snippet);
-                                              setPlaceholderOpen(false);
-                                            }}
-                                            snippet={p.snippet}
-                                          />
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </ScrollArea>
-                                <div className="mt-1 flex items-center justify-between border-t border-border pt-1">
-                                  <span className="px-2 text-[10px] text-muted-foreground">
-                                    {RELEASE_TEMPLATE_PLACEHOLDERS.length +
-                                      RELEASE_TASK_FIELDS.length}{" "}
-                                    placeholders
-                                  </span>
-                                  <Button
-                                    onClick={() => {
-                                      setTemplateDraft(
-                                        defaultReleaseTemplate(),
-                                      );
-                                      setTemplateDirty(true);
-                                      setPlaceholderOpen(false);
-                                    }}
-                                    size="sm"
-                                    type="button"
-                                    variant="ghost"
-                                  >
-                                    <RotateCcw className="size-3" />
-                                    Reset
-                                  </Button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                            <div className="ml-auto flex items-center gap-1">
-                              {!selectedRelease.releasedAt && (
-                                <Button
-                                  onClick={() => void handleMarkReleased()}
-                                  size="icon-sm"
-                                  title="Mark as released"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <Check className="size-3.5 text-green-500" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          <textarea
-                            aria-label="Release notes template"
-                            className="min-h-[260px] w-full flex-1 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            onChange={(e) => {
-                              setTemplateDraft(e.target.value);
-                              setTemplateDirty(true);
-                            }}
-                            placeholder={defaultReleaseTemplate()}
-                            ref={templateEditorRef}
-                            spellCheck={false}
-                            value={templateDraft}
-                          />
-                        </div>
-                      )}
-
-                      {/* Preview pane */}
-                      {(isWideLayout || notesPane === "preview") && (
-                        <div
-                          className={cn(
-                            "flex min-w-0 min-h-0 flex-col",
-                            isWideLayout ? "flex-1" : "w-full",
-                          )}
-                        >
-                          <div className="mb-1.5 flex items-center gap-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Preview
-                            </h3>
-                            <div className="inline-flex h-6 items-center rounded-md border border-border bg-card/40 p-0.5 text-[10px]">
-                              <button
-                                aria-pressed={previewTab === "preview"}
-                                className={cn(
-                                  "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
-                                  previewTab === "preview"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground",
-                                )}
-                                onClick={() => setPreviewTab("preview")}
-                                type="button"
-                              >
-                                <FileText className="size-3" />
-                                Rendered
-                              </button>
-                              <button
-                                aria-pressed={previewTab === "source"}
-                                className={cn(
-                                  "inline-flex h-5 items-center gap-1 rounded px-1.5 transition-colors",
-                                  previewTab === "source"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground",
-                                )}
-                                onClick={() => setPreviewTab("source")}
-                                type="button"
-                              >
-                                <Code className="size-3" />
-                                Source
-                              </button>
-                            </div>
-                          </div>
-                          <div
-                            className={cn(
-                              "min-h-[260px] flex-1 overflow-auto rounded-md border border-border bg-card/40",
-                              previewTab === "preview" ? "p-4" : "p-0",
-                            )}
-                          >
-                            {previewTab === "preview" ? (
-                              fullSummaryMd.trim() ? (
-                                <div className="markdown">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {fullSummaryMd}
-                                  </ReactMarkdown>
-                                </div>
-                              ) : (
-                                <p className="text-muted-foreground">
-                                  Empty release notes.
-                                </p>
-                              )
-                            ) : (
-                              <pre className="h-full whitespace-pre-wrap p-4 font-mono text-xs leading-relaxed text-foreground/90">
-                                {fullSummaryMd || "_Empty release notes._"}
-                              </pre>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 )}
               </div>
@@ -1191,8 +1685,7 @@ export function ReleaseView({
           <DialogHeader>
             <DialogTitle>New release</DialogTitle>
             <DialogDescription>
-              Group tasks under a named milestone. Add an optional version label
-              if you want to track changelog releases.
+              Group tasks under a named release.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1207,20 +1700,6 @@ export function ReleaseView({
                 id="new-release-name"
                 placeholder="e.g. UI refresh"
                 ref={newNameRef}
-              />
-            </div>
-            <div>
-              <label
-                className="mb-1 block text-xs font-medium"
-                htmlFor="new-release-version"
-              >
-                Version{" "}
-                <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="new-release-version"
-                placeholder="e.g. 0.3.0"
-                ref={newVersionRef}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -1244,44 +1723,41 @@ export function ReleaseView({
         </DialogContent>
       </Dialog>
 
-      {/* Edit version dialog */}
+      {/* Publish release confirmation */}
       <Dialog
         onOpenChange={(open) => {
-          if (!open) setEditVersionDialogOpen(false);
+          if (!open) setConfirmReleaseOpen(false);
         }}
-        open={editVersionDialogOpen}
+        open={confirmReleaseOpen}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit release version</DialogTitle>
+            <DialogTitle>Publish release?</DialogTitle>
             <DialogDescription>
-              Update the optional version label for this release. Leave empty to
-              remove it.
+              This will publish <strong>{selectedRelease?.name}</strong> and
+              lock its tasks and notes. You cannot move it back to draft after
+              release.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              onChange={(e) => setEditVersion(e.target.value)}
-              placeholder="e.g. 0.3.0"
-              value={editVersion ?? ""}
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                onClick={() => setEditVersionDialogOpen(false)}
-                type="button"
-                variant="ghost"
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={() => void handleSaveVersion()}
-                type="button"
-                variant="default"
-              >
-                Save
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => setConfirmReleaseOpen(false)}
+              type="button"
+              variant="ghost"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={async () => {
+                await updateReleaseStatus("released");
+                setConfirmReleaseOpen(false);
+              }}
+              type="button"
+              variant="default"
+            >
+              Release
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1289,22 +1765,22 @@ export function ReleaseView({
       {/* Delete release confirmation */}
       <Dialog
         onOpenChange={(open) => {
-          if (!open) setDeleteDialogOpen(false);
+          if (!open) setReleaseToDelete(null);
         }}
-        open={deleteDialogOpen}
+        open={!!releaseToDelete}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete release</DialogTitle>
             <DialogDescription>
-              This will remove the release tag from all tasks tagged with{" "}
-              <strong>{selectedRelease?.name}</strong>. The release and its
-              association with tasks will be permanently deleted.
+              This will delete <strong>{releaseToDelete?.name}</strong> and its
+              notes. Tagged tasks will stay in DevThread and will only be
+              detached from this release.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={() => setReleaseToDelete(null)}
               type="button"
               variant="ghost"
             >
@@ -1323,4 +1799,17 @@ export function ReleaseView({
       </Dialog>
     </section>
   );
+}
+
+function clampReleaseSidebarWidth(value: number) {
+  if (!Number.isFinite(value) || value <= 0)
+    return DEFAULT_RELEASE_SIDEBAR_WIDTH;
+  const viewportLimit =
+    typeof window === "undefined"
+      ? MAX_RELEASE_SIDEBAR_WIDTH
+      : Math.min(
+          MAX_RELEASE_SIDEBAR_WIDTH,
+          Math.floor(window.innerWidth * 0.42),
+        );
+  return Math.min(Math.max(value, MIN_RELEASE_SIDEBAR_WIDTH), viewportLimit);
 }

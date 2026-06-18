@@ -1,34 +1,23 @@
-import { useMemo } from "react";
-import { Flame } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { computeStreaks } from "@/lib/worklogStreaks";
-import { chartAccentBlend, readChartColor } from "@/lib/chartColors";
 import type { WorklogDay } from "@/lib/worklog";
 import { cn } from "@/lib/utils";
 
 export interface WorklogHeatmapProps {
   days: ReadonlyArray<WorklogDay>;
+  goalMinutes?: number;
   range: "7d" | "4w" | "12w" | "12m";
   selectedDay: string | null;
   onSelectDay: (key: string | null) => void;
 }
 
-/**
- * Five intensity buckets, cut on absolute minutes per day. Each
- * bucket maps to a ratio between the theme's --muted colour (the
- * "empty cell" tone) and the theme's --chart-1 accent (the
- * "busiest day" colour). We interpolate lightness (and a little
- * saturation) on that axis so adjacent buckets are clearly
- * different even on saturated dark-theme accents.
- *
- * The previous ladder used pure alpha opacity against a single
- * colour, which collapsed to a single shade on Gruvbox amber
- * (a 0.7 -> 1.0 amber against a 12% card looks the same). The
- * 5-step lightness ladder instead steps 20% of the way from
- * --muted to --chart-1 at every bucket, so a 2h cell and a 6h
- * cell are visibly different regardless of the theme.
- */
-const BUCKET_RATIOS = [0.2, 0.4, 0.6, 0.8, 1] as const;
-const BUCKET_STRIPES = [8, 4, 2.5, 1.5, 1] as const;
+const HEATMAP_LEVELS = [
+  "bg-[hsl(var(--chart-1)/0.24)]",
+  "bg-[hsl(var(--chart-1)/0.38)]",
+  "bg-[hsl(var(--chart-1)/0.54)]",
+  "bg-[hsl(var(--chart-1)/0.72)]",
+  "bg-[hsl(var(--chart-1)/0.9)]",
+] as const;
 
 function bucketIndex(minutes: number): number {
   if (minutes < 30) return 0;
@@ -38,140 +27,264 @@ function bucketIndex(minutes: number): number {
   return 4;
 }
 
-function streakLabel(value: number): string {
-  if (value === 0) return "No streak";
-  return `${value}-day streak`;
+const RANGE_DAYS = {
+  "7d": 7,
+  "4w": 28,
+  "12w": 84,
+  "12m": 365,
+} as const;
+
+const TOOLTIP_GAP = 8;
+const TOOLTIP_WIDTH = 180;
+const TOOLTIP_HEIGHT = 56;
+
+interface HoverState {
+  day: WorklogDay;
+  top: number;
+  left: number;
 }
 
 export function WorklogHeatmap({
   days,
+  goalMinutes = 8 * 60,
   range,
   selectedDay,
   onSelectDay,
 }: WorklogHeatmapProps) {
+  const [hover, setHover] = useState<HoverState | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cellSize, setCellSize] = useState(14);
+
+  // Measure the grid container and resize the cells to fill the
+  // full available width. 7 rows × 53 columns (a year) with a
+  // 3px gap gives us cellSize = (width - 52*3) / 53. The 12px
+  // floor keeps tiny cells tappable on very narrow viewports.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const el = gridRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (!width) return;
+      const weeks = Math.ceil(days.length / 7);
+      const gap = 3;
+      const next = Math.max(12, (width - (weeks - 1) * gap) / weeks);
+      setCellSize(next);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [days.length]);
+
   const streaks = useMemo(() => computeStreaks(days), [days]);
+  const mostActive = useMemo(
+    () =>
+      days.reduce<WorklogDay | null>(
+        (best, day) => (!best || day.minutes > best.minutes ? day : best),
+        null,
+      ),
+    [days],
+  );
+  const goalHits = days.filter((day) => day.minutes >= goalMinutes).length;
+  const loggedDays = days.filter((day) => day.minutes > 0).length;
+  const selectedRangeKeys = useMemo(() => {
+    const selectedKeys = new Set<string>();
+    const lastDate = days.at(-1)?.date;
+    if (!lastDate) return selectedKeys;
+    if (range === "12m") {
+      for (const day of days) {
+        selectedKeys.add(day.key);
+      }
+      return selectedKeys;
+    }
+    const start = new Date(lastDate);
+    start.setUTCDate(start.getUTCDate() - RANGE_DAYS[range] + 1);
+    start.setUTCHours(0, 0, 0, 0);
+    for (const day of days) {
+      if (new Date(day.date) >= start) selectedKeys.add(day.key);
+    }
+    return selectedKeys;
+  }, [days, range]);
+
+  function handleCellEnter(
+    event: MouseEvent<HTMLButtonElement>,
+    day: WorklogDay,
+  ) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceRight = viewportWidth - rect.right;
+    // Prefer the side that has the most room; fall back to the other
+    // when there's not enough space.
+    const placeAbove =
+      spaceAbove > spaceBelow && spaceAbove > TOOLTIP_HEIGHT + TOOLTIP_GAP;
+    const top = placeAbove
+      ? rect.top - TOOLTIP_HEIGHT - TOOLTIP_GAP
+      : rect.bottom + TOOLTIP_GAP;
+    const placeRight =
+      spaceRight < TOOLTIP_WIDTH && rect.left > TOOLTIP_WIDTH + TOOLTIP_GAP;
+    const left = placeRight
+      ? rect.left - TOOLTIP_WIDTH - TOOLTIP_GAP
+      : Math.max(
+          TOOLTIP_GAP,
+          Math.min(
+            rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2,
+            viewportWidth - TOOLTIP_WIDTH - TOOLTIP_GAP,
+          ),
+        );
+    setHover({ day, top, left });
+  }
+
+  function handleCellLeave() {
+    setHover(null);
+  }
 
   return (
-    <div
-      className="rounded-lg border border-border bg-card p-4"
-      data-testid="worklog-heatmap"
-    >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-medium">Daily heatmap</h2>
-          <span
-            aria-label={streakLabel(streaks.current)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
-              streaks.current > 0
-                ? "bg-background"
-                : "bg-muted text-muted-foreground",
-            )}
-            data-testid="worklog-streak-pill"
-            style={
-              streaks.current > 0
-                ? {
-                    // A solid pill: the theme's --background is the
-                    // canvas, the accent paints the text + 1px ring.
-                    // That way the pill reads as "accent on dark" on
-                    // dark themes and "accent on light" on light
-                    // themes, with the text always contrasted against
-                    // its own background.
-                    backgroundColor: "var(--background)",
-                    color: readChartColor("--chart-1"),
-                    boxShadow: `inset 0 0 0 1px ${readChartColor("--chart-1")}`,
-                  }
-                : undefined
-            }
-            title={
-              streaks.longest > streaks.current
-                ? `Longest streak this range: ${streaks.longest} days`
-                : undefined
-            }
-          >
-            <Flame className="size-3" />
-            {streaks.current > 0 ? `${streaks.current}d` : "0d"}
-            {streaks.longest > streaks.current && streaks.longest > 0 && (
-              <span className="text-muted-foreground">
-                {" "}
-                / best {streaks.longest}d
-              </span>
-            )}
+    <div className="flex h-full min-h-0 flex-col" data-testid="worklog-heatmap">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">
+          Daily heatmap
+          <span className="ml-2 text-xs font-normal text-foreground/70">
+            Year overview · {loggedDays} logged day
+            {loggedDays === 1 ? "" : "s"}
           </span>
-        </div>
+        </h2>
         <div
           aria-label="Intensity legend, less to more"
-          className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"
+          className="flex items-center gap-1.5 text-[11px] font-normal text-foreground/70"
         >
-          <span className="mr-1">Less</span>
-          {BUCKET_RATIOS.map((ratio, i) => (
+          <span className="mr-0.5">Less</span>
+          {HEATMAP_LEVELS.map((level) => (
             <span
               aria-hidden
-              className="inline-block h-3 w-3 rounded-sm border border-border/40"
-              key={i}
-              style={{
-                backgroundColor: chartAccentBlend(ratio),
-                backgroundImage: `repeating-linear-gradient(45deg, ${readChartColor(
-                  "--chart-1",
-                )} ${BUCKET_STRIPES[i]!}px, transparent ${BUCKET_STRIPES[
-                  i
-                ]!}px, transparent ${BUCKET_STRIPES[i]! * 2}px)`,
-              }}
+              className={cn(
+                "inline-block size-3 rounded-[3px] border border-border/40",
+                level,
+              )}
+              key={level}
             />
           ))}
-          <span className="ml-1">More</span>
+          <span className="ml-0.5">More</span>
         </div>
       </div>
-      <div
-        className="grid grid-flow-col grid-rows-7 gap-1.5"
-        style={{
-          gridAutoColumns: `minmax(0, ${range === "12m" ? "1fr" : "18px"})`,
-        }}
-      >
-        {days.map((day) => {
-          const isSelected = selectedDay === day.key;
-          const hasTime = day.minutes > 0;
-          const bucket = hasTime ? bucketIndex(day.minutes) : -1;
-          const ratio = bucket >= 0 ? BUCKET_RATIOS[bucket]! : 0;
-          const stripe = bucket >= 0 ? BUCKET_STRIPES[bucket]! : 0;
-          return (
-            <button
-              aria-label={`${day.key} ${formatHM(day.minutes)}`}
-              className={cn(
-                "group relative h-7 w-full min-w-0 overflow-hidden rounded-[3px] border border-border/40 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                range !== "12m" && "w-[18px]",
-                !hasTime && "bg-muted/40",
-                isSelected && "ring-2 ring-primary",
-              )}
-              data-testid="heatmap-cell"
-              key={day.key}
-              onClick={() => onSelectDay(isSelected ? null : day.key)}
-              style={
-                hasTime
-                  ? {
-                      backgroundColor: chartAccentBlend(ratio),
-                      // The diagonal hatch on top of the fill gives
-                      // the cell a textured, chart-like quality. The
-                      // stripe is at the same lightness as the cell
-                      // so the eye reads the hatch as a darker
-                      // shading on top of the hue, not as a totally
-                      // different colour.
-                      backgroundImage: `repeating-linear-gradient(45deg, ${readChartColor(
-                        "--chart-1",
-                      )} ${stripe}px, transparent ${stripe}px, transparent ${
-                        stripe * 2
-                      }px)`,
-                    }
-                  : undefined
-              }
-              title={`${day.key} · ${formatHM(day.minutes)}`}
-              type="button"
-            />
-          );
-        })}
+      <div className="mt-3 flex min-h-0">
+        <div
+          className="grid w-full grid-flow-col grid-rows-7 gap-[3px] px-0.5 py-1"
+          ref={gridRef}
+          style={{
+            gridAutoColumns: `${cellSize}px`,
+          }}
+        >
+          {/*
+           * Render every day starting at the top-left of the grid
+           * (no leading weekday padding). Days before the year
+           * begins, or after it ends, are explicit zero-minute
+           * placeholders so the visual rhythm is consistent and
+           * the first day of the year is always the first cell.
+           */}
+          {days.map((day) => {
+            const isSelected = selectedDay === day.key;
+            const hasTime = day.minutes > 0;
+            const bucket = hasTime ? bucketIndex(day.minutes) : -1;
+            const isInSelectedRange = selectedRangeKeys.has(day.key);
+            return (
+              <button
+                aria-label={`${day.key} ${formatHM(day.minutes)}`}
+                className={cn(
+                  "aspect-square rounded-[3px] border border-border/45 transition duration-150 hover:scale-110 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  hasTime ? HEATMAP_LEVELS[bucket]! : "bg-muted/35",
+                  !isInSelectedRange && "opacity-25",
+                  isSelected &&
+                    "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                )}
+                data-testid="heatmap-cell"
+                key={day.key}
+                onClick={() => onSelectDay(isSelected ? null : day.key)}
+                onMouseEnter={(event) => handleCellEnter(event, day)}
+                onMouseLeave={handleCellLeave}
+                type="button"
+              />
+            );
+          })}
+        </div>
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-xs">
+        <HeatmapStat
+          label="Current streak"
+          value={`${streaks.current}d`}
+          tone={streaks.current > 0 ? "active" : "muted"}
+        />
+        <HeatmapStat label="Best streak" value={`${streaks.longest}d`} />
+        <HeatmapStat
+          label="Most active"
+          value={
+            mostActive && mostActive.minutes > 0
+              ? `${formatShortDate(mostActive.date)} · ${formatHM(
+                  mostActive.minutes,
+                )}`
+              : "—"
+          }
+        />
+        <HeatmapStat label="Goal hit" value={`${goalHits} days`} />
+      </div>
+      {hover && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 max-w-[200px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/30"
+          style={{ top: hover.top, left: hover.left, width: TOOLTIP_WIDTH }}
+        >
+          <p className="font-medium text-popover-foreground">
+            {formatShortDate(hover.day.key)}
+          </p>
+          <p className="font-mono tabular-nums text-muted-foreground">
+            {formatHM(hover.day.minutes)}
+            {hover.day.minutes > 0 && goalMinutes > 0 && (
+              <span className="ml-2 text-foreground/70">
+                {Math.round((hover.day.minutes / goalMinutes) * 100)}% of goal
+              </span>
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
+}
+
+function HeatmapStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "active" | "muted";
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-[11px] font-normal text-foreground/70">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "text-xs font-semibold tabular-nums",
+          tone === "active" && "text-foreground",
+          tone === "muted" && "text-muted-foreground",
+          tone === "default" && "text-foreground",
+        )}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function formatShortDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function formatHM(minutes: number): string {

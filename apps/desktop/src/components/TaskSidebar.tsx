@@ -1,4 +1,6 @@
 import {
+  ArchiveRestore,
+  Check,
   ChevronRight,
   Copy,
   FileSpreadsheet,
@@ -9,6 +11,7 @@ import {
   FolderPlus,
   ListTodo,
   Pencil,
+  Pin,
   Plus,
   Search,
   Tag,
@@ -19,12 +22,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Folder as FolderModel, Release, Task } from "@/lib/types";
 import { STATUS_DOT } from "@/lib/status";
+import { hasComposerDraft } from "@/lib/composerDraftStore";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -50,11 +53,20 @@ import {
 import { copyTaskSummary } from "@/lib/taskSummary";
 import { cn } from "@/lib/utils";
 
-interface Props {
+// Common shape shared by every mode. Mode-specific behaviour
+// (folders, restore button, drag/drop, etc.) is opt-in via the
+// discriminated `mode` union below.
+interface CommonProps {
   tasks: Task[];
   folders: FolderModel[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDeleteTask: (taskId: string) => Promise<void>;
+  releases?: Release[];
+}
+
+interface ActiveModeProps extends CommonProps {
+  mode: "active";
   onCreate: (folderId?: string | null) => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
   onCopyFolder: (
@@ -63,7 +75,6 @@ interface Props {
   ) => Promise<void> | void;
   onRenameFolder: (id: string, name: string) => Promise<void>;
   onMoveTask: (taskId: string, folderId: string | null) => Promise<void>;
-  onDeleteTask: (taskId: string) => Promise<void>;
   onDeleteFolder: (
     folderId: string,
     mode: "cascade" | "unassign",
@@ -71,16 +82,54 @@ interface Props {
   newFolderDialogRef?: { current: (() => void) | null };
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
   onRemoveFolderRelease?: (folderId: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
+  pinnedTaskIds?: string[];
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
   onTagFolderRelease?: (folderId: string, name: string) => Promise<void>;
-  releases?: Release[];
 }
+
+interface ArchiveModeProps extends CommonProps {
+  mode: "archive";
+  onRestoreTask: (task: Task) => Promise<void>;
+  // Optional custom title in the header. Defaults to "Archive".
+  title?: string;
+  // Placeholder for the search input. Defaults to "Search archive".
+  searchPlaceholder?: string;
+}
+
+type Props = ActiveModeProps | ArchiveModeProps;
 
 const UNCATEGORIZED = "__ungrouped__";
 const SEARCH_INPUT_MAX_LENGTH = 80;
 const SEARCH_MESSAGE_MAX_LENGTH = 28;
 
-export function TaskSidebar({
+// Subscribe to composer-draft store changes so the sidebar
+// re-renders the status-dot ring when a draft is created or
+// cleared. Returns the current "task has draft" status for a
+// given taskId; callers pass it down to TaskStatusDot.
+function useComposerDrafts() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const handler = () => force((value) => value + 1);
+    window.addEventListener("devthread:composer-drafts", handler);
+    return () =>
+      window.removeEventListener("devthread:composer-drafts", handler);
+  }, []);
+  return { hasDraft: hasComposerDraft };
+}
+
+export function TaskSidebar(props: Props) {
+  // The header, search input, scroll area, and task row shape are
+  // shared across both modes. Mode-specific bits (folder grouping,
+  // status dot vs checkbox, hover buttons, bulk action) are gated
+  // on `props.mode` so we never need duplicated sub-components.
+  if (props.mode === "archive") {
+    return <ArchiveSidebar {...props} />;
+  }
+  return <ActiveSidebar {...props} />;
+}
+
+function ActiveSidebar({
   tasks,
   folders,
   selectedId,
@@ -95,10 +144,13 @@ export function TaskSidebar({
   newFolderDialogRef,
   onRemoveTaskRelease,
   onRemoveFolderRelease,
+  onTogglePin,
+  pinnedTaskIds = [],
   onTagTaskRelease,
   onTagFolderRelease,
   releases,
-}: Props) {
+}: ActiveModeProps) {
+  const { hasDraft } = useComposerDrafts();
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
@@ -121,6 +173,7 @@ export function TaskSidebar({
   }, [newFolderDialogRef]);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [openActiveTasks, setOpenActiveTasks] = useState(true);
+  const [openPinnedTasks, setOpenPinnedTasks] = useState(true);
   const searchTerm = query.trim();
   const isSearching = searchTerm.length > 0;
 
@@ -220,13 +273,23 @@ export function TaskSidebar({
     () => filtered.filter((task) => task.status === "active"),
     [filtered],
   );
+  const pinnedTasks = useMemo(() => {
+    if (isSearching || !pinnedTaskIds.length) return [];
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    return pinnedTaskIds
+      .map((id) => byId.get(id))
+      .filter((task): task is Task => Boolean(task));
+  }, [isSearching, pinnedTaskIds, tasks]);
   const noResultsQuery = formatSearchMessageQuery(searchTerm);
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
       <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
         <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo className="size-4 shrink-0 text-current" strokeWidth={1.75} />
+          <ListTodo
+            className="size-4 shrink-0 text-current"
+            strokeWidth={1.75}
+          />
           <span className="truncate text-sm font-medium text-current">
             Tasks
           </span>
@@ -311,7 +374,7 @@ export function TaskSidebar({
             >
               <button
                 aria-expanded={openActiveTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
                 onClick={() => setOpenActiveTasks((open) => !open)}
                 type="button"
               >
@@ -323,8 +386,20 @@ export function TaskSidebar({
                 />
                 <span className="min-w-0 flex-1 truncate">Active tasks</span>
               </button>
-              {openActiveTasks && (
-                <div className="flex min-w-0 flex-col gap-px overflow-hidden pt-1">
+              <div
+                aria-hidden={!openActiveTasks}
+                className={cn(
+                  "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                  openActiveTasks
+                    ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex min-w-0 flex-col gap-px overflow-hidden pt-1",
+                  )}
+                >
                   {activeTasks.map((task) => (
                     <button
                       className={cn(
@@ -336,20 +411,75 @@ export function TaskSidebar({
                       onClick={() => onSelect(task.id)}
                       type="button"
                     >
-                      <TaskStatusDot status={task.status} />
-                      <EllipsisTooltip
-                        className="w-full truncate"
-                        text={task.title}
+                      <TaskStatusDot
+                        hasDraft={hasDraft(task.id)}
+                        status={task.status}
                       />
+                      <span className="w-full truncate text-sm font-normal text-current">
+                        {task.title}
+                      </span>
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
+            </section>
+          )}
+
+          {!isSearching && !!pinnedTasks.length && (
+            <section
+              aria-label="Pinned tasks"
+              className="flex min-w-0 flex-col overflow-hidden px-3.5 pb-3"
+            >
+              <button
+                aria-expanded={openPinnedTasks}
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                onClick={() => setOpenPinnedTasks((open) => !open)}
+                type="button"
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 transition-transform duration-150 ease-out",
+                    openPinnedTasks && "rotate-90",
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate">Pinned tasks</span>
+              </button>
+              <div
+                aria-hidden={!openPinnedTasks}
+                className={cn(
+                  "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                  openPinnedTasks
+                    ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                )}
+              >
+                <div className="flex min-w-0 flex-col gap-px overflow-hidden pt-1">
+                  {pinnedTasks.map((task) => (
+                    <TaskRow
+                      compact
+                      folders={folders}
+                      grouped={false}
+                      hasDraft={hasDraft(task.id)}
+                      isPinned={pinnedTaskIds.includes(task.id)}
+                      key={task.id}
+                      onMove={handleMove}
+                      onDeleteTask={setTaskToDelete}
+                      onRemoveTaskRelease={onRemoveTaskRelease}
+                      onSelect={onSelect}
+                      onTagTaskRelease={onTagTaskRelease}
+                      onTogglePin={onTogglePin}
+                      releases={releases}
+                      selected={selectedId === task.id}
+                      task={task}
+                    />
+                  ))}
+                </div>
+              </div>
             </section>
           )}
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
-            <div className="px-0.5 pb-1 text-[11px] font-medium text-muted-foreground">
+            <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
               {isSearching ? "Search results" : "All Tasks"}
             </div>
             {isSearching
@@ -357,15 +487,19 @@ export function TaskSidebar({
                   <TaskRow
                     folders={folders}
                     grouped={false}
+                    hasDraft={hasDraft(task.id)}
                     key={task.id}
                     onMove={handleMove}
                     onDeleteTask={setTaskToDelete}
                     onRemoveTaskRelease={onRemoveTaskRelease}
                     onSelect={onSelect}
                     onTagTaskRelease={onTagTaskRelease}
+                    onTogglePin={onTogglePin}
+                    isPinned={pinnedTaskIds.includes(task.id)}
                     releases={releases}
                     selected={selectedId === task.id}
                     task={task}
+                    variant="active"
                   />
                 ))
               : folders.map((folder) => (
@@ -373,6 +507,7 @@ export function TaskSidebar({
                     collapsed={collapsedFolderIds.has(folder.id)}
                     folder={folder}
                     folders={folders}
+                    hasDraft={hasDraft}
                     key={folder.id}
                     onCopyFolder={onCopyFolder}
                     onCreate={onCreate}
@@ -385,6 +520,8 @@ export function TaskSidebar({
                     onSelect={onSelect}
                     onTagFolderRelease={onTagFolderRelease}
                     onTagTaskRelease={onTagTaskRelease}
+                    onTogglePin={onTogglePin}
+                    pinnedTaskIds={pinnedTaskIds}
                     onToggleFolder={toggleFolder}
                     releases={releases}
                     selectedId={selectedId}
@@ -395,6 +532,7 @@ export function TaskSidebar({
               <FolderGroup
                 folder={null}
                 folders={folders}
+                hasDraft={hasDraft}
                 onCopyFolder={onCopyFolder}
                 onCreate={onCreate}
                 onDeleteFolder={setFolderToDelete}
@@ -406,6 +544,8 @@ export function TaskSidebar({
                 onSelect={onSelect}
                 onTagFolderRelease={onTagFolderRelease}
                 onTagTaskRelease={onTagTaskRelease}
+                onTogglePin={onTogglePin}
+                pinnedTaskIds={pinnedTaskIds}
                 onToggleFolder={toggleFolder}
                 releases={releases}
                 selectedId={selectedId}
@@ -476,12 +616,209 @@ export function TaskSidebar({
   );
 }
 
+function ArchiveSidebar({
+  tasks,
+  folders,
+  selectedId,
+  onSelect,
+  onDeleteTask,
+  onRestoreTask,
+  title = "Archive",
+  searchPlaceholder = "Search archive",
+}: ArchiveModeProps) {
+  const [query, setQuery] = useState("");
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  const searchTerm = query.trim();
+
+  const folderNames = useMemo(
+    () => new Map(folders.map((folder) => [folder.id, folder.name])),
+    [folders],
+  );
+
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return tasks.filter((task) => {
+      if (!term) return true;
+      return `${task.title} ${folderNames.get(task.folderId ?? "") ?? ""}`
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [folderNames, searchTerm, tasks]);
+
+  // Keep the selected task valid: if the user restores/deletes the
+  // currently selected task, fall back to the first row in the list.
+  useEffect(() => {
+    if (!filtered.length) return;
+    if (selectedId && filtered.some((task) => task.id === selectedId)) return;
+    onSelect(filtered[0]!.id);
+  }, [filtered, onSelect, selectedId]);
+
+  const noResultsQuery = formatSearchMessageQuery(searchTerm);
+
+  async function restoreOne(task: Task) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onRestoreTask(task);
+      setCheckedIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreMany() {
+    if (busy || !checkedIds.size) return;
+    setBusy(true);
+    try {
+      const selected = tasks.filter((task) => checkedIds.has(task.id));
+      await Promise.all(selected.map((task) => onRestoreTask(task)));
+      setCheckedIds(new Set());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleChecked(id: string) {
+    setCheckedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
+      <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
+        <div className="flex min-w-0 items-center gap-2 text-foreground/85">
+          <ListTodo
+            className="size-4 shrink-0 text-current"
+            strokeWidth={1.75}
+          />
+          <span className="truncate text-sm font-medium text-current">
+            {title}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            aria-label="Restore selected"
+            className="h-7 px-2 text-xs"
+            disabled={!checkedIds.size || busy}
+            onClick={() => void restoreMany()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <ArchiveRestore className="mr-1 size-3.5" strokeWidth={1.75} />
+            Restore selected
+          </Button>
+        </div>
+      </div>
+
+      <div className="px-3.5 pb-4">
+        <div className="relative">
+          {query ? (
+            <button
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => setQuery("")}
+              type="button"
+            >
+              <X className="size-3.5" strokeWidth={1.75} />
+            </button>
+          ) : (
+            <Search
+              className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
+              strokeWidth={1.75}
+            />
+          )}
+          <Input
+            aria-label={searchPlaceholder}
+            autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            className="h-9 rounded-md border-border/80 bg-background/35 pl-3 pr-8 text-sm text-foreground shadow-inner shadow-black/5 placeholder:text-muted-foreground/75 focus-visible:border-ring/70"
+            maxLength={SEARCH_INPUT_MAX_LENGTH}
+            name="devthread-archive-search"
+            onChange={(event) =>
+              setQuery(event.target.value.slice(0, SEARCH_INPUT_MAX_LENGTH))
+            }
+            placeholder={searchPlaceholder}
+            spellCheck={false}
+            value={query}
+          />
+        </div>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <nav
+          aria-label="Archive"
+          className="flex w-full min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3"
+        >
+          {filtered.map((task) => (
+            <ArchiveRow
+              busy={busy}
+              checked={checkedIds.has(task.id)}
+              key={task.id}
+              onDelete={() => setTaskToDelete(task)}
+              onRestore={() => void restoreOne(task)}
+              onSelect={() => onSelect(task.id)}
+              onToggleChecked={() => toggleChecked(task.id)}
+              selected={selectedId === task.id}
+              task={task}
+            />
+          ))}
+          {!filtered.length && (
+            <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
+              <ListTodo className="size-5 opacity-60" strokeWidth={1.75} />
+              {searchTerm ? (
+                <span className="max-w-full truncate">
+                  No archived tasks match “{noResultsQuery}”.
+                </span>
+              ) : (
+                <span>No archived tasks yet.</span>
+              )}
+            </div>
+          )}
+        </nav>
+      </ScrollArea>
+
+      <DeleteTaskDialog
+        description="This permanently removes the archived task and its timeline from the local workspace."
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          await onDeleteTask(taskToDelete.id);
+          setCheckedIds((current) => {
+            const next = new Set(current);
+            next.delete(taskToDelete.id);
+            return next;
+          });
+          setTaskToDelete(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setTaskToDelete(null);
+        }}
+        task={taskToDelete}
+        title="Delete archived task?"
+      />
+    </aside>
+  );
+}
+
 function FolderGroup({
   folder,
   folders,
   tasks,
   selectedId,
   collapsed,
+  hasDraft,
   onSelect,
   onCopyFolder,
   onCreate,
@@ -494,6 +831,8 @@ function FolderGroup({
   onRemoveTaskRelease,
   onTagFolderRelease,
   onTagTaskRelease,
+  onTogglePin,
+  pinnedTaskIds = [],
   releases,
 }: {
   folder: FolderModel | null;
@@ -501,6 +840,7 @@ function FolderGroup({
   tasks: Task[];
   selectedId: string | null;
   collapsed?: boolean;
+  hasDraft: (taskId: string) => boolean;
   onSelect: (id: string) => void;
   onCopyFolder: (
     folder: FolderModel,
@@ -516,6 +856,8 @@ function FolderGroup({
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
   onTagFolderRelease?: (folderId: string, name: string) => Promise<void>;
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
+  pinnedTaskIds?: string[];
   releases?: Release[];
 }) {
   if (!tasks.length && !folder) return null;
@@ -527,7 +869,14 @@ function FolderGroup({
       {folder && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="group/folder flex h-7 min-w-0 items-center rounded text-sm text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground">
+            <div
+              className={cn(
+                "group/folder flex h-7 min-w-0 items-center rounded text-sm transition-colors hover:bg-accent/45",
+                open
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
               <button
                 aria-expanded={open}
                 className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left"
@@ -535,13 +884,26 @@ function FolderGroup({
                 type="button"
               >
                 <FolderIcon
-                  className="size-3.5 shrink-0 text-muted-foreground/90 transition-colors duration-150 ease-out group-hover/folder:text-foreground"
+                  className={cn(
+                    "size-3.5 shrink-0 transition-colors duration-150 ease-out group-hover/folder:text-foreground",
+                    open ? "text-foreground/80" : "text-muted-foreground/90",
+                  )}
                   strokeWidth={1.75}
                 />
-                <EllipsisTooltip
-                  className="min-w-0 flex-1 truncate"
-                  text={folder.name}
-                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {folder.name}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    align="start"
+                    className="max-w-80 whitespace-nowrap text-ellipsis"
+                    side="top"
+                  >
+                    {folder.name}
+                  </TooltipContent>
+                </Tooltip>
               </button>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -703,12 +1065,15 @@ function FolderGroup({
               <TaskRow
                 folders={folders}
                 grouped={grouped}
+                hasDraft={hasDraft(task.id)}
                 key={task.id}
                 onMove={onMove}
                 onDeleteTask={onDeleteTask}
                 onRemoveTaskRelease={onRemoveTaskRelease}
                 onSelect={onSelect}
                 onTagTaskRelease={onTagTaskRelease}
+                onTogglePin={onTogglePin}
+                isPinned={pinnedTaskIds.includes(task.id)}
                 releases={releases}
                 selected={selectedId === task.id}
                 task={task}
@@ -799,10 +1164,16 @@ function DeleteTaskDialog({
   task,
   onOpenChange,
   onConfirm,
+  title = "Delete task?",
+  description = "This removes the task and its timeline from the local workspace. Later we can add a safer archive-first flow for tasks you may want to keep.",
+  confirmLabel = "Delete task",
 }: {
   task: Task | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => Promise<void>;
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
 }) {
   const [deleting, setDeleting] = useState(false);
 
@@ -816,12 +1187,8 @@ function DeleteTaskDialog({
     <Dialog onOpenChange={onOpenChange} open>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete task?</DialogTitle>
-          <DialogDescription>
-            This removes the task and its timeline from the local workspace.
-            Later we can add a safer archive-first flow for tasks you may want
-            to keep.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
           {task.title}
@@ -843,7 +1210,7 @@ function DeleteTaskDialog({
             type="button"
             variant="destructive"
           >
-            {deleting ? "Deleting..." : "Delete task"}
+            {deleting ? "Deleting..." : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -948,9 +1315,14 @@ function TaskRow({
   onDeleteTask,
   folders,
   grouped,
+  hasDraft,
   onTagTaskRelease,
   onRemoveTaskRelease,
+  onTogglePin,
   releases,
+  variant = "active",
+  isPinned = false,
+  compact = false,
 }: {
   task: Task;
   selected: boolean;
@@ -959,9 +1331,14 @@ function TaskRow({
   onDeleteTask: (task: Task) => void;
   folders: FolderModel[];
   grouped: boolean;
+  hasDraft: boolean;
   onTagTaskRelease?: (taskId: string, name: string) => Promise<void>;
   onRemoveTaskRelease?: (taskId: string) => Promise<void>;
+  onTogglePin?: (taskId: string) => void;
   releases?: Release[];
+  variant?: "active" | "archive";
+  isPinned?: boolean;
+  compact?: boolean;
 }) {
   return (
     <ContextMenu>
@@ -969,7 +1346,8 @@ function TaskRow({
         <Button
           aria-current={selected ? "page" : undefined}
           className={cn(
-            "group/task h-7 w-full min-w-0 justify-start gap-2 overflow-hidden rounded px-1.5 text-left text-sm shadow-none",
+            "group/task w-full min-w-0 justify-start gap-2 overflow-hidden rounded px-1.5 text-left text-sm shadow-none",
+            compact ? "h-6" : "h-7",
             selected
               ? "bg-accent/70 text-foreground"
               : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
@@ -977,11 +1355,10 @@ function TaskRow({
           onClick={() => onSelect(task.id)}
           variant="ghost"
         >
-          <TaskStatusDot status={task.status} />
-          <EllipsisTooltip
-            className="w-full flex-1 truncate text-sm font-normal select-text"
-            text={task.title}
-          />
+          <TaskStatusDot hasDraft={hasDraft} status={task.status} />
+          <span className="w-full flex-1 truncate text-sm font-normal text-current select-text">
+            {task.title}
+          </span>
           <span
             aria-label={`Delete ${task.title}`}
             className="ml-auto hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/task:flex group-hover/task:opacity-100"
@@ -1007,6 +1384,12 @@ function TaskRow({
           <Copy className="size-3.5 text-muted-foreground" />
           Copy summary
         </ContextMenuItem>
+        {onTogglePin && (
+          <ContextMenuItem onSelect={() => onTogglePin(task.id)}>
+            <Pin className="size-3.5 text-muted-foreground" />
+            {isPinned ? "Unpin task" : "Pin task"}
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger>
@@ -1087,11 +1470,126 @@ function TaskRow({
   );
 }
 
-function TaskStatusDot({ status }: { status: Task["status"] }) {
+// Archive-mode row: a checkbox drives multi-select, the row body
+// opens the task in the read-only view, and on hover two icon
+// buttons surface (restore + delete) since those are the only
+// state-changing actions available in archive. Mirrors the
+// TaskRow shape: single line, no subtitle, status row is the
+// only context.
+function ArchiveRow({
+  task,
+  selected,
+  checked,
+  busy,
+  onSelect,
+  onToggleChecked,
+  onRestore,
+  onDelete,
+}: {
+  task: Task;
+  selected: boolean;
+  checked: boolean;
+  busy: boolean;
+  onSelect: () => void;
+  onToggleChecked: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "group/row flex h-7 min-w-0 items-center gap-2 rounded px-1.5 text-left text-sm transition-colors",
+        selected
+          ? "bg-accent/70 text-foreground"
+          : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
+      )}
+    >
+      <span className="relative grid size-3.5 shrink-0 place-items-center cursor-pointer">
+        <input
+          aria-label={`Select ${task.title}`}
+          checked={checked}
+          className="peer size-3.5 cursor-pointer appearance-none rounded-[3px] border border-border bg-background/60 transition-colors checked:border-primary checked:bg-primary hover:border-ring/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={onToggleChecked}
+          onClick={(event) => event.stopPropagation()}
+          type="checkbox"
+        />
+        {checked && (
+          <Check
+            aria-hidden
+            className="pointer-events-none absolute size-3 text-primary-foreground"
+            strokeWidth={3}
+          />
+        )}
+      </span>
+      <button
+        className="min-w-0 flex-1 text-left"
+        onClick={onSelect}
+        type="button"
+      >
+        <span className="block w-full truncate text-sm font-normal text-current">
+          {task.title}
+        </span>
+      </button>
+      <div className="hidden shrink-0 items-center gap-0.5 group-hover/row:flex group-focus-within/row:flex">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label={`Restore ${task.title}`}
+              className="size-6 text-muted-foreground hover:text-foreground"
+              disabled={busy}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRestore();
+              }}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <ArchiveRestore className="size-3.5" strokeWidth={1.75} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Restore to active</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label={`Delete ${task.title}`}
+              className="size-6 text-muted-foreground hover:text-destructive"
+              disabled={busy}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Delete permanently</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+function TaskStatusDot({
+  status,
+  hasDraft,
+}: {
+  status: Task["status"];
+  hasDraft?: boolean;
+}) {
   return (
     <span
       aria-hidden
-      className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])}
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        STATUS_DOT[status],
+        hasDraft &&
+          "ring-2 ring-offset-1 ring-offset-background ring-amber-400/80",
+      )}
     />
   );
 }
@@ -1099,34 +1597,4 @@ function TaskStatusDot({ status }: { status: Task["status"] }) {
 function formatSearchMessageQuery(query: string) {
   if (query.length <= SEARCH_MESSAGE_MAX_LENGTH) return query;
   return `${query.slice(0, SEARCH_MESSAGE_MAX_LENGTH)}...`;
-}
-
-function EllipsisTooltip({
-  className,
-  text,
-}: {
-  className?: string;
-  text: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap",
-            className,
-          )}
-        >
-          {text}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent
-        align="start"
-        className="max-w-80 whitespace-normal break-words leading-5"
-        side="top"
-      >
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  );
 }

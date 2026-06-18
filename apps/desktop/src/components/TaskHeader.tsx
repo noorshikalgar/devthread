@@ -88,7 +88,7 @@ interface Props {
   onStatusOpenChange?: (open: boolean) => void;
   logTimeOpen?: boolean;
   onLogTimeOpenChange?: (open: boolean) => void;
-  onLogTime: (input: LogTimeInput) => Promise<void>;
+  onLogTime?: (input: LogTimeInput) => Promise<void>;
   onTimelineViewModeChange?: (mode: TimelineViewMode) => void;
   onCreateQuickLink?: (url: string) => Promise<void>;
   onUpdateQuickLink?: (id: string, url: string) => Promise<void>;
@@ -97,10 +97,11 @@ interface Props {
   onPendingTitleEditConsumed?: () => void;
   onStatusChange?: (status: TaskStatus) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
-  onUpdate: (task: Task) => Promise<void>;
+  onUpdate?: (task: Task) => Promise<void>;
   onTagRelease?: (name: string) => Promise<void>;
   onRemoveReleaseTag?: () => Promise<void>;
   releases?: Release[];
+  readOnly?: boolean;
 }
 
 const TITLE_MAX_LENGTH = 140;
@@ -139,6 +140,7 @@ export function TaskHeader({
   onTagRelease,
   onRemoveReleaseTag,
   releases,
+  readOnly = false,
 }: Props) {
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [titleState, setTitleState] = useState<"idle" | "saving" | "error">(
@@ -183,6 +185,7 @@ export function TaskHeader({
 
   async function commitTitle() {
     if (titleDraft === null) return;
+    if (!onUpdate) return;
     const normalized = titleDraft.trim();
     setTitleDraft(null);
     consumePendingTitleEditRef.current?.();
@@ -220,29 +223,38 @@ export function TaskHeader({
     task.status !== "done" && task.status !== "archived";
   const isArchived = task.status === "archived";
   return (
-    <header className="flex flex-col gap-2.5 bg-card/70 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+    <header className="flex flex-col gap-2.5 bg-card px-6 py-3">
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {titleDraft === null ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  aria-label="Edit task title"
-                  className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
-                  onClick={() => setTitleDraft(task.title)}
-                  type="button"
-                >
-                  <span className="truncate">{task.title}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent
-                align="start"
-                className="max-w-md whitespace-normal break-words leading-5"
-                side="bottom"
+            readOnly ? (
+              <h1
+                className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight"
+                title={task.title}
               >
-                {task.title}
-              </TooltipContent>
-            </Tooltip>
+                <span className="truncate">{task.title}</span>
+              </h1>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    aria-label="Edit task title"
+                    className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
+                    onClick={() => setTitleDraft(task.title)}
+                    type="button"
+                  >
+                    <span className="truncate">{task.title}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  align="start"
+                  className="max-w-md whitespace-normal break-words leading-5"
+                  side="bottom"
+                >
+                  {task.title}
+                </TooltipContent>
+              </Tooltip>
+            )
           ) : (
             <Input
               aria-label="Task title"
@@ -315,7 +327,7 @@ export function TaskHeader({
               </TooltipContent>
             </Tooltip>
           )}
-          {showWorkSessionAction && (
+          {showWorkSessionAction && !readOnly && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -353,127 +365,129 @@ export function TaskHeader({
             </TooltipTrigger>
             <TooltipContent>Copy task summary</TooltipContent>
           </Tooltip>
-          <DropdownMenu onOpenChange={setOverflowOpen} open={overflowOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="More task actions"
-                onClick={() => setOverflowOpen(true)}
-                size="icon-sm"
-                variant="ghost"
-                title="More actions"
-              >
-                <Ellipsis />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onSelect={() => {
-                  void navigator.clipboard.writeText(task.id);
-                  toast.success("Task ID copied");
-                }}
-              >
-                <Copy className="mr-2 size-3.5" />
-                Copy task ID
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                  {task.id.slice(0, 8)}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() =>
-                  void changeStatus(isArchived ? "planned" : "archived")
-                }
-              >
-                {isArchived ? (
-                  <>
-                    <Check className="mr-2 size-3.5" />
-                    Restore to active
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="mr-2 size-3.5" />
-                    Archive task
-                  </>
-                )}
-              </DropdownMenuItem>
-              {onDelete && (
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => void onDelete(task.id)}
+          {!readOnly && (
+            <DropdownMenu onOpenChange={setOverflowOpen} open={overflowOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="More task actions"
+                  onClick={() => setOverflowOpen(true)}
+                  size="icon-sm"
+                  variant="ghost"
+                  title="More actions"
                 >
-                  <Trash2 className="mr-2 size-3.5" />
-                  Delete permanently
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onSelect={() =>
+                    void changeStatus(isArchived ? "planned" : "archived")
+                  }
+                >
+                  {isArchived ? (
+                    <>
+                      <Check className="mr-2 size-3.5" />
+                      Restore to active
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 size-3.5" />
+                      Archive task
+                    </>
+                  )}
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {onDelete && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => void onDelete(task.id)}
+                  >
+                    <Trash2 className="mr-2 size-3.5" />
+                    Delete permanently
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Popover onOpenChange={setStatusOpen} open={statusOpen}>
-            <PopoverTrigger asChild>
-              <button
-                aria-label={`Status: ${statusLabel}. Click to change.`}
-                className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-                type="button"
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    STATUS_DOT[task.status],
-                  )}
-                />
-                <span className="font-medium">{statusLabel}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1">
-              <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Status
-              </p>
-              {STATUS_ORDER.map((status) => {
-                const active = task.status === status;
-                return (
-                  <button
+          {readOnly ? (
+            <span
+              aria-label={`Status: ${statusLabel}.`}
+              className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground"
+            >
+              <span
+                aria-hidden
+                className={cn("size-1.5 rounded-full", STATUS_DOT[task.status])}
+              />
+              <span className="font-medium">{statusLabel}</span>
+            </span>
+          ) : (
+            <Popover onOpenChange={setStatusOpen} open={statusOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  aria-label={`Status: ${statusLabel}. Click to change.`}
+                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                  type="button"
+                >
+                  <span
+                    aria-hidden
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0",
-                      active && "bg-accent",
+                      "size-1.5 rounded-full",
+                      STATUS_DOT[task.status],
                     )}
-                    key={status}
-                    onClick={() => {
-                      setStatusOpen(false);
-                      void changeStatus(status as TaskStatus);
-                    }}
-                    type="button"
-                  >
-                    <span
-                      aria-hidden
+                  />
+                  <span className="font-medium">{statusLabel}</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-44 p-1">
+                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status
+                </p>
+                {STATUS_ORDER.map((status) => {
+                  const active = task.status === status;
+                  return (
+                    <button
                       className={cn(
-                        "size-1.5 rounded-full",
-                        STATUS_DOT[status],
+                        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0",
+                        active && "bg-accent",
                       )}
-                    />
-                    {STATUS_LABEL[status]}
-                  </button>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
+                      key={status}
+                      onClick={() => {
+                        setStatusOpen(false);
+                        void changeStatus(status as TaskStatus);
+                      }}
+                      type="button"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          STATUS_DOT[status],
+                        )}
+                      />
+                      {STATUS_LABEL[status]}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
+          )}
           <QuickLinks
             links={quickLinks}
             onAdd={
-              onCreateQuickLink && quickLinks.length < 3
+              !readOnly && onCreateQuickLink && quickLinks.length < 3
                 ? () => {
                     setEditingQuickLink(null);
                     setQuickLinkOpen(true);
                   }
                 : undefined
             }
-            onDelete={onDeleteQuickLink}
+            onDelete={readOnly ? undefined : onDeleteQuickLink}
             onEdit={
-              onUpdateQuickLink
+              !readOnly && onUpdateQuickLink
                 ? (link) => {
                     setEditingQuickLink(link);
                     setQuickLinkOpen(true);
@@ -481,22 +495,16 @@ export function TaskHeader({
                 : undefined
             }
           />
-          {(onTagRelease || task.releaseName || releases?.length) && (
-            <Popover onOpenChange={setReleaseOpen} open={releaseOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  aria-label={
-                    task.releaseName
-                      ? `Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}. Click to change.`
-                      : "Assign release. Click to choose."
-                  }
-                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-                  type="button"
+          {(onTagRelease || task.releaseName || releases?.length) &&
+            (readOnly ? (
+              task.releaseName && (
+                <span
+                  aria-label={`Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}.`}
+                  className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground"
                 >
                   <Tag className="size-3 text-muted-foreground" />
                   <span className="font-medium">
                     {(() => {
-                      if (!task.releaseName) return "Assign release";
                       const r = releases?.find(
                         (x) => x.name === task.releaseName,
                       );
@@ -507,146 +515,204 @@ export function TaskHeader({
                         : task.releaseName;
                     })()}
                   </span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-56 p-1">
-                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Release
-                </p>
-                {(!releases || releases.length === 0) && (
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    No releases yet
+                </span>
+              )
+            ) : (
+              <Popover onOpenChange={setReleaseOpen} open={releaseOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    aria-label={
+                      task.releaseName
+                        ? `Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}. Click to change.`
+                        : "Assign release. Click to choose."
+                    }
+                    className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                    type="button"
+                  >
+                    <Tag className="size-3 text-muted-foreground" />
+                    <span className="font-medium">
+                      {(() => {
+                        if (!task.releaseName) return "Assign release";
+                        const r = releases?.find(
+                          (x) => x.name === task.releaseName,
+                        );
+                        return r
+                          ? r.version
+                            ? `${r.name} (${r.version})`
+                            : r.name
+                          : task.releaseName;
+                      })()}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-56 p-1">
+                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Release
                   </p>
-                )}
-                {releases?.map((r) => {
-                  const active = task.releaseName === r.name;
-                  return (
+                  {(!releases || releases.length === 0) && (
+                    <p className="px-2 py-2 text-xs text-muted-foreground">
+                      No releases yet
+                    </p>
+                  )}
+                  {releases?.map((r) => {
+                    const active = task.releaseName === r.name;
+                    return (
+                      <button
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
+                          active && "bg-accent",
+                        )}
+                        key={r.name}
+                        onClick={() => {
+                          setReleaseOpen(false);
+                          if (active) {
+                            void onRemoveReleaseTag?.();
+                          } else {
+                            void onTagRelease?.(r.name);
+                          }
+                        }}
+                        type="button"
+                      >
+                        <Tag className="size-3 text-muted-foreground" />
+                        <span className="truncate">
+                          {r.version ? `${r.name} (${r.version})` : r.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {task.releaseName && (
                     <button
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
-                        active && "bg-accent",
-                      )}
-                      key={r.name}
+                      className="flex w-full items-center gap-2 rounded-sm border-t border-border px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                       onClick={() => {
                         setReleaseOpen(false);
-                        if (active) {
-                          void onRemoveReleaseTag?.();
-                        } else {
-                          void onTagRelease?.(r.name);
-                        }
+                        void onRemoveReleaseTag?.();
                       }}
                       type="button"
                     >
-                      <Tag className="size-3 text-muted-foreground" />
-                      <span className="truncate">
-                        {r.version ? `${r.name} (${r.version})` : r.name}
-                      </span>
+                      <X className="size-3" />
+                      Remove release tag
                     </button>
-                  );
-                })}
-                {task.releaseName && (
-                  <button
-                    className="flex w-full items-center gap-2 rounded-sm border-t border-border px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                    onClick={() => {
-                      setReleaseOpen(false);
-                      void onRemoveReleaseTag?.();
-                    }}
-                    type="button"
-                  >
-                    <X className="size-3" />
-                    Remove release tag
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
-          )}
+                  )}
+                </PopoverContent>
+              </Popover>
+            ))}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <button
                 aria-label={
                   totalMinutes > 0
                     ? `Log time. ${formatDuration(totalMinutes)} logged.`
                     : "Log time"
                 }
-                className="h-8 gap-1.5 px-2.5 text-xs"
-                onClick={() => setLogTimeOpen(true)}
-                size="sm"
-                variant="ghost"
+                aria-disabled={readOnly}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  readOnly ? "cursor-not-allowed" : "hover:text-foreground",
+                )}
+                onClick={() => {
+                  if (readOnly) return;
+                  setLogTimeOpen(true);
+                }}
+                type="button"
               >
                 <Clock4 className="size-3.5" />
-                Log time
+                <span>Log time</span>
                 {totalMinutes > 0 && (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · {formatDuration(totalMinutes)}
+                  <span className="text-foreground/40">·</span>
+                )}
+                {totalMinutes > 0 && (
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {formatDuration(totalMinutes)}
                   </span>
                 )}
-              </Button>
+              </button>
             </TooltipTrigger>
-            <TooltipContent>Record time spent on this task</TooltipContent>
+            <TooltipContent>
+              {readOnly
+                ? "Read-only in archive"
+                : "Record time spent on this task"}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <button
                 aria-label={
                   task.estimatedMinutes
                     ? `Estimate: ${formatDuration(task.estimatedMinutes)}. Click to change.`
                     : "Set estimate"
                 }
-                className="h-8 gap-1.5 px-2.5 text-xs"
-                onClick={() => setEstimateOpen(true)}
-                size="sm"
-                variant="ghost"
+                aria-disabled={readOnly}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  readOnly ? "cursor-not-allowed" : "hover:text-foreground",
+                )}
+                onClick={() => {
+                  if (readOnly) return;
+                  setEstimateOpen(true);
+                }}
+                type="button"
               >
                 <Calculator className="size-3.5" />
-                Estimate
+                <span>Estimate</span>
+                <span className="text-foreground/40">·</span>
                 {task.estimatedMinutes != null && task.estimatedMinutes > 0 ? (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · {formatDuration(task.estimatedMinutes)}
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {formatDuration(task.estimatedMinutes)}
                   </span>
                 ) : (
-                  <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-                    · none
+                  <span className="font-mono font-normal text-foreground/60">
+                    none
                   </span>
                 )}
-              </Button>
+              </button>
             </TooltipTrigger>
-            <TooltipContent>Set expected time for this task</TooltipContent>
+            <TooltipContent>
+              {readOnly
+                ? "Read-only in archive"
+                : "Set expected time for this task"}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>
-      <LogTimeDialog
-        onOpenChange={setLogTimeOpen}
-        onSubmit={onLogTime}
-        open={logTimeOpen}
-        taskTitle={task.title}
-      />
-      <EstimateDialog
-        currentMinutes={task.estimatedMinutes}
-        onOpenChange={setEstimateOpen}
-        onSubmit={async (minutes) => {
-          await onEstimateChange?.(minutes);
-        }}
-        open={estimateOpen}
-        taskTitle={task.title}
-      />
-      <QuickLinkDialog
-        link={editingQuickLink}
-        onOpenChange={(open) => {
-          setQuickLinkOpen(open);
-          if (!open) setEditingQuickLink(null);
-        }}
-        onSubmit={async (url) => {
-          if (editingQuickLink) {
-            if (!onUpdateQuickLink) return;
-            await onUpdateQuickLink(editingQuickLink.id, url);
-            return;
-          }
-          if (onCreateQuickLink) await onCreateQuickLink(url);
-        }}
-        open={quickLinkOpen}
-      />
+      {!readOnly && onLogTime && (
+        <LogTimeDialog
+          onOpenChange={setLogTimeOpen}
+          onSubmit={onLogTime}
+          open={logTimeOpen}
+          taskTitle={task.title}
+        />
+      )}
+      {!readOnly && onEstimateChange && (
+        <EstimateDialog
+          currentMinutes={task.estimatedMinutes}
+          onOpenChange={setEstimateOpen}
+          onSubmit={async (minutes) => {
+            await onEstimateChange?.(minutes);
+          }}
+          open={estimateOpen}
+          taskTitle={task.title}
+        />
+      )}
+      {!readOnly && (onCreateQuickLink || onUpdateQuickLink) && (
+        <QuickLinkDialog
+          link={editingQuickLink}
+          onOpenChange={(open) => {
+            setQuickLinkOpen(open);
+            if (!open) setEditingQuickLink(null);
+          }}
+          onSubmit={async (url) => {
+            if (editingQuickLink) {
+              if (!onUpdateQuickLink) return;
+              await onUpdateQuickLink(editingQuickLink.id, url);
+              return;
+            }
+            if (onCreateQuickLink) await onCreateQuickLink(url);
+          }}
+          open={quickLinkOpen}
+        />
+      )}
     </header>
   );
 
@@ -656,7 +722,7 @@ export function TaskHeader({
       await onStatusChange(status);
       return;
     }
-    await onUpdate({ ...task, status });
+    await onUpdate?.({ ...task, status });
   }
 }
 
@@ -675,7 +741,9 @@ function QuickLinks({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">Links</span>
+      <span className="text-[11px] font-normal text-foreground/70">
+        Quicklinks
+      </span>
       {links.map((link) => (
         <QuickLinkButton
           key={link.id}
@@ -727,6 +795,7 @@ function QuickLinkButton({
             </p>
           </div>
         }
+        disabled={menuOpen}
       >
         <DropdownMenuTrigger asChild>
           <Button
@@ -743,8 +812,20 @@ function QuickLinkButton({
           </Button>
         </DropdownMenuTrigger>
       </HoverTooltip>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel className="truncate">{link.title}</DropdownMenuLabel>
+      <DropdownMenuContent align="start" className="min-w-[180px]">
+        <DropdownMenuItem
+          onSelect={() => {
+            void navigator.clipboard
+              .writeText(link.url)
+              .then(() => toast.success("Link copied"))
+              .catch((cause) =>
+                toast.error(`Could not copy link: ${String(cause)}`),
+              );
+          }}
+        >
+          <Copy className="mr-2 size-3.5" />
+          Copy link
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void openExternalUrl(link.url)}>
           <ExternalLink className="mr-2 size-3.5" />
           Open link
@@ -792,9 +873,11 @@ function measureTip(): Size {
 function HoverTooltip({
   content,
   children,
+  disabled = false,
 }: {
   content: ReactNode;
   children: ReactElement<Record<string, unknown>>;
+  disabled?: boolean;
 }) {
   const triggerRef = useRef<HTMLElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -805,6 +888,7 @@ function HoverTooltip({
   } | null>(null);
 
   function showTip() {
+    if (disabled) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const anchor = anchorFromRect(rect);
@@ -814,6 +898,10 @@ function HoverTooltip({
   function hideTip() {
     setTip(null);
   }
+
+  useEffect(() => {
+    if (disabled) setTip(null);
+  }, [disabled]);
 
   useLayoutEffect(() => {
     if (!tip || !tipRef.current) return;
@@ -840,14 +928,6 @@ function HoverTooltip({
     ),
     onMouseLeave: composeHover(
       childProps.onMouseLeave as ((event: SyntheticEvent) => void) | undefined,
-      hideTip,
-    ),
-    onFocus: composeHover(
-      childProps.onFocus as ((event: SyntheticEvent) => void) | undefined,
-      showTip,
-    ),
-    onBlur: composeHover(
-      childProps.onBlur as ((event: SyntheticEvent) => void) | undefined,
       hideTip,
     ),
   } as Partial<React.HTMLAttributes<HTMLElement>> & {

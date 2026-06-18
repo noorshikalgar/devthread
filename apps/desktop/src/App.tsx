@@ -1,9 +1,12 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowUp,
   BarChart3,
+  Calendar,
   Check,
   Clock4,
+  ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
@@ -16,18 +19,27 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Scissors,
   Sun,
   Tag,
   Trash2,
   X,
 } from "lucide-react";
+import { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
   type DownloadEvent,
   type Update,
 } from "@tauri-apps/plugin-updater";
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -41,8 +53,6 @@ import { Timeline, type TimelineViewMode } from "@/components/Timeline";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
-import { WorklogBars } from "@/components/WorklogBars";
-import { Pager } from "@/components/Pager";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,9 +117,19 @@ import {
 } from "@/lib/worklogSettings";
 import type { WorklogDay } from "@/lib/worklog";
 import { aggregateByBucket } from "@/lib/worklogAggregates";
+import {
+  exportWorklogToExcel,
+  buildWorklogFilename,
+} from "@/lib/worklogExportPayload";
 import { copyTaskSummary, formatTaskSummary } from "@/lib/taskSummary";
 import { copyFolderSummary } from "@/lib/folderSummary";
 import { copyFolderCsv, copyTaskCsv, type FolderSummaryTask } from "@/lib/csv";
+import {
+  getCachedTaskData,
+  updateCachedTaskData,
+  invalidateTaskData,
+} from "@/lib/taskDataCache";
+import { getCachedWorklogYear, setCachedWorklogYear } from "@/lib/worklogCache";
 import {
   type Attachment,
   type EntryType,
@@ -127,7 +147,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const SELECTED_TASK_KEY = "devthread:selected-task";
+const PINNED_TASKS_KEY = "devthread:pinned-tasks";
 const SIDEBAR_WIDTH_KEY = "devthread:sidebar-width";
+const RELEASE_SIDEBAR_OPEN_KEY = "devthread:release-sidebar-open";
 const THEME_KEY = "devthread:theme";
 const UPDATE_AUTO_CHECK_KEY = "devthread:update-auto-check";
 const UPDATE_CHECK_INTERVAL_KEY = "devthread:update-check-interval";
@@ -153,15 +175,28 @@ type UpdateState =
   | "installed"
   | "error";
 type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases";
-type WorklogRange = "7d" | "4w" | "12w" | "12m";
 interface AppContextMenuState {
   x: number;
   y: number;
   selectedText: string;
   linkUrl: string | null;
+  editableTarget: HTMLElement | null;
+  editorView: CodeMirrorEditorView | null;
+  canPaste: boolean;
 }
 
 export { TaskHeader } from "@/components/TaskHeader";
+
+function loadPinnedTaskIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PINNED_TASKS_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -169,6 +204,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(
     localStorage.getItem(SELECTED_TASK_KEY),
   );
+  const [pinnedTaskIds, setPinnedTaskIds] =
+    useState<string[]>(loadPinnedTaskIds);
   const [pendingTitleEdit, setPendingTitleEdit] = useState(false);
   const [entries, setEntries] = useState<WorkLogEntry[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -189,6 +226,9 @@ export default function App() {
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [releaseSidebarOpen, setReleaseSidebarOpen] = useState(
+    () => localStorage.getItem(RELEASE_SIDEBAR_OPEN_KEY) !== "false",
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     clampSidebarWidth(Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))),
   );
@@ -239,17 +279,22 @@ export default function App() {
     const stored = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
     return stored ? Number(stored) : null;
   });
-  const [worklogRange, setWorklogRange] = useState<WorklogRange>("12w");
+  const [worklogYear, setWorklogYear] = useState(() =>
+    new Date().getUTCFullYear(),
+  );
   const [worklogMetrics, setWorklogMetrics] = useState<WorklogMetricEntry[]>(
     [],
   );
+  const [worklogHeatmapMetrics, setWorklogHeatmapMetrics] = useState<
+    WorklogMetricEntry[]
+  >([]);
   const [worklogLoading, setWorklogLoading] = useState(false);
   const [releases, setReleases] = useState<Release[]>([]);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
   );
-  const selectedTask = useMemo(
+  const rawSelectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
     [selectedId, tasks],
   );
@@ -261,12 +306,80 @@ export default function App() {
     () => tasks.filter((task) => task.status === "archived"),
     [tasks],
   );
+  const selectedTask = useMemo(
+    () =>
+      workspaceMode === "tasks" && rawSelectedTask?.status !== "archived"
+        ? rawSelectedTask
+        : null,
+    [rawSelectedTask, workspaceMode],
+  );
+
+  // The archive view mutates `selectedId` so the read-only TaskHeader
+  // and Timeline load the right entries/quicklinks. That same
+  // `selectedId` would otherwise leak into the regular task view and
+  // re-enable all the editing actions on a task that's been
+  // archived. To keep the modes independent, we snapshot the active
+  // selection before leaving the task view and restore it on return.
+  const lastActiveSelectedIdRef = useRef<string | null>(null);
+  const previousWorkspaceModeRef = useRef<WorkspaceMode>(workspaceMode);
+  useEffect(() => {
+    const prev = previousWorkspaceModeRef.current;
+    const next = workspaceMode;
+    if (prev === "tasks" && next !== "tasks") {
+      // Heading out of the task view — remember the active pick.
+      if (rawSelectedTask && rawSelectedTask.status !== "archived") {
+        lastActiveSelectedIdRef.current = selectedId;
+      }
+    } else if (prev !== "tasks" && next === "tasks") {
+      // Coming back — clear out any archive selection that bled in
+      // and restore the previous active pick (or the first active
+      // task as a fallback).
+      if (rawSelectedTask && rawSelectedTask.status === "archived") {
+        const remembered = lastActiveSelectedIdRef.current;
+        const stillValid =
+          remembered &&
+          tasks.some(
+            (task) => task.id === remembered && task.status !== "archived",
+          );
+        if (stillValid) {
+          setSelectedId(remembered);
+        } else {
+          const firstActive = tasks.find((task) => task.status !== "archived");
+          setSelectedId(firstActive?.id ?? null);
+        }
+      }
+    }
+    previousWorkspaceModeRef.current = next;
+  }, [workspaceMode, selectedId, rawSelectedTask, tasks]);
+
+  useEffect(() => {
+    if (workspaceMode !== "tasks") return;
+    if (!rawSelectedTask || rawSelectedTask.status !== "archived") {
+      if (rawSelectedTask) {
+        lastActiveSelectedIdRef.current = rawSelectedTask.id;
+      }
+      return;
+    }
+
+    const firstActive = tasks.find((task) => task.status !== "archived");
+    setSelectedId(firstActive?.id ?? null);
+  }, [workspaceMode, rawSelectedTask, tasks]);
 
   useEffect(() => {
     void loadTasks();
     void loadFolders();
     void loadReleases();
   }, []);
+
+  useEffect(() => {
+    const validIds = new Set(sidebarTasks.map((task) => task.id));
+    setPinnedTaskIds((current) => {
+      const next = current.filter((id) => validIds.has(id));
+      if (next.length === current.length) return current;
+      localStorage.setItem(PINNED_TASKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [sidebarTasks]);
 
   useEffect(() => {
     if (!updateAutoCheck) return;
@@ -333,23 +446,46 @@ export default function App() {
       setContextMenu(null);
     }
 
-    function handleContextMenu(event: globalThis.MouseEvent) {
+    async function handleContextMenu(event: globalThis.MouseEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-radix-popper-content-wrapper]")) return;
-      const selectedText = window.getSelection()?.toString().trim() ?? "";
+      const editorRoot = target?.closest(".cm-editor") as HTMLElement | null;
+      const editorView = editorRoot
+        ? CodeMirrorEditorView.findFromDOM(editorRoot)
+        : null;
+      const editableTarget =
+        editorView?.contentDOM ??
+        ((target?.closest(
+          'input, textarea, [contenteditable="true"]',
+        ) as HTMLElement | null) ||
+          null);
+      const selectedText = editorView
+        ? getCodeMirrorSelectedText(editorView)
+        : getEditableSelectedText(editableTarget);
       const link = target?.closest("a[href]") as HTMLAnchorElement | null;
       const linkUrl = safeExternalUrl(link?.getAttribute("href"));
 
       event.preventDefault();
-      if (!selectedText && !linkUrl) {
+      if (!selectedText && !linkUrl && !editableTarget) {
         setContextMenu(null);
         return;
+      }
+      let canPaste = false;
+      if (editableTarget && navigator.clipboard?.readText) {
+        try {
+          canPaste = (await navigator.clipboard.readText()).length > 0;
+        } catch {
+          canPaste = false;
+        }
       }
       setContextMenu({
         x: event.clientX,
         y: event.clientY,
         selectedText,
         linkUrl,
+        editableTarget,
+        editorView,
+        canPaste,
       });
     }
 
@@ -379,6 +515,19 @@ export default function App() {
       return;
     }
     localStorage.setItem(SELECTED_TASK_KEY, selectedId);
+    // Hydrate from the per-task cache so toggling between Tasks and
+    // Archive is instant. We only re-fetch if we don't have the
+    // payload yet, or the cached entries belong to a different task
+    // (which can happen if the user lands on a never-loaded task).
+    const cached = getCachedTaskData(selectedId);
+    if (cached) {
+      setEntries(cached.entries);
+      setQuickLinks(cached.quickLinks);
+      setAttachments(cached.attachments);
+      setHasMore(cached.entries.length === PAGE_SIZE);
+      setHistoryEntryId(null);
+      return;
+    }
     setEntries([]);
     setAttachments([]);
     setQuickLinks([]);
@@ -388,8 +537,17 @@ export default function App() {
 
   useEffect(() => {
     if (workspaceMode !== "worklog") return;
-    void loadWorklogMetrics(worklogRange);
-  }, [workspaceMode, worklogRange]);
+    // Hydrate from the per-year cache so toggling back to Worklog is
+    // instant. The fetch only happens on the first visit for that
+    // year, or when the user explicitly changes the year.
+    const cached = getCachedWorklogYear(worklogYear);
+    if (cached) {
+      setWorklogMetrics(cached.metrics);
+      setWorklogHeatmapMetrics(cached.heatmapMetrics);
+      return;
+    }
+    void loadWorklogMetrics(worklogYear);
+  }, [workspaceMode, worklogYear]);
 
   const visibleEntries = useMemo(() => {
     const term = timelineSearch.trim();
@@ -416,8 +574,11 @@ export default function App() {
       setTasks(next);
       const saved = localStorage.getItem(SELECTED_TASK_KEY);
       if (!selectedId || !next.some((task) => task.id === selectedId)) {
+        const activeTasks = next.filter((task) => task.status !== "archived");
         setSelectedId(
-          next.find((task) => task.id === saved)?.id ?? next[0]?.id ?? null,
+          activeTasks.find((task) => task.id === saved)?.id ??
+            activeTasks[0]?.id ??
+            null,
         );
       }
     } catch (cause) {
@@ -465,6 +626,16 @@ export default function App() {
     }
   }
 
+  function togglePinnedTask(taskId: string) {
+    setPinnedTaskIds((current) => {
+      const next = current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [taskId, ...current];
+      localStorage.setItem(PINNED_TASKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
   async function handleTagFolderRelease(folderId: string, name: string) {
     try {
       await api.tagFolderRelease(folderId, name);
@@ -497,6 +668,11 @@ export default function App() {
       setAttachments(nextAttachments);
       setHasMore(next.length === PAGE_SIZE);
       setHistoryEntryId(null);
+      // Keep the per-task cache in sync so toggling modes is instant.
+      updateCachedTaskData(taskId, {
+        entries: next,
+        attachments: nextAttachments,
+      });
     } catch (cause) {
       setError(String(cause));
     }
@@ -504,17 +680,28 @@ export default function App() {
 
   async function loadQuickLinks(taskId: string) {
     try {
-      setQuickLinks(await api.listQuickLinks(taskId));
+      const next = await api.listQuickLinks(taskId);
+      setQuickLinks(next);
+      updateCachedTaskData(taskId, { quickLinks: next });
     } catch (cause) {
       setError(String(cause));
     }
   }
 
-  async function loadWorklogMetrics(range: WorklogRange) {
+  async function loadWorklogMetrics(year: number) {
     setWorklogLoading(true);
     try {
-      const { startAt, endAt } = worklogRangeBounds(range);
-      setWorklogMetrics(await api.listWorklogMetrics(startAt, endAt));
+      const yearBounds = worklogCalendarYearBounds(year);
+      const metrics = await api.listWorklogMetrics(
+        yearBounds.startAt,
+        yearBounds.endAt,
+      );
+      setWorklogMetrics(metrics);
+      setWorklogHeatmapMetrics(metrics);
+      setCachedWorklogYear(year, {
+        metrics,
+        heatmapMetrics: metrics,
+      });
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -560,7 +747,11 @@ export default function App() {
         "private",
       );
       if (selectedId === task.id) {
-        setEntries((current) => [entry, ...current]);
+        setEntries((current) => {
+          const next = [entry, ...current];
+          updateCachedTaskData(task.id, { entries: next });
+          return next;
+        });
       }
     } catch (cause) {
       setError(`Status changed, but the timeline log failed: ${cause}`);
@@ -589,7 +780,11 @@ export default function App() {
         minutes,
       );
       if (selectedId === task.id) {
-        setEntries((current) => [entry, ...current]);
+        setEntries((current) => {
+          const next = [entry, ...current];
+          updateCachedTaskData(task.id, { entries: next });
+          return next;
+        });
       }
     } catch (cause) {
       setError(`Estimate changed, but the timeline log failed: ${cause}`);
@@ -622,9 +817,13 @@ export default function App() {
         enriched.provider,
       );
       if (selectedId !== taskId) return;
-      setQuickLinks((existing) =>
-        existing.map((link) => (link.id === saved.id ? saved : link)),
-      );
+      setQuickLinks((existing) => {
+        const next = existing.map((link) =>
+          link.id === saved.id ? saved : link,
+        );
+        updateCachedTaskData(taskId, { quickLinks: next });
+        return next;
+      });
     } catch (cause) {
       console.warn("quick link preview enrichment failed", cause);
     }
@@ -645,7 +844,9 @@ export default function App() {
     );
     setQuickLinks((current) => {
       const withoutDuplicate = current.filter((link) => link.id !== saved.id);
-      return [...withoutDuplicate, saved].slice(0, 3);
+      const next = [...withoutDuplicate, saved].slice(0, 3);
+      updateCachedTaskData(selectedId, { quickLinks: next });
+      return next;
     });
     void enrichQuickLinkInBackground(selectedId, saved.id, saved.url);
   }
@@ -662,16 +863,22 @@ export default function App() {
       normalized.domain,
       normalized.provider,
     );
-    setQuickLinks((current) =>
-      current.map((link) => (link.id === saved.id ? saved : link)),
-    );
+    setQuickLinks((current) => {
+      const next = current.map((link) => (link.id === saved.id ? saved : link));
+      updateCachedTaskData(saved.taskId, { quickLinks: next });
+      return next;
+    });
     const taskId = saved.taskId;
     void enrichQuickLinkInBackground(taskId, saved.id, saved.url);
   }
 
   async function deleteQuickLink(id: string) {
     await api.deleteQuickLink(id);
-    setQuickLinks((current) => current.filter((link) => link.id !== id));
+    setQuickLinks((current) => {
+      const next = current.filter((link) => link.id !== id);
+      if (selectedId) updateCachedTaskData(selectedId, { quickLinks: next });
+      return next;
+    });
   }
 
   async function createEntry(
@@ -706,8 +913,16 @@ export default function App() {
         );
       }
     }
-    setEntries((current) => [entry, ...current]);
-    setAttachments((current) => [...current, ...savedImages]);
+    setEntries((current) => {
+      const next = [entry, ...current];
+      updateCachedTaskData(selectedId, { entries: next });
+      return next;
+    });
+    setAttachments((current) => {
+      const next = [...current, ...savedImages];
+      updateCachedTaskData(selectedId, { attachments: next });
+      return next;
+    });
     await loadTasks();
   }
 
@@ -729,6 +944,7 @@ export default function App() {
     setEntries((current) => {
       const next = [entry, ...current];
       next.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      updateCachedTaskData(selectedId, { entries: next });
       return next;
     });
     await loadTasks();
@@ -761,7 +977,11 @@ export default function App() {
 
   async function trashEntry(entryId: string) {
     await api.trashEntry(entryId);
-    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+    setEntries((current) => {
+      const next = current.filter((entry) => entry.id !== entryId);
+      if (selectedId) updateCachedTaskData(selectedId, { entries: next });
+      return next;
+    });
     toast("Entry moved to trash.", {
       description: "You can restore it from the trash view.",
       action: {
@@ -780,7 +1000,11 @@ export default function App() {
   async function loadMore() {
     if (!selectedId) return;
     const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
-    setEntries((current) => [...current, ...next]);
+    setEntries((current) => {
+      const merged = [...current, ...next];
+      updateCachedTaskData(selectedId, { entries: merged });
+      return merged;
+    });
     setHasMore(next.length === PAGE_SIZE);
   }
 
@@ -879,6 +1103,9 @@ export default function App() {
   async function deleteTask(taskId: string) {
     await api.deleteTask(taskId);
     setTasks((current) => current.filter((task) => task.id !== taskId));
+    // Drop any cached data for the deleted task so a stale entry
+    // doesn't resurface on a subsequent view toggle.
+    invalidateTaskData(taskId);
     if (selectedId === taskId) {
       const next = tasks.find((task) => task.id !== taskId) ?? null;
       setSelectedId(next?.id ?? null);
@@ -970,9 +1197,13 @@ export default function App() {
   }
 
   function replaceEntry(updated: WorkLogEntry) {
-    setEntries((current) =>
-      current.map((entry) => (entry.id === updated.id ? updated : entry)),
-    );
+    setEntries((current) => {
+      const next = current.map((entry) =>
+        entry.id === updated.id ? updated : entry,
+      );
+      updateCachedTaskData(updated.taskId, { entries: next });
+      return next;
+    });
   }
 
   function startSidebarResize(event: MouseEvent<HTMLButtonElement>) {
@@ -1015,8 +1246,17 @@ export default function App() {
     onNewTask: () => void createTask(),
     onNewFolder: () => newFolderDialogRef.current?.(),
     onToggleSidebar: () => setSidebarOpen((o) => !o),
-    onToggleArchive: () =>
-      setWorkspaceMode((m) => (m === "archive" ? "tasks" : "archive")),
+    onToggleArchive: () => {
+      // Match the rail button: first invocation enters the archive
+      // view (and opens the sidebar), later invocations just toggle
+      // the sidebar without bouncing back to the task view.
+      if (workspaceMode !== "archive") {
+        setWorkspaceMode("archive");
+        setSidebarOpen(true);
+        return;
+      }
+      setSidebarOpen((open) => !open);
+    },
     onOpenWorklog: () => setWorkspaceMode("worklog"),
     onEditTitle: () => {
       if (selectedTask) setPendingTitleEdit(true);
@@ -1068,12 +1308,33 @@ export default function App() {
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
+          archiveOpen={workspaceMode === "archive" && sidebarOpen}
           onArchiveToggle={() => {
-            setWorkspaceMode((mode) =>
-              mode === "archive" ? "tasks" : "archive",
-            );
+            // First click enters the archive view (with the sidebar
+            // open so the user sees the list). Subsequent clicks
+            // only toggle the sidebar — they don't bounce back to
+            // the task view, mirroring how the Tasks rail button
+            // handles second-and-later clicks.
+            if (workspaceMode !== "archive") {
+              setWorkspaceMode("archive");
+              setSidebarOpen(true);
+              return;
+            }
+            setSidebarOpen((open) => !open);
           }}
-          onReleasesOpen={() => setWorkspaceMode("releases")}
+          onReleasesToggle={() => {
+            if (workspaceMode !== "releases") {
+              setWorkspaceMode("releases");
+              setReleaseSidebarOpen(true);
+              localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "true");
+              return;
+            }
+            setReleaseSidebarOpen((open) => {
+              const next = !open;
+              localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, String(next));
+              return next;
+            });
+          }}
           onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
@@ -1086,6 +1347,7 @@ export default function App() {
           }}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
+          releasesOpen={releaseSidebarOpen}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
           updateAvailable={updateState === "available"}
@@ -1098,45 +1360,69 @@ export default function App() {
             resizingSidebar && "transition-none",
           )}
           style={{
-            width: workspaceMode === "tasks" && sidebarOpen ? sidebarWidth : 0,
+            // The sidebar shell hosts both the active tasks list and
+            // the archive list — the same `sidebarOpen` toggle hides
+            // either of them, so the archive icon can mirror the
+            // tasks icon's behavior.
+            width:
+              (workspaceMode === "tasks" || workspaceMode === "archive") &&
+              sidebarOpen
+                ? sidebarWidth
+                : 0,
           }}
         >
           <div className="h-full select-none" style={{ width: sidebarWidth }}>
-            <TaskSidebar
-              folders={folders}
-              newFolderDialogRef={newFolderDialogRef}
-              onCopyFolder={copyFolder}
-              onCreate={createTask}
-              onCreateFolder={createFolder}
-              onDeleteFolder={deleteFolder}
-              onDeleteTask={deleteTask}
-              onMoveTask={moveTask}
-              onRemoveFolderRelease={handleRemoveFolderReleaseTag}
-              onRemoveTaskRelease={handleRemoveTaskTag}
-              onRenameFolder={renameFolder}
-              onSelect={setSelectedId}
-              onTagFolderRelease={handleTagFolderRelease}
-              onTagTaskRelease={handleTagTask}
-              releases={releases}
-              selectedId={selectedId}
-              tasks={sidebarTasks}
-            />
+            {workspaceMode === "archive" ? (
+              <TaskSidebar
+                mode="archive"
+                folders={folders}
+                onDeleteTask={deleteTask}
+                onRestoreTask={(task) => updateTaskStatus(task, "planned")}
+                onSelect={setSelectedId}
+                selectedId={selectedId}
+                tasks={archivedTasks}
+              />
+            ) : (
+              <TaskSidebar
+                mode="active"
+                folders={folders}
+                newFolderDialogRef={newFolderDialogRef}
+                onCopyFolder={copyFolder}
+                onCreate={createTask}
+                onCreateFolder={createFolder}
+                onDeleteFolder={deleteFolder}
+                onDeleteTask={deleteTask}
+                onMoveTask={moveTask}
+                onRemoveFolderRelease={handleRemoveFolderReleaseTag}
+                onRemoveTaskRelease={handleRemoveTaskTag}
+                onRenameFolder={renameFolder}
+                onSelect={setSelectedId}
+                onTogglePin={togglePinnedTask}
+                onTagFolderRelease={handleTagFolderRelease}
+                onTagTaskRelease={handleTagTask}
+                pinnedTaskIds={pinnedTaskIds}
+                releases={releases}
+                selectedId={selectedId}
+                tasks={sidebarTasks}
+              />
+            )}
           </div>
-          {workspaceMode === "tasks" && sidebarOpen && (
-            <button
-              aria-label="Resize task sidebar"
-              className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
-              onDoubleClick={() => {
-                setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
-                localStorage.setItem(
-                  SIDEBAR_WIDTH_KEY,
-                  String(DEFAULT_SIDEBAR_WIDTH),
-                );
-              }}
-              onMouseDown={startSidebarResize}
-              type="button"
-            />
-          )}
+          {(workspaceMode === "tasks" || workspaceMode === "archive") &&
+            sidebarOpen && (
+              <button
+                aria-label="Resize task sidebar"
+                className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
+                onDoubleClick={() => {
+                  setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+                  localStorage.setItem(
+                    SIDEBAR_WIDTH_KEY,
+                    String(DEFAULT_SIDEBAR_WIDTH),
+                  );
+                }}
+                onMouseDown={startSidebarResize}
+                type="button"
+              />
+            )}
         </div>
 
         <main className="flex min-h-0 min-w-0 flex-1 select-none flex-col">
@@ -1159,17 +1445,26 @@ export default function App() {
           )}
           {workspaceMode === "archive" ? (
             <ArchiveView
-              folders={folders}
-              onDeleteTask={deleteTask}
-              onRestoreTask={(task) => updateTaskStatus(task, "planned")}
+              attachments={attachments}
+              entries={entries}
+              quickLinks={quickLinks}
+              releases={releases}
+              selectedId={selectedId}
               tasks={archivedTasks}
+              totalMinutes={totalMinutes}
             />
           ) : workspaceMode === "worklog" ? (
             <WorklogMetricsView
               entries={worklogMetrics}
+              heatmapEntries={worklogHeatmapMetrics}
               loading={worklogLoading}
-              onRangeChange={setWorklogRange}
-              range={worklogRange}
+              onSelectTask={(id) => {
+                setSelectedId(id);
+                setWorkspaceMode("tasks");
+                setSidebarOpen(true);
+              }}
+              selectedYear={worklogYear}
+              onYearChange={setWorklogYear}
               worklogSettings={worklogSettings}
             />
           ) : workspaceMode === "releases" ? (
@@ -1184,6 +1479,7 @@ export default function App() {
               }}
               onTagTask={handleTagTask}
               releases={releases}
+              sidebarOpen={releaseSidebarOpen}
               tasks={sidebarTasks}
             />
           ) : selectedTask ? (
@@ -1223,9 +1519,11 @@ export default function App() {
                   onEntryTypeFilterChange={setEntryTypeFilter}
                   onRegexChange={setTimelineRegex}
                   onSearchChange={setTimelineSearch}
+                  onSubmit={createEntry}
                   regex={timelineRegex}
                   search={timelineSearch}
                   searchInputRef={timelineSearchInputRef}
+                  taskId={selectedTask.id}
                 >
                   <Composer
                     onSubmit={createEntry}
@@ -1304,26 +1602,30 @@ export default function App() {
 
 function AppRail({
   archiveActive,
+  archiveOpen,
   onArchiveToggle,
-  onReleasesOpen,
+  onReleasesToggle,
   onSearchOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
   releasesActive,
+  releasesOpen,
   tasksActive,
   tasksOpen,
   updateAvailable,
   worklogActive,
 }: {
   archiveActive: boolean;
+  archiveOpen: boolean;
   onArchiveToggle: () => void;
-  onReleasesOpen: () => void;
+  onReleasesToggle: () => void;
   onSearchOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
   releasesActive: boolean;
+  releasesOpen: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
   updateAvailable: boolean;
@@ -1331,38 +1633,30 @@ function AppRail({
 }) {
   return (
     <aside className="flex h-full w-12 shrink-0 select-none flex-col items-center border-r border-border bg-card py-3 text-card-foreground">
-      <RailButton
-        active={tasksActive}
-        icon={ListTodo}
-        label={
-          tasksActive && tasksOpen ? "Hide task sidebar" : "Show task sidebar"
-        }
-        onClick={onTaskToggle}
-        tooltip="Tasks"
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            aria-label="Open global search"
-            className="mt-1 rounded-md"
-            onClick={onSearchOpen}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <Search />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">Search</TooltipContent>
-      </Tooltip>
-
-      <div className="mt-auto flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <RailButton
-          active={releasesActive}
-          icon={Tag}
-          label="Open releases"
-          onClick={onReleasesOpen}
-          tooltip="Releases"
+          active={tasksActive}
+          icon={ListTodo}
+          label={
+            tasksActive && tasksOpen ? "Hide task sidebar" : "Show task sidebar"
+          }
+          onClick={onTaskToggle}
+          tooltip="Tasks"
         />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Open global search"
+              className="rounded-md"
+              onClick={onSearchOpen}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <Search />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Search</TooltipContent>
+        </Tooltip>
         <RailButton
           active={worklogActive}
           icon={BarChart3}
@@ -1371,9 +1665,31 @@ function AppRail({
           tooltip="Worklog"
         />
         <RailButton
+          active={releasesActive}
+          icon={Tag}
+          label={
+            releasesActive
+              ? releasesOpen
+                ? "Hide release sidebar"
+                : "Show release sidebar"
+              : "Open releases"
+          }
+          onClick={onReleasesToggle}
+          tooltip="Releases"
+        />
+      </div>
+
+      <div className="mt-auto flex flex-col gap-1">
+        <RailButton
           active={archiveActive}
           icon={Archive}
-          label={archiveActive ? "Hide archived tasks" : "Show archived tasks"}
+          label={
+            archiveActive
+              ? archiveOpen
+                ? "Hide archive sidebar"
+                : "Show archive sidebar"
+              : "Open archive"
+          }
           onClick={onArchiveToggle}
           tooltip="Archive"
         />
@@ -1408,6 +1724,25 @@ function AppRail({
   );
 }
 
+function getCodeMirrorSelectedText(view: CodeMirrorEditorView) {
+  return view.state.selection.ranges
+    .filter((range) => !range.empty)
+    .map((range) => view.state.sliceDoc(range.from, range.to))
+    .join("\n");
+}
+
+function getEditableSelectedText(target: HTMLElement | null) {
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    return start === end ? "" : target.value.slice(start, end);
+  }
+  return window.getSelection()?.toString() ?? "";
+}
+
 function AppContextMenu({
   menu,
   onClose,
@@ -1417,10 +1752,75 @@ function AppContextMenu({
 }) {
   if (!menu) return null;
 
+  const activeMenu = menu;
+  const hasSelection = activeMenu.selectedText.length > 0;
+
   async function copy(value: string) {
     await navigator.clipboard.writeText(value);
     onClose();
   }
+
+  async function copyFromEditor() {
+    if (activeMenu.editorView) {
+      await navigator.clipboard.writeText(
+        getCodeMirrorSelectedText(activeMenu.editorView),
+      );
+      activeMenu.editorView.focus();
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    document.execCommand("copy");
+    onClose();
+  }
+
+  async function cutFromEditor() {
+    if (activeMenu.editorView) {
+      const view = activeMenu.editorView;
+      const selectedText = getCodeMirrorSelectedText(view);
+      if (selectedText) await navigator.clipboard.writeText(selectedText);
+      if (!view.state.readOnly) view.dispatch(view.state.replaceSelection(""));
+      view.focus();
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    document.execCommand("cut");
+    onClose();
+  }
+
+  async function pasteIntoEditor() {
+    if (activeMenu.editorView) {
+      activeMenu.editorView.focus();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && !activeMenu.editorView.state.readOnly) {
+          activeMenu.editorView.dispatch(
+            activeMenu.editorView.state.replaceSelection(text),
+          );
+        }
+      } catch {
+        // Leave the menu as a no-op when clipboard read is blocked.
+      }
+      onClose();
+      return;
+    }
+    activeMenu.editableTarget?.focus({ preventScroll: true });
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        document.execCommand("insertText", false, text);
+      } else {
+        document.execCommand("paste");
+      }
+    } catch {
+      document.execCommand("paste");
+    }
+    onClose();
+  }
+
+  const itemClass =
+    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent";
 
   return (
     <div
@@ -1428,12 +1828,46 @@ function AppContextMenu({
       onClick={(event) => event.stopPropagation()}
       style={{ left: menu.x, top: menu.y }}
     >
-      {menu.linkUrl && (
+      {activeMenu.editableTarget && (
         <>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+            className={itemClass}
+            disabled={!hasSelection}
+            onClick={() => void cutFromEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Scissors className="size-3.5 text-muted-foreground" />
+            Cut
+          </button>
+          <button
+            className={itemClass}
+            disabled={!hasSelection}
+            onClick={() => void copyFromEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Copy className="size-3.5 text-muted-foreground" />
+            Copy
+          </button>
+          <button
+            className={itemClass}
+            disabled={!activeMenu.canPaste}
+            onClick={() => void pasteIntoEditor()}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <ClipboardPaste className="size-3.5 text-muted-foreground" />
+            Paste
+          </button>
+        </>
+      )}
+      {activeMenu.linkUrl && (
+        <>
+          <button
+            className={itemClass}
             onClick={() => {
-              void openExternalUrl(menu.linkUrl);
+              void openExternalUrl(activeMenu.linkUrl);
               onClose();
             }}
             type="button"
@@ -1442,8 +1876,8 @@ function AppContextMenu({
             Open link
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
-            onClick={() => void copy(menu.linkUrl!)}
+            className={itemClass}
+            onClick={() => void copy(activeMenu.linkUrl!)}
             type="button"
           >
             <Copy className="size-3.5 text-muted-foreground" />
@@ -1451,10 +1885,10 @@ function AppContextMenu({
           </button>
         </>
       )}
-      {menu.selectedText && (
+      {activeMenu.selectedText && !activeMenu.editableTarget && (
         <button
-          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
-          onClick={() => void copy(menu.selectedText)}
+          className={itemClass}
+          onClick={() => void copy(activeMenu.selectedText)}
           type="button"
         >
           <Copy className="size-3.5 text-muted-foreground" />
@@ -1466,326 +1900,115 @@ function AppContextMenu({
 }
 
 function ArchiveView({
-  folders,
+  attachments,
+  entries,
+  quickLinks,
+  releases,
+  selectedId,
   tasks,
-  onRestoreTask,
-  onDeleteTask,
+  totalMinutes,
 }: {
-  folders: Folder[];
+  attachments: Attachment[];
+  entries: WorkLogEntry[];
+  quickLinks: TaskQuickLink[];
+  releases: Release[];
+  selectedId: string | null;
   tasks: Task[];
-  onRestoreTask: (task: Task) => Promise<void>;
-  onDeleteTask: (taskId: string) => Promise<void>;
+  totalMinutes: number;
 }) {
-  const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const folderNames = useMemo(
-    () => new Map(folders.map((folder) => [folder.id, folder.name])),
-    [folders],
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedId) ?? tasks[0] ?? null,
+    [selectedId, tasks],
   );
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return tasks;
-    return tasks.filter((task) =>
-      `${task.title} ${folderNames.get(task.folderId ?? "") ?? ""}`
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [folderNames, query, tasks]);
-  const selectedTask =
-    filtered.find((task) => task.id === selectedId) ?? filtered[0] ?? null;
-  const selectedForRestore = tasks.filter((task) => checkedIds.has(task.id));
-
-  useEffect(() => {
-    if (selectedTask) setSelectedId(selectedTask.id);
-    else setSelectedId(null);
-  }, [selectedTask?.id]);
-
-  async function restoreMany() {
-    if (!selectedForRestore.length || busy) return;
-    setBusy(true);
-    try {
-      await Promise.all(selectedForRestore.map((task) => onRestoreTask(task)));
-      setCheckedIds(new Set());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function restoreOne(task: Task) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRestoreTask(task);
-      setCheckedIds((current) => {
-        const next = new Set(current);
-        next.delete(task.id);
-        return next;
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[minmax(280px,380px)_minmax(0,1fr)] bg-background">
-      <div className="flex min-h-0 flex-col border-r border-border bg-card/60">
-        <div className="border-b border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-semibold">Archive</h1>
-              <p className="text-xs text-muted-foreground">
-                {tasks.length} archived {tasks.length === 1 ? "task" : "tasks"}
-              </p>
-            </div>
-            <Button
-              disabled={!selectedForRestore.length || busy}
-              onClick={() => void restoreMany()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <ArchiveRestore className="size-3.5" />
-              Restore selected
-            </Button>
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      {selectedTask ? (
+        <>
+          <TaskHeader
+            key={selectedTask.id}
+            quickLinks={quickLinks}
+            readOnly
+            releases={releases}
+            task={selectedTask}
+            totalMinutes={totalMinutes}
+          />
+          <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="mx-auto flex w-full max-w-3xl flex-col px-8 py-4 pb-12">
+                <Timeline
+                  attachments={attachments}
+                  entries={entries}
+                  hasMore={false}
+                  historyEntryId={null}
+                  readOnly
+                  revisions={[]}
+                  viewMode="normal"
+                />
+              </div>
+            </ScrollArea>
           </div>
-          <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search archived tasks"
-              className="h-8 pl-7 text-xs"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search archive"
-              value={query}
-            />
+        </>
+      ) : (
+        <div className="grid flex-1 place-items-center px-8 text-center text-sm text-muted-foreground">
+          <div>
+            <Archive className="mx-auto mb-3 size-8 opacity-60" />
+            <p>No archived task selected.</p>
           </div>
         </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {filtered.map((task) => {
-              const selected = selectedTask?.id === task.id;
-              return (
-                <div
-                  className={cn(
-                    "group flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-2 hover:bg-accent/60",
-                    selected &&
-                      "border-border bg-accent text-accent-foreground",
-                  )}
-                  key={task.id}
-                >
-                  <input
-                    aria-label={`Select ${task.title}`}
-                    checked={checkedIds.has(task.id)}
-                    className="size-3.5 shrink-0 accent-primary"
-                    onChange={(event) => {
-                      setCheckedIds((current) => {
-                        const next = new Set(current);
-                        if (event.target.checked) next.add(task.id);
-                        else next.delete(task.id);
-                        return next;
-                      });
-                    }}
-                    type="checkbox"
-                  />
-                  <button
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setSelectedId(task.id)}
-                    type="button"
-                  >
-                    <span className="block truncate text-sm font-medium">
-                      {task.title}
-                    </span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {folderNames.get(task.folderId ?? "") ?? "No folder"} ·{" "}
-                      archived {formatShortDate(task.updatedAt)}
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
-            {!filtered.length && (
-              <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                {query.trim()
-                  ? "No archived tasks match this search."
-                  : "No archived tasks yet."}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      <div className="flex min-h-0 flex-col">
-        {selectedTask ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-8 py-8">
-            <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
-              <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Archived task
-                </p>
-                <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight">
-                  {selectedTask.title}
-                </h2>
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                  <ArchiveMetaChip
-                    label="Folder"
-                    value={
-                      folderNames.get(selectedTask.folderId ?? "") ??
-                      "No folder"
-                    }
-                  />
-                  <ArchiveMetaChip
-                    label="Created"
-                    value={formatShortDate(selectedTask.createdAt)}
-                  />
-                  <ArchiveMetaChip
-                    label="Archived"
-                    value={formatShortDateTime(selectedTask.updatedAt)}
-                  />
-                </div>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  disabled={busy}
-                  onClick={() => void restoreOne(selectedTask)}
-                  size="sm"
-                  type="button"
-                >
-                  <ArchiveRestore className="size-3.5" />
-                  Restore
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => setTaskToDelete(selectedTask)}
-                  size="sm"
-                  type="button"
-                  variant="destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </Button>
-              </div>
-            </div>
-            <div className="grid flex-1 place-items-center text-center text-sm text-muted-foreground">
-              <div>
-                <Archive className="mx-auto mb-3 size-8 opacity-60" />
-                <p>
-                  Restore this task to bring it back to the active workspace.
-                </p>
-                <p className="mt-1 text-xs">
-                  Delete only when you are sure the local timeline is no longer
-                  needed.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="grid flex-1 place-items-center px-8 text-center text-sm text-muted-foreground">
-            <div>
-              <Archive className="mx-auto mb-3 size-8 opacity-60" />
-              <p>No archived task selected.</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <DeleteArchiveTaskDialog
-        onConfirm={async () => {
-          if (!taskToDelete) return;
-          await onDeleteTask(taskToDelete.id);
-          setCheckedIds((current) => {
-            const next = new Set(current);
-            next.delete(taskToDelete.id);
-            return next;
-          });
-          setTaskToDelete(null);
-        }}
-        onOpenChange={(open) => {
-          if (!open) setTaskToDelete(null);
-        }}
-        task={taskToDelete}
-      />
-    </section>
-  );
-}
-
-function DeleteArchiveTaskDialog({
-  task,
-  onOpenChange,
-  onConfirm,
-}: {
-  task: Task | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
-}) {
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!task) setDeleting(false);
-  }, [task]);
-
-  if (!task) return null;
-
-  return (
-    <Dialog onOpenChange={onOpenChange} open>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Delete archived task?</DialogTitle>
-          <DialogDescription>
-            This permanently removes the task and timeline from this local
-            workspace. Restoring keeps the history intact.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-          {task.title}
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="ghost"
-          >
-            Cancel
-          </Button>
-          <Button
-            disabled={deleting}
-            onClick={() => {
-              setDeleting(true);
-              void onConfirm().finally(() => setDeleting(false));
-            }}
-            type="button"
-            variant="destructive"
-          >
-            {deleting ? "Deleting..." : "Delete task"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </div>
   );
 }
 
 function WorklogMetricsView({
   entries,
+  heatmapEntries,
   loading,
-  range,
+  onSelectTask,
+  onYearChange,
+  selectedYear,
   worklogSettings,
-  onRangeChange,
 }: {
   entries: WorklogMetricEntry[];
+  heatmapEntries: WorklogMetricEntry[];
   loading: boolean;
-  range: WorklogRange;
+  onSelectTask: (id: string) => void;
+  onYearChange: (year: number) => void;
+  selectedYear: number;
   worklogSettings: WorklogSettings;
-  onRangeChange: (range: WorklogRange) => void;
 }) {
-  const [selectedDay, setSelectedDay] = useState<string | null>(
-    dayKey(new Date().toISOString()),
-  );
-  const [logPage, setLogPage] = useState(1);
+  // Default the drill-down to the current week so the inspector and
+  // period breakdown are anchored to "now" on first paint. The
+  // inspector further refines to today if today has logs.
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<{
+    kind: "week" | "month";
+    key: string;
+    label: string;
+  } | null>(() => {
+    const today = new Date().toISOString();
+    const key = weekKeyOf(today);
+    return { kind: "week", key, label: weekLabel(today) };
+  });
+  const [periodMode, setPeriodMode] = useState<"weeks" | "months">("weeks");
+  const [periodExpanded, setPeriodExpanded] = useState(false);
+
+  // Year is a global control. Reset the drill-down selection so the
+  // inspector doesn't keep pointing at a day/week/month that the new
+  // year's data would no longer contain.
+  const resetSelection = useCallback(() => {
+    setSelectedDay(null);
+    setSelectedPeriod(null);
+  }, []);
+
   const days = useMemo(
-    () => buildWorklogDays(range, entries),
-    [entries, range],
+    () => buildWorklogDays(entries, selectedYear),
+    [entries, selectedYear],
+  );
+  const heatmapDays = useMemo(
+    () => buildWorklogDays(heatmapEntries, selectedYear),
+    [heatmapEntries, selectedYear],
   );
   const totalMinutes = entries.reduce(
     (sum, entry) => sum + entry.durationMinutes,
@@ -1796,209 +2019,920 @@ function WorklogMetricsView({
     (best, day) => (!best || day.minutes > best.minutes ? day : best),
     null,
   );
-  const filteredEntries = selectedDay
-    ? entries.filter((entry) => dayKey(entry.occurredAt) === selectedDay)
-    : entries;
-  const recentEntries = filteredEntries;
-
-  // Reset to the first page whenever the user picks a new day or
-  // changes the range. Otherwise the pager can get stuck showing
-  // a page that no longer exists.
-  useEffect(() => {
-    setLogPage(1);
-  }, [selectedDay, range]);
-
-  const LOG_PAGE_SIZE = 8;
-  const totalLogPages = Math.max(
-    1,
-    Math.ceil(filteredEntries.length / LOG_PAGE_SIZE),
-  );
-  const safeLogPage = Math.min(logPage, totalLogPages);
-  const pagedEntries = filteredEntries.slice(
-    (safeLogPage - 1) * LOG_PAGE_SIZE,
-    safeLogPage * LOG_PAGE_SIZE,
+  const latestLoggedDay = loggedDays.at(-1)?.key ?? null;
+  const dailyGoalMinutes = effectiveDailyGoalMinutes(worklogSettings);
+  const taskTotals = buildTaskWorklogTotals(entries);
+  const goalHitDays = loggedDays.filter(
+    (day) => day.minutes >= dailyGoalMinutes,
+  ).length;
+  const averageActiveDayMinutes = loggedDays.length
+    ? Math.round(totalMinutes / loggedDays.length)
+    : 0;
+  const goalCoveragePercent = dailyGoalMinutes
+    ? Math.min(
+        100,
+        Math.round((averageActiveDayMinutes / dailyGoalMinutes) * 100),
+      )
+    : 0;
+  const remainingGapMinutes = Math.max(
+    0,
+    dailyGoalMinutes - averageActiveDayMinutes,
   );
 
-  // Weekly and monthly bars, one row per bucket with the total
-  // minutes logged in that bucket. Segments and an average line
-  // were tried in an earlier iteration and felt busy for the cards
-  // at this density, so they're out.
-  const weekly = aggregateByBucket(entries, weekLabel);
-  const monthly = aggregateByBucket(entries, monthLabel);
+  const weekly = useMemo(
+    () => aggregateByBucket(entries, weekLabel, weekKeyOf),
+    [entries],
+  );
+  const monthly = useMemo(
+    () => aggregateByBucket(entries, monthLabel, monthKeyOf),
+    [entries],
+  );
+
+  // The "active" selection for the inspector: an explicit week/month
+  // selection wins, otherwise the selected day, otherwise the most
+  // recent logged day. Falling back to "no selection" means the
+  // inspector renders an empty hint.
+  const inspector = useMemo(() => {
+    if (selectedPeriod?.kind === "week") {
+      return {
+        kind: "week" as const,
+        key: selectedPeriod.key,
+        label: selectedPeriod.label,
+        entries: entries.filter(
+          (entry) => weekKeyOf(entry.occurredAt) === selectedPeriod.key,
+        ),
+      };
+    }
+    if (selectedPeriod?.kind === "month") {
+      return {
+        kind: "month" as const,
+        key: selectedPeriod.key,
+        label: selectedPeriod.label,
+        entries: entries.filter(
+          (entry) => monthKeyOf(entry.occurredAt) === selectedPeriod.key,
+        ),
+      };
+    }
+    const day = selectedDay ?? latestLoggedDay;
+    return {
+      kind: "day" as const,
+      key: day,
+      label: day ? formatWorklogLongDate(day) : "No day selected",
+      entries: day
+        ? entries.filter((entry) => dayKey(entry.occurredAt) === day)
+        : [],
+    };
+  }, [selectedDay, selectedPeriod, latestLoggedDay, entries]);
+
+  const yearOptions = useMemo(() => {
+    const current = new Date().getUTCFullYear();
+    return [current, current - 1, current - 2];
+  }, []);
+
+  function selectPeriodRow(item: { label: string; key: string }) {
+    setSelectedDay(null);
+    setSelectedPeriod((current) =>
+      current?.key === item.key && current.kind === periodMode.slice(0, -1)
+        ? null
+        : {
+            kind: periodMode === "weeks" ? "week" : "month",
+            key: item.key,
+            label: item.label,
+          },
+    );
+  }
+
+  function copySummaryToClipboard() {
+    const lines = [
+      `Worklog ${selectedYear}`,
+      `Total ${formatDuration(totalMinutes)}`,
+      `Logged days ${loggedDays.length}`,
+      `Avg active day ${formatDuration(averageActiveDayMinutes)}`,
+      bestDay
+        ? `Best day ${formatWorklogDayShort(bestDay.date)} · ${formatDuration(bestDay.minutes)}`
+        : "Best day —",
+      `Goal hit ${goalHitDays} day${goalHitDays === 1 ? "" : "s"}`,
+    ];
+    void navigator.clipboard
+      .writeText(lines.join("\n"))
+      .then(() => toast.success("Worklog summary copied"))
+      .catch((cause) =>
+        toast.error(`Could not copy summary: ${String(cause)}`),
+      );
+  }
+
+  function exportToExcel() {
+    try {
+      exportWorklogToExcel({
+        year: selectedYear,
+        settings: worklogSettings,
+        entries,
+      });
+      toast.success("Worklog exported", {
+        description: `Saved ${buildWorklogFilename(selectedYear)}`,
+      });
+    } catch (cause) {
+      toast.error(`Could not export worklog: ${String(cause)}`);
+    }
+  }
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-8 py-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Worklog metrics
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Time spent across tasks
-          </h1>
-        </div>
-        <div className="flex rounded-md border border-border bg-card p-0.5">
-          {WORKLOG_RANGES.map((option) => (
-            <Button
-              aria-pressed={range === option.value}
-              className="h-7 px-2.5 text-xs"
-              key={option.value}
-              onClick={() => {
-                setSelectedDay(null);
-                onRangeChange(option.value);
-              }}
-              size="sm"
-              type="button"
-              variant={range === option.value ? "secondary" : "ghost"}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <WorklogMetricsHeader
+        loading={loading}
+        onCopySummary={copySummaryToClipboard}
+        onExportExcel={exportToExcel}
+        onYearChange={(year) => {
+          resetSelection();
+          onYearChange(year);
+        }}
+        selectedYear={selectedYear}
+        yearOptions={yearOptions}
+      />
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-6">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="Total" value={formatDuration(totalMinutes)} />
-            <MetricCard
-              label="Daily avg"
-              value={formatDuration(
-                loggedDays.length
-                  ? Math.round(totalMinutes / loggedDays.length)
-                  : 0,
-              )}
-            />
-            <MetricCard
-              label="Best day"
-              value={bestDay ? formatDuration(bestDay.minutes) : "0m"}
-              detail={bestDay ? formatShortDate(bestDay.date) : undefined}
-            />
-            <MetricCard label="Logged days" value={String(loggedDays.length)} />
-          </div>
-
-          <WorklogHoursChart days={days} settings={worklogSettings} />
-
-          <WorklogHeatmap
-            days={days}
-            onSelectDay={setSelectedDay}
-            range={range}
-            selectedDay={selectedDay}
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-8 py-5 pb-16">
+          <WorklogSummaryStrip
+            bestDay={bestDay}
+            goalHitDays={goalHitDays}
+            loggedDaysCount={loggedDays.length}
+            taskCount={taskTotals.length}
+            totalMinutes={totalMinutes}
+            year={selectedYear}
           />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <WorklogBars items={weekly} title="Weekly totals" />
-            <WorklogBars items={monthly} title="Monthly totals" />
-          </div>
+          <WorklogGoalRow
+            averageActiveDayMinutes={averageActiveDayMinutes}
+            dailyGoalMinutes={dailyGoalMinutes}
+            goalCoveragePercent={goalCoveragePercent}
+            loggedDaysCount={loggedDays.length}
+            remainingGapMinutes={remainingGapMinutes}
+          />
 
-          <div className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-sm font-medium">
-                {selectedDay
-                  ? `Logs on ${formatShortDate(selectedDay)}`
-                  : "Recent worklogs"}
-              </h2>
-              {loading && (
-                <span className="text-xs text-muted-foreground">
-                  Loading...
-                </span>
-              )}
-            </div>
-            <div className="divide-y divide-border">
-              {pagedEntries.map((entry) => (
-                <div
-                  className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[120px_minmax(0,1fr)_auto]"
-                  key={entry.id}
-                >
-                  <time className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-                    {formatShortDate(entry.occurredAt)}
-                  </time>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {entry.taskTitle}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {entry.folderName ?? "No folder"} ·{" "}
-                      {stripOneLine(entry.contentMarkdown)}
-                    </p>
-                  </div>
-                  <span className="font-mono text-sm text-foreground">
-                    {formatDuration(entry.durationMinutes)}
-                  </span>
-                </div>
-              ))}
-              {!filteredEntries.length && (
-                <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  No logged time in this range.
-                </div>
-              )}
-            </div>
-            <Pager
-              ariaLabel="Worklog entries pagination"
-              className="rounded-b-lg"
-              onPageChange={setLogPage}
-              page={safeLogPage}
-              pageSize={LOG_PAGE_SIZE}
-              totalItems={filteredEntries.length}
-              totalPages={totalLogPages}
+          <WorklogHeatmap
+            days={heatmapDays}
+            goalMinutes={dailyGoalMinutes}
+            onSelectDay={(day) => {
+              setSelectedPeriod(null);
+              setSelectedDay(day);
+            }}
+            range="12m"
+            selectedDay={
+              inspector.kind === "day" && inspector.key ? inspector.key : null
+            }
+          />
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+            <WorklogHoursChart
+              days={days}
+              onSelectDay={(day) => {
+                setSelectedPeriod(null);
+                setSelectedDay(day);
+              }}
+              settings={worklogSettings}
+            />
+            <WorklogTaskBreakdown
+              emptyHint="Only one task has logged time this year."
+              items={taskTotals}
+              onSelectTask={onSelectTask}
             />
           </div>
+
+          <WorklogPeriodBreakdown
+            dailyGoalMinutes={dailyGoalMinutes}
+            expanded={periodExpanded}
+            mode={periodMode}
+            monthly={monthly}
+            onExpandedChange={setPeriodExpanded}
+            onModeChange={(mode) => {
+              setPeriodExpanded(false);
+              setPeriodMode(mode);
+              // Auto-select the current period of the new mode so the
+              // inspector and the row highlight track the switch
+              // instead of falling back to a stale day selection.
+              const today = new Date().toISOString();
+              setSelectedPeriod(
+                mode === "weeks"
+                  ? {
+                      kind: "week",
+                      key: weekKeyOf(today),
+                      label: weekLabel(today),
+                    }
+                  : {
+                      kind: "month",
+                      key: monthKeyOf(today),
+                      label: monthLabel(today),
+                    },
+              );
+              setSelectedDay(null);
+            }}
+            onSelect={selectPeriodRow}
+            selectedKey={
+              inspector.kind === periodMode.slice(0, -1) ? inspector.key : null
+            }
+            weekly={weekly}
+          />
+
+          <WorklogInspector
+            inspection={inspector}
+            loading={loading}
+            onSelectTask={onSelectTask}
+          />
         </div>
       </ScrollArea>
     </section>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  detail,
+function WorklogMetricsHeader({
+  loading,
+  onCopySummary,
+  onExportExcel,
+  onYearChange,
+  selectedYear,
+  yearOptions,
 }: {
-  label: string;
-  value: string;
-  detail?: string;
+  loading: boolean;
+  onCopySummary: () => void;
+  onExportExcel: () => void;
+  onYearChange: (year: number) => void;
+  selectedYear: number;
+  yearOptions: ReadonlyArray<number>;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
-      {detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
+    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-4 bg-card px-6">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <BarChart3 className="size-4 shrink-0 text-foreground/80" />
+        <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
+          WorkLog
+        </h1>
+        <span className="text-foreground/30">/</span>
+        <span className="truncate text-sm font-normal text-foreground/70">
+          Time spent across tasks
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Select
+          onValueChange={(value) => onYearChange(Number.parseInt(value, 10))}
+          value={String(selectedYear)}
+        >
+          <SelectTrigger
+            aria-label="Select worklog year"
+            className="h-7 w-[96px] text-xs"
+          >
+            <Calendar className="mr-1 size-3.5 text-foreground/70" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Year</SelectLabel>
+              {yearOptions.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Copy worklog summary"
+              className="size-7 p-0"
+              disabled={loading}
+              onClick={onCopySummary}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <Copy className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Copy summary</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Export worklog to Excel"
+              className="size-7 p-0"
+              disabled={loading}
+              onClick={onExportExcel}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <Download className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Export to Excel</TooltipContent>
+        </Tooltip>
+      </div>
+    </header>
+  );
+}
+
+function WorklogSummaryStrip({
+  bestDay,
+  goalHitDays,
+  loggedDaysCount,
+  taskCount,
+  totalMinutes,
+  year,
+}: {
+  bestDay: WorklogDay | null;
+  goalHitDays: number;
+  loggedDaysCount: number;
+  taskCount: number;
+  totalMinutes: number;
+  year: number;
+}) {
+  // Flat row: no card background or outer borders. A single vertical
+  // divider sits between each metric so the eye groups them as a
+  // strip while keeping each value independent.
+  const metrics: { label: string; value: string }[] = [
+    { label: `Total · ${year}`, value: formatDuration(totalMinutes) },
+    {
+      label: "Avg active day",
+      value: formatDuration(
+        loggedDaysCount ? Math.round(totalMinutes / loggedDaysCount) : 0,
+      ),
+    },
+    {
+      label: "Best day",
+      value: bestDay
+        ? `${formatWorklogDayShort(bestDay.date)} · ${formatDuration(
+            bestDay.minutes,
+          )}`
+        : "—",
+    },
+    {
+      label: "Logged",
+      value: `${loggedDaysCount} day${loggedDaysCount === 1 ? "" : "s"} · ${taskCount} task${
+        taskCount === 1 ? "" : "s"
+      }`,
+    },
+  ];
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+      {metrics.map((metric) => (
+        <MetricCell
+          key={metric.label}
+          label={metric.label}
+          value={metric.value}
+        />
+      ))}
+      {/*
+        The Goal-hit figure is computed but reserved for the inspector
+        goal context. Keeping it out of the summary strip prevents the
+        four metrics from competing with each other for attention.
+      */}
+      <span className="sr-only">
+        {goalHitDays} day{goalHitDays === 1 ? "" : "s"} hit goal
+      </span>
     </div>
   );
 }
 
-const WORKLOG_RANGES: { value: WorklogRange; label: string; days: number }[] = [
-  { value: "7d", label: "7D", days: 7 },
-  { value: "4w", label: "4W", days: 28 },
-  { value: "12w", label: "12W", days: 84 },
-  { value: "12m", label: "12M", days: 365 },
-];
+function MetricCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-[72px] flex-col justify-center border-l border-border/60 px-4 py-3 first:border-l-0 sm:px-4 lg:px-5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-foreground/70">
+        {label}
+      </p>
+      <p className="mt-1.5 line-clamp-2 break-words text-xl font-semibold leading-tight tracking-tight text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
 
-function worklogRangeBounds(range: WorklogRange) {
-  const now = new Date();
-  if (range === "12m") {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const end = new Date(
-      Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999),
-    );
-    return { startAt: start.toISOString(), endAt: end.toISOString() };
-  }
-  const days =
-    WORKLOG_RANGES.find((option) => option.value === range)?.days ?? 84;
-  const end = new Date();
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - days + 1);
-  start.setUTCHours(0, 0, 0, 0);
-  end.setUTCHours(23, 59, 59, 999);
+interface WorklogTaskTotal {
+  taskId: string;
+  taskTitle: string;
+  folderName: string | null;
+  minutes: number;
+}
+
+function WorklogGoalRow({
+  averageActiveDayMinutes,
+  dailyGoalMinutes,
+  goalCoveragePercent,
+  loggedDaysCount,
+  remainingGapMinutes,
+}: {
+  averageActiveDayMinutes: number;
+  dailyGoalMinutes: number;
+  goalCoveragePercent: number;
+  loggedDaysCount: number;
+  remainingGapMinutes: number;
+}) {
+  // Compact insight strip: the only data here that isn't already
+  // surfaced above is the coverage bar + the average gap. The
+  // duplicate summary metrics (best day, goal hit, avg active day)
+  // are dropped — they're available in the summary strip and the
+  // heatmap footer, no need to repeat them.
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <p className="text-xs text-foreground/70">
+          <span className="font-normal">Goal context</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {formatDuration(dailyGoalMinutes)}
+          </span>
+          <span className="font-normal">/day</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {formatDuration(averageActiveDayMinutes)}
+          </span>
+          <span className="font-normal"> avg active day</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {goalCoveragePercent}%
+          </span>
+          <span className="font-normal"> coverage</span>
+          <span className="mx-2 text-foreground/40">·</span>
+          <span className="font-semibold text-foreground">
+            {formatDuration(remainingGapMinutes)}
+          </span>
+          <span className="font-normal"> avg gap/day</span>
+        </p>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/45">
+        <div
+          className="h-full rounded-full bg-primary/60"
+          style={{ width: `${goalCoveragePercent}%` }}
+        />
+      </div>
+      {!loggedDaysCount && (
+        <p className="mt-2 text-xs text-foreground/70">
+          Log time to start measuring against your daily goal.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function WorklogTaskBreakdown({
+  emptyHint,
+  items,
+  onSelectTask,
+}: {
+  emptyHint: string;
+  items: WorklogTaskTotal[];
+  onSelectTask: (id: string) => void;
+}) {
+  const visible = items.slice(0, 5);
+  return (
+    <div className="flex h-full min-h-[300px] flex-col">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-sm font-medium">Time by task</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                aria-label="About Time by task"
+                className="inline-flex size-4 items-center justify-center rounded text-foreground/40 transition-colors hover:bg-accent/40 hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                type="button"
+              >
+                <Info className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              className="max-w-[240px] text-xs leading-relaxed"
+              side="bottom"
+            >
+              The top 5 tasks you've logged time against this year, ranked by
+              total time. Click any row to open the task in the workspace.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <span className="text-[11px] font-normal text-foreground/70">
+          Top {visible.length}
+        </span>
+      </div>
+      <p className="mt-1 text-xs font-normal text-foreground/70">
+        Tasks consuming the most time this year.
+      </p>
+      <div className="mt-3 flex-1 divide-y divide-border/60">
+        {visible.map((item) => {
+          const token = taskToken(item.taskTitle);
+          const title = token
+            ? item.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
+            : item.taskTitle;
+          return (
+            <button
+              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
+              key={item.taskId}
+              onClick={() => onSelectTask(item.taskId)}
+              type="button"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                {token && (
+                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-foreground/70">
+                    {token}
+                  </span>
+                )}
+                <span className="truncate text-xs font-medium text-foreground">
+                  {title}
+                </span>
+              </span>
+              <span className="font-mono text-xs text-foreground">
+                {formatDuration(item.minutes)}
+              </span>
+            </button>
+          );
+        })}
+        {items.length > 1 && items.length <= 5 && (
+          <p className="pt-2 text-xs font-normal text-foreground/70">
+            {emptyHint}
+          </p>
+        )}
+      </div>
+      {!items.length && (
+        <p className="mt-2 grid flex-1 place-items-center py-6 text-center text-xs font-normal text-foreground/70">
+          No task time in this range.
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface WorklogPeriodItem {
+  key: string;
+  label: string;
+  minutes: number;
+}
+
+function WorklogPeriodBreakdown({
+  dailyGoalMinutes,
+  expanded,
+  mode,
+  monthly,
+  onExpandedChange,
+  onModeChange,
+  onSelect,
+  selectedKey,
+  weekly,
+}: {
+  dailyGoalMinutes: number;
+  expanded: boolean;
+  mode: "weeks" | "months";
+  monthly: WorklogPeriodItem[];
+  onExpandedChange: (expanded: boolean) => void;
+  onModeChange: (mode: "weeks" | "months") => void;
+  onSelect: (item: { key: string; label: string }) => void;
+  selectedKey: string | null;
+  weekly: WorklogPeriodItem[];
+}) {
+  const activeItems = mode === "weeks" ? weekly : monthly;
+
+  // When viewing weeks, default to the weeks that fall inside the
+  // current calendar month (4–6 depending on the month). Every Monday
+  // in that range is rendered even if the week has zero logged
+  // minutes — otherwise the current week disappears until the user
+  // logs their first entry of the week. "View all" shows every
+  // week/month in the year with internal scroll.
+  const visibleItems = useMemo(() => {
+    const today = new Date();
+    const itemsByKey = new Map(activeItems.map((item) => [item.key, item]));
+
+    if (mode === "weeks") {
+      const currentMondayKey = weekKeyOf(today.toISOString());
+
+      if (expanded) {
+        // Walk every Monday from the start of the year up to and
+        // including the current week, newest first, so an empty
+        // current week is never lost when the user expands the list.
+        const yearStart = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+        const cursor = new Date(yearStart);
+        const daysBack = (cursor.getUTCDay() + 6) % 7;
+        cursor.setUTCDate(cursor.getUTCDate() - daysBack);
+        const mondayKeys: string[] = [];
+        while (cursor.toISOString().slice(0, 10) <= currentMondayKey) {
+          mondayKeys.push(cursor.toISOString().slice(0, 10));
+          cursor.setUTCDate(cursor.getUTCDate() + 7);
+        }
+        return mondayKeys.reverse().map((key) => {
+          const existing = itemsByKey.get(key);
+          return existing ?? { key, label: weekLabel(key), minutes: 0 };
+        });
+      }
+
+      // Default: weeks of the current month whose Monday has
+      // already passed, newest first. Future weeks of the month
+      // are hidden — they get added as the week starts.
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth();
+      const monthStart = new Date(Date.UTC(year, month, 1));
+      const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+      const cursor = new Date(monthStart);
+      const daysBack = (cursor.getUTCDay() + 6) % 7;
+      cursor.setUTCDate(cursor.getUTCDate() - daysBack);
+      const mondayKeys: string[] = [];
+      while (cursor <= monthEnd) {
+        const key = cursor.toISOString().slice(0, 10);
+        if (key <= currentMondayKey) mondayKeys.push(key);
+        cursor.setUTCDate(cursor.getUTCDate() + 7);
+      }
+      return mondayKeys.reverse().map((key) => {
+        const existing = itemsByKey.get(key);
+        return existing ?? { key, label: weekLabel(key), minutes: 0 };
+      });
+    }
+
+    // Months: default to the current month and the 4 previous
+    // months (5 rows), newest first. The current month is always
+    // rendered, even if it has no entries yet, so the user can
+    // click into it from the breakdown.
+    const currentMonthKey = monthKeyOf(today.toISOString());
+    const [year, monthNum] = currentMonthKey.split("-").map(Number);
+    const monthKeys: string[] = [];
+    for (let offset = 0; offset < 5; offset += 1) {
+      const d = new Date(Date.UTC(year, monthNum - 1 - offset, 1));
+      monthKeys.push(monthKeyOf(d.toISOString()));
+    }
+    const baseItems = monthKeys
+      .reverse()
+      .map(
+        (key) =>
+          itemsByKey.get(key) ?? { key, label: monthLabel(key), minutes: 0 },
+      );
+
+    if (!expanded) return baseItems;
+
+    // Expanded: every month from January up to and including the
+    // current month, newest first, with synthetic 0-minute rows
+    // for any month that has no entries yet.
+    const allKeys: string[] = [];
+    for (let m = 0; m < monthNum; m += 1) {
+      allKeys.push(monthKeyOf(new Date(Date.UTC(year, m, 1)).toISOString()));
+    }
+    allKeys.push(currentMonthKey);
+    return allKeys.reverse().map((key) => {
+      return itemsByKey.get(key) ?? { key, label: monthLabel(key), minutes: 0 };
+    });
+  }, [activeItems, expanded, mode]);
+
+  // The bar and the percent both measure "share of the
+  // week/month goal". A week counts 5 workdays, a month 20.
+  const goalMinutes =
+    mode === "weeks" ? dailyGoalMinutes * 5 : dailyGoalMinutes * 20;
+
+  return (
+    <div className="flex flex-col rounded-md border border-border/55 bg-card/70 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Period breakdown</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Logged time per {mode === "weeks" ? "week" : "month"}. The bar shows
+            share of the {formatDuration(goalMinutes)}{" "}
+            {mode === "weeks" ? "weekly" : "monthly"} goal. Click a row to
+            inspect.
+          </p>
+        </div>
+        <div
+          aria-label="Period mode"
+          className="flex rounded-md border border-border/60 bg-muted/20 p-0.5"
+          role="tablist"
+        >
+          {(["weeks", "months"] as const).map((option) => (
+            <button
+              aria-pressed={mode === option}
+              className={cn(
+                "h-7 rounded px-2.5 text-xs capitalize text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground",
+                mode === option && "bg-accent text-foreground shadow-sm",
+              )}
+              key={option}
+              onClick={() => onModeChange(option)}
+              role="tab"
+              type="button"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div
+        className={cn(
+          "mt-3 space-y-1",
+          expanded && "max-h-[260px] overflow-y-auto pr-1",
+        )}
+      >
+        {visibleItems.map((item) => {
+          // Clamp the visual fill at 100% so a week that overshoots
+          // the goal doesn't run off the track, but keep the raw
+          // percent in the label so the user can see they beat it.
+          // Zero minutes = no fill, not the 4% floor — an empty bar
+          // honestly reads as "no progress this week".
+          const rawPercent = goalMinutes
+            ? Math.round((item.minutes / goalMinutes) * 100)
+            : 0;
+          const hasProgress = item.minutes > 0;
+          const fillPercent = hasProgress
+            ? Math.max(4, Math.min(100, rawPercent))
+            : 0;
+          const hitGoal = item.minutes >= goalMinutes && goalMinutes > 0;
+          const selected = item.key === selectedKey;
+          return (
+            <button
+              aria-pressed={selected}
+              className={cn(
+                "grid w-full grid-cols-[132px_minmax(80px,1fr)_84px_44px] items-center gap-3 rounded-md px-2 py-1.5 text-xs transition-colors",
+                selected
+                  ? "bg-accent/45 text-foreground"
+                  : "hover:bg-accent/30",
+                !hasProgress && "text-foreground/50",
+              )}
+              key={item.key}
+              onClick={() => onSelect(item)}
+              type="button"
+            >
+              <span className="truncate text-left">{item.label}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-muted/45">
+                <span
+                  className={cn(
+                    "block h-full rounded-full",
+                    hitGoal ? "bg-emerald-400/70" : "bg-primary/55",
+                  )}
+                  style={{ width: `${fillPercent}%` }}
+                />
+              </span>
+              <span
+                className={cn(
+                  "whitespace-nowrap text-right font-mono text-xs tabular-nums",
+                  hasProgress ? "text-foreground" : "text-foreground/60",
+                )}
+              >
+                {formatDuration(item.minutes)}
+              </span>
+              <span
+                className={cn(
+                  "text-right font-mono text-[10px] tabular-nums",
+                  hitGoal
+                    ? "text-emerald-400"
+                    : rawPercent >= 75
+                      ? "text-foreground"
+                      : "text-muted-foreground",
+                )}
+              >
+                {rawPercent}%
+              </span>
+            </button>
+          );
+        })}
+        {!activeItems.length && (
+          <p className="py-8 text-center text-xs font-normal text-foreground/70">
+            No logged time yet.
+          </p>
+        )}
+      </div>
+      {!!activeItems.length && activeItems.length > 5 && (
+        <button
+          className="mt-2 self-start text-xs font-normal text-foreground/70 transition-colors hover:text-foreground"
+          onClick={() => onExpandedChange(!expanded)}
+          type="button"
+        >
+          {expanded
+            ? mode === "weeks"
+              ? "Show this month"
+              : "Show less"
+            : "View all"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface WorklogInspection {
+  kind: "day" | "week" | "month";
+  key: string | null;
+  label: string;
+  entries: WorklogMetricEntry[];
+}
+
+function WorklogInspector({
+  inspection,
+  loading,
+  onSelectTask,
+}: {
+  inspection: WorklogInspection;
+  loading: boolean;
+  onSelectTask: (id: string) => void;
+}) {
+  const { kind, label, entries: scopedEntries } = inspection;
+  const minutes = scopedEntries.reduce(
+    (sum, entry) => sum + entry.durationMinutes,
+    0,
+  );
+  const taskCount = new Set(scopedEntries.map((entry) => entry.taskId)).size;
+  const periodKindLabel =
+    kind === "day" ? "day" : kind === "week" ? "week" : "month";
+
+  // Cap the visible logs so a busy day doesn't push the page
+  // around. Internal scroll takes over beyond 10 rows, matching the
+  // period breakdown's behaviour.
+  const MAX_VISIBLE_LOGS = 10;
+  const visibleLogs = scopedEntries.slice(0, MAX_VISIBLE_LOGS);
+  const logsScrollable = scopedEntries.length > MAX_VISIBLE_LOGS;
+
+  return (
+    <div className="rounded-md border border-border/55 bg-card/70 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/70 px-4 py-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="shrink-0 text-sm font-medium">Inspector</h2>
+          <span className="text-muted-foreground/50">·</span>
+          <p className="truncate text-sm text-foreground">{label}</p>
+        </div>
+        <p className="text-xs text-foreground/70">
+          <span className="font-semibold text-foreground">
+            {formatDuration(minutes)}
+          </span>{" "}
+          logged ·{" "}
+          <span className="font-semibold text-foreground">{taskCount}</span>{" "}
+          task
+          {taskCount === 1 ? "" : "s"}
+          {loading && (
+            <>
+              {" "}
+              <span className="text-foreground/40">·</span>{" "}
+              <span className="font-normal text-foreground/70">Loading…</span>
+            </>
+          )}
+        </p>
+      </div>
+
+      {/* Logs: single-column rows that grow with content and cap at
+          10 before an internal scroll takes over. Each row holds
+          time, task chip, title, folder, and duration on one line. */}
+      <div className={cn(logsScrollable && "max-h-[360px] overflow-y-auto")}>
+        {visibleLogs.map((entry) => {
+          const token = taskToken(entry.taskTitle);
+          const title = token
+            ? entry.taskTitle.replace(new RegExp(`^${token}\\s*`), "")
+            : entry.taskTitle;
+          return (
+            <button
+              className="grid w-full grid-cols-[68px_minmax(0,1fr)_minmax(0,160px)_72px] items-center gap-3 border-b border-border/60 px-4 py-1.5 text-left text-sm transition-colors hover:bg-accent/35 last:border-b-0"
+              key={entry.id}
+              onClick={() => onSelectTask(entry.taskId)}
+              type="button"
+            >
+              <time className="font-mono text-xs tabular-nums text-foreground/70">
+                {formatWorklogTime(entry.occurredAt)}
+              </time>
+              <span className="flex min-w-0 items-center gap-2">
+                {token && (
+                  <span className="shrink-0 rounded border border-border bg-muted/35 px-1.5 py-0.5 font-mono text-[10px] text-foreground/70">
+                    {token}
+                  </span>
+                )}
+                <span className="truncate text-sm font-medium text-foreground">
+                  {title}
+                </span>
+              </span>
+              <span className="truncate text-xs font-normal text-foreground/70">
+                {entry.folderName ?? "No folder"}
+              </span>
+              <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums text-foreground">
+                {formatDuration(entry.durationMinutes)}
+              </span>
+            </button>
+          );
+        })}
+        {!scopedEntries.length && (
+          <div className="grid place-items-center px-4 py-10 text-center text-sm font-normal text-foreground/70">
+            {kind === "day"
+              ? "Select a day from the heatmap or chart to inspect logged work."
+              : `No logged time in this ${periodKindLabel}.`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function daysInMonth(monthKey: string | null): number {
+  if (!monthKey) return 0;
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!match) return 0;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function worklogCalendarYearBounds(reference: Date | number = new Date()) {
+  const year =
+    typeof reference === "number" ? reference : reference.getUTCFullYear();
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   return { startAt: start.toISOString(), endAt: end.toISOString() };
 }
 
 function buildWorklogDays(
-  range: WorklogRange,
   entries: WorklogMetricEntry[],
+  year: number,
 ): WorklogDay[] {
-  const { startAt, endAt } = worklogRangeBounds(range);
+  const { startAt, endAt } = worklogCalendarYearBounds(year);
   const start = new Date(startAt);
   const end = new Date(endAt);
   const minutes = new Map<string, number>();
@@ -2022,18 +2956,108 @@ function dayKey(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-function weekLabel(value: string) {
+function weekStart(value: string) {
   const date = new Date(value);
-  const monday = new Date(date);
   const day = (date.getDay() + 6) % 7;
-  monday.setDate(date.getDate() - day);
-  return `${monday.getMonth() + 1}/${monday.getDate()}`;
+  const monday = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() - day,
+    ),
+  );
+  return monday.toISOString().slice(0, 10);
+}
+
+function monthStart(value: string) {
+  const date = new Date(value);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function weekLabel(value: string) {
+  return `Week of ${new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(weekStart(value)))}`;
 }
 
 function monthLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function weekKeyOf(value: string) {
+  return weekStart(value);
+}
+
+function monthKeyOf(value: string) {
+  return monthStart(value);
+}
+
+function buildTaskWorklogTotals(
+  entries: WorklogMetricEntry[],
+): WorklogTaskTotal[] {
+  const totals = new Map<string, WorklogTaskTotal>();
+  for (const entry of entries) {
+    const current = totals.get(entry.taskId);
+    if (current) {
+      current.minutes += entry.durationMinutes;
+    } else {
+      totals.set(entry.taskId, {
+        taskId: entry.taskId,
+        taskTitle: entry.taskTitle,
+        folderName: entry.folderName,
+        minutes: entry.durationMinutes,
+      });
+    }
+  }
+  return [...totals.values()].sort((a, b) => b.minutes - a.minutes);
+}
+
+function taskToken(value: string) {
+  return value.match(/\b[A-Z]{2,}-\d+\b/)?.[0] ?? null;
+}
+
+function formatWorklogDayShort(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfValue = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const diffDays = Math.round(
+    (startOfToday.getTime() - startOfValue.getTime()) / 86_400_000,
+  );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  const weekday = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+  }).format(date);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${weekday} · ${day}/${month}`;
+}
+
+function formatWorklogLongDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
     month: "short",
-    year: "2-digit",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatWorklogTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
   }).format(new Date(value));
 }
 
@@ -2044,17 +3068,6 @@ function stripOneLine(value: string) {
     .replace(/[`*_~>#-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function ArchiveMetaChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted/30 px-2">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-foreground">{value}</span>
-    </span>
-  );
 }
 
 function RailButton({
@@ -2899,6 +3912,8 @@ function clampSidebarWidth(value: number) {
 
 function ThreadColumn({
   children,
+  taskId,
+  onSubmit,
   search,
   regex,
   onSearchChange,
@@ -2908,6 +3923,13 @@ function ThreadColumn({
   searchInputRef,
 }: {
   children: React.ReactNode;
+  taskId: string;
+  onSubmit: (
+    type: EntryType,
+    content: string,
+    visibility: Visibility,
+    images: PendingImage[],
+  ) => Promise<void>;
   search: string;
   regex: boolean;
   onSearchChange: (value: string) => void;
@@ -2916,6 +3938,13 @@ function ThreadColumn({
   onEntryTypeFilterChange: (value: EntryType | "all") => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
+  const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const stickyComposerRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLElement | null>(null);
+  const compactComposerExpandedRef = useRef(false);
+  const [compactComposerVisible, setCompactComposerVisible] = useState(false);
+  const [compactComposerExpanded, setCompactComposerExpanded] = useState(false);
+  const [goTopVisible, setGoTopVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -2934,8 +3963,41 @@ function ThreadColumn({
   const regexInvalid =
     regex && !!search.trim() && !safelyCompileRegex(search).valid;
 
+  useEffect(() => {
+    compactComposerExpandedRef.current = compactComposerExpanded;
+  }, [compactComposerExpanded]);
+
+  useEffect(() => {
+    const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+    viewportRef.current = viewport;
+
+    function handleScroll() {
+      const top = viewportRef.current?.scrollTop ?? 0;
+      setCompactComposerVisible(top > 140);
+      if (top <= 140) setCompactComposerExpanded(false);
+      else if (
+        compactComposerExpandedRef.current &&
+        !stickyComposerRef.current?.contains(document.activeElement)
+      ) {
+        setCompactComposerExpanded(false);
+      }
+      setGoTopVisible(top > 700);
+    }
+
+    handleScroll();
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [taskId]);
+
+  useEffect(() => {
+    setCompactComposerExpanded(false);
+  }, [taskId]);
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-col">
+    <div className="relative flex min-h-0 min-w-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 bg-card/45 px-6 py-2.5">
         <div className="relative min-w-[220px] max-w-xl flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -3042,11 +4104,39 @@ function ThreadColumn({
           </DropdownMenu>
         </div>
       </div>
-      <ScrollArea className="min-h-0 flex-1">
+      {compactComposerVisible && (
+        <div
+          className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8"
+          ref={stickyComposerRef}
+        >
+          <div className="mx-auto w-full max-w-[920px]">
+            <Composer
+              compact={!compactComposerExpanded}
+              onCompactExpand={() => setCompactComposerExpanded(true)}
+              onSubmit={onSubmit}
+              taskId={taskId}
+            />
+          </div>
+        </div>
+      )}
+      <ScrollArea className="min-h-0 flex-1" ref={scrollRootRef}>
         <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </div>
       </ScrollArea>
+      {goTopVisible && (
+        <Button
+          aria-label="Go to top"
+          className="absolute bottom-4 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
+          onClick={() =>
+            viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+          }
+          size="icon-sm"
+          variant="secondary"
+        >
+          <ArrowUp className="size-4" />
+        </Button>
+      )}
     </div>
   );
 }

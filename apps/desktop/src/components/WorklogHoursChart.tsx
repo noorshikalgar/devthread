@@ -24,6 +24,7 @@ function formatShortDate(value: string): string {
 
 export interface WorklogHoursChartProps {
   days: ReadonlyArray<WorklogDay>;
+  onSelectDay?: (key: string) => void;
   settings: WorklogSettings;
 }
 
@@ -61,6 +62,37 @@ export function tooltipValueFormatter(
   return [formatHoursTooltip(Number(value)), String(name)];
 }
 
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; color?: string }>;
+  label?: string | number;
+}
+
+function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/20">
+      <p className="font-medium text-popover-foreground">{String(label)}</p>
+      {payload.map((entry, index) => (
+        <p
+          className="mt-0.5 flex items-center gap-1.5 text-popover-foreground"
+          key={`${entry.name ?? "value"}-${index}`}
+        >
+          <span
+            aria-hidden
+            className="inline-block size-2 rounded-sm"
+            style={{ background: entry.color }}
+          />
+          <span className="text-muted-foreground">{entry.name}</span>
+          <span className="ml-auto font-mono tabular-nums">
+            {formatHoursTooltip(Number(entry.value ?? 0))}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function buildChartData(
   days: ReadonlyArray<WorklogDay>,
   goalHours: number,
@@ -76,7 +108,11 @@ function buildChartData(
   });
 }
 
-export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
+export function WorklogHoursChart({
+  days,
+  onSelectDay,
+  settings,
+}: WorklogHoursChartProps) {
   const goalHours = effectiveDailyGoalMinutes(settings) / 60;
   const data = useMemo(
     () => buildChartData(days, goalHours),
@@ -105,16 +141,17 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   }, [settings.dailyHours, settings.breakMinutes]);
 
   const aboveDays = data.filter((d) => d.isAboveGoal).length;
+  const loggedDays = days.filter((day) => day.minutes > 0);
   const maxHours = data.reduce((max, d) => Math.max(max, d.hours), goalHours);
   const yMax = Math.max(8, Math.ceil((maxHours + 1) * 2) / 2);
 
   if (!data.length) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="flex h-full flex-col">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">Daily hours</h2>
         </div>
-        <p className="py-8 text-center text-xs text-muted-foreground">
+        <p className="grid flex-1 place-items-center text-center text-xs text-foreground/70">
           No worklog entries in the selected range.
         </p>
       </div>
@@ -124,30 +161,43 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
   return (
     <div
       aria-label={`Daily worklog hours, goal ${formatHoursTooltip(goalHours)} per day`}
-      className="rounded-lg border border-border bg-card p-4"
+      className="flex h-full flex-col"
       data-testid="worklog-hours-chart"
       role="figure"
     >
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Daily hours</h2>
-          <p className="text-xs text-muted-foreground">
-            Hours logged per day, with a goal line at{" "}
-            <span className="font-medium text-foreground">
+          <p className="text-xs text-foreground/70">
+            Year trend with a goal line at{" "}
+            <span className="font-semibold text-foreground">
               {formatHoursTooltip(goalHours)}
             </span>{" "}
             per workday.
           </p>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {aboveDays} day{aboveDays === 1 ? "" : "s"} above goal
+        <p className="text-xs text-foreground/70">
+          <span className="font-semibold text-foreground">
+            {loggedDays.length}
+          </span>{" "}
+          logged ·{" "}
+          <span className="font-semibold text-foreground">{aboveDays}</span> day
+          {aboveDays === 1 ? "" : "s"} above goal
         </p>
       </div>
-      <div className="h-[260px] w-full">
+      <div className="mt-3 h-[240px] w-full min-h-0 flex-1">
         <ResponsiveContainer height="100%" width="100%">
           <ComposedChart
             data={data}
             margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
+            onClick={(state: unknown) => {
+              const payload = (
+                state as {
+                  activePayload?: Array<{ payload?: ChartDatum }>;
+                }
+              )?.activePayload?.[0]?.payload as ChartDatum | undefined;
+              if (payload) onSelectDay?.(payload.date);
+            }}
           >
             <defs>
               <linearGradient
@@ -196,7 +246,7 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
               axisLine={false}
               dataKey="dateLabel"
               interval="preserveStartEnd"
-              minTickGap={32}
+              minTickGap={48}
               stroke={palette.text}
               tick={{ fontSize: 10 }}
               tickLine={false}
@@ -212,20 +262,8 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
               width={36}
             />
             <Tooltip
-              contentStyle={{
-                background: "var(--popover)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                color: "var(--popover-foreground)",
-                fontSize: 11,
-              }}
+              content={<ChartTooltip />}
               cursor={{ stroke: palette.text, strokeOpacity: 0.25 }}
-              // Recharts 3's Formatter type is a complex union; the
-              // exported helper has a tighter signature we can test
-              // directly. The `as never` bridges the two without
-              // re-declaring Recharts' full type at the call site.
-              formatter={tooltipValueFormatter as never}
-              labelFormatter={(label) => String(label)}
             />
             <ReferenceLine
               ifOverflow="extendDomain"
@@ -240,13 +278,15 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
               y={goalHours}
             />
             <Area
+              activeDot={{ fill: palette.primary, r: 3, strokeWidth: 0 }}
               dataKey="hours"
+              dot={false}
               fill="url(#worklog-primary-fill)"
               fillOpacity={1}
               isAnimationActive={false}
               name="Logged"
               stroke={palette.primary}
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               type="monotone"
             />
             <Line
@@ -261,6 +301,29 @@ export function WorklogHoursChart({ days, settings }: WorklogHoursChartProps) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {loggedDays.length > 0 && loggedDays.length < 5 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {formatLowDataInsight(loggedDays)}
+        </p>
+      )}
     </div>
   );
+}
+
+function formatLowDataInsight(days: ReadonlyArray<WorklogDay>) {
+  const best = days.reduce((current, day) =>
+    day.minutes > current.minutes ? day : current,
+  );
+  return `You logged ${formatHM(best.minutes)} on ${formatShortDate(
+    best.date,
+  )}. Add more logs to build a trend.`;
+}
+
+function formatHM(minutes: number): string {
+  if (minutes === 0) return "0m";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

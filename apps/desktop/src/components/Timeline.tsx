@@ -1,5 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
+  ChevronDown,
   Clock4,
   ExternalLink,
   History,
@@ -39,17 +40,18 @@ interface Props {
   revisions: WorkLogRevision[];
   historyEntryId: string | null;
   hasMore: boolean;
-  onEdit: (
+  onEdit?: (
     id: string,
     type: EntryType,
     content: string,
     visibility: Visibility,
   ) => Promise<void>;
-  onHistory: (id: string) => Promise<void>;
-  onRestoreRevision: (id: string) => Promise<void>;
-  onTrash: (id: string) => Promise<void>;
-  onLoadMore: () => Promise<void>;
+  onHistory?: (id: string) => Promise<void>;
+  onRestoreRevision?: (id: string) => Promise<void>;
+  onTrash?: (id: string) => Promise<void>;
+  onLoadMore?: () => Promise<void>;
   viewMode?: TimelineViewMode;
+  readOnly?: boolean;
 }
 
 export type TimelineViewMode = "normal" | "compact";
@@ -79,10 +81,8 @@ const TYPE_DOT: Record<EntryType, string> = {
 };
 
 const TYPE_TOKEN: Record<EntryType, string> = {
-  progress:
-    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  next_step:
-    "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  progress: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  next_step: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
   finding:
     "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   blocker:
@@ -90,10 +90,8 @@ const TYPE_TOKEN: Record<EntryType, string> = {
   decision:
     "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   note: "border-border bg-muted/45 text-muted-foreground",
-  worklog:
-    "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  status:
-    "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  worklog: "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+  status: "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
   estimate:
     "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
 };
@@ -122,12 +120,19 @@ export function Timeline({
   onTrash,
   onLoadMore,
   viewMode = "normal",
+  readOnly = false,
 }: Props) {
   if (!entries.length) {
     return (
       <div className="flex min-h-[240px] flex-col items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-        <p className="font-medium text-foreground">No updates yet.</p>
-        <p>Record the first thing that happened.</p>
+        <p className="font-medium text-foreground">
+          {readOnly ? "No archived history." : "No updates yet."}
+        </p>
+        <p>
+          {readOnly
+            ? "This task has no recorded timeline entries."
+            : "Record the first thing that happened."}
+        </p>
       </div>
     );
   }
@@ -141,19 +146,16 @@ export function Timeline({
         <div key={group.label} className="group/day flex flex-col gap-2">
           {compact ? (
             <div className="flex items-center gap-3">
-              <h2 className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-medium tracking-[0.04em] text-muted-foreground">
+              <h2 className="whitespace-nowrap text-[12px] font-semibold tracking-[0.02em] text-foreground">
                 {compactDateGroupLabel(group)}
               </h2>
               <div className="min-w-0 flex-1 border-t border-dashed border-border/80" />
             </div>
           ) : (
-            <div className="grid grid-cols-[50px_20px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5">
-              <h2 className="whitespace-nowrap text-right font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] font-medium leading-4 tracking-[0.04em] text-muted-foreground">
+            <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-2">
+              <h2 className="whitespace-nowrap text-left text-[11px] font-semibold leading-4 tracking-[0.02em] text-muted-foreground">
                 {group.label}
               </h2>
-              <div className="flex translate-x-px justify-center">
-                <span className="size-2 rounded-full border border-border bg-background shadow-[0_0_0_4px_hsl(var(--background))]" />
-              </div>
               <div className="min-w-0 border-t border-dashed border-border/80" />
             </div>
           )}
@@ -167,11 +169,11 @@ export function Timeline({
               <>
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[69px] sm:left-[79px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 border-l-2 border-dotted border-border/60 left-[9px]"
                 />
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[69px] sm:left-[79px]"
+                  className="pointer-events-none absolute bottom-2 top-2 z-0 origin-top scale-y-0 border-l-2 border-border opacity-0 transition-[opacity,transform] duration-300 group-hover/day:scale-y-100 group-hover/day:opacity-100 left-[9px]"
                 />
               </>
             )}
@@ -184,10 +186,10 @@ export function Timeline({
                 entry={entry}
                 historyOpen={historyEntryId === entry.id}
                 key={entry.id}
-                onEdit={onEdit}
-                onHistory={onHistory}
-                onRestoreRevision={onRestoreRevision}
-                onTrash={onTrash}
+                onEdit={readOnly ? undefined : onEdit}
+                onHistory={readOnly ? undefined : onHistory}
+                onRestoreRevision={readOnly ? undefined : onRestoreRevision}
+                onTrash={readOnly ? undefined : onTrash}
                 revisions={historyEntryId === entry.id ? revisions : []}
               />
             ))}
@@ -195,7 +197,7 @@ export function Timeline({
         </div>
       ))}
 
-      {hasMore && (
+      {hasMore && !readOnly && onLoadMore && (
         <div className="flex justify-center pt-2">
           <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
             Load older updates
@@ -230,18 +232,37 @@ interface EntryProps {
 function CompactTimelineEntry({
   entry,
   attachments,
+  revisions,
+  historyOpen,
+  onEdit,
   onHistory,
+  onRestoreRevision,
   onTrash,
 }: EntryProps) {
+  const [expanded, setExpanded] = useState(false);
   const summary = compactSummary(entry.contentMarkdown, attachments.length);
-  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
+  const hasDuration =
+    entry.durationMinutes != null && entry.durationMinutes > 0;
 
   return (
     <li
-      className="group relative grid min-h-7 min-w-0 grid-cols-[16px_62px_66px_34px_minmax(0,1fr)_44px] items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/35"
+      className={cn(
+        "group relative grid min-h-7 min-w-0 cursor-pointer gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/35",
+        expanded
+          ? "grid-cols-[16px_62px_minmax(0,1fr)] items-start"
+          : hasDuration
+            ? "grid-cols-[16px_62px_66px_max-content_minmax(0,1fr)_44px] items-center"
+            : "grid-cols-[16px_62px_66px_minmax(0,1fr)_44px] items-center",
+      )}
       data-entry-id={entry.id}
+      onClick={() => setExpanded((current) => !current)}
     >
-      <div className="relative flex h-full items-center justify-center">
+      <div
+        className={cn(
+          "relative flex justify-center",
+          expanded ? "items-start pt-4" : "h-full items-center",
+        )}
+      >
         <span
           aria-hidden
           className={cn(
@@ -251,78 +272,101 @@ function CompactTimelineEntry({
         />
         <span
           aria-hidden
-          className="absolute bottom-[-0.5rem] top-1/2 w-px border-l border-border/35 group-last:hidden"
+          className={cn(
+            "absolute bottom-[-0.5rem] w-px border-l border-border/35 group-last:hidden",
+            expanded ? "top-5" : "top-1/2",
+          )}
         />
       </div>
 
       <time
-        className="whitespace-nowrap font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground"
+        className={cn(
+          "whitespace-nowrap text-[11px] font-semibold tabular-nums tracking-[0.02em] text-foreground",
+          expanded && "pt-3",
+        )}
         dateTime={entry.occurredAt}
       >
         {formatMessageTimestamp(entry.occurredAt)}
       </time>
 
-      <span
-        className={cn(
-          "inline-flex h-[17px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.03em]",
-          TYPE_TOKEN[entry.entryType],
-        )}
-      >
-        <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
-      </span>
-
-      <span className="flex min-w-0 items-center justify-start">
-        {entry.durationMinutes != null && entry.durationMinutes > 0 ? (
+      {!expanded && (
+        <>
           <span
-            aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-            className="inline-flex h-4 max-w-full items-center rounded bg-muted/55 px-1.5 font-mono text-[9px] text-foreground/75"
+            className={cn(
+              "inline-flex h-[17px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.03em]",
+              TYPE_TOKEN[entry.entryType],
+            )}
           >
-            {formatDuration(entry.durationMinutes)}
+            <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
           </span>
-        ) : attachments.length > 0 && summary.hasText ? (
-          <span className="font-mono text-[9px] text-muted-foreground">
-            image
-          </span>
-        ) : null}
-      </span>
 
-      <span
-        className={cn(
-          "min-w-0 truncate text-xs leading-5",
-          summary.hasText ? "text-foreground" : "text-muted-foreground",
-        )}
-        title={summary.text}
-      >
-        {summary.text}
-      </span>
+          {hasDuration && (
+            <span className="flex min-w-0 items-center justify-start">
+              <span
+                aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
+                className="inline-flex h-4 max-w-full items-center whitespace-nowrap rounded bg-muted/55 px-1.5 font-mono text-[9px] text-foreground/75"
+              >
+                {formatDuration(entry.durationMinutes)}
+              </span>
+            </span>
+          )}
 
-      <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <Button
-          aria-label="Revision history"
-          className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
-          onClick={() => void onHistory(entry.id)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <History />
-        </Button>
-        {canTrash && (
-          <Button
-            aria-label="Move entry to trash"
-            className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
-            onClick={() => void onTrash(entry.id)}
-            size="icon-sm"
-            variant="ghost"
+          <span
+            className={cn(
+              "min-w-0 truncate text-xs leading-5",
+              summary.hasText ? "text-foreground" : "text-muted-foreground",
+            )}
+            title={summary.text}
           >
-            <Trash2 />
-          </Button>
-        )}
-      </div>
+            {summary.text}
+          </span>
+
+          <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <Button
+              aria-label="Expand entry"
+              className="size-5 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded(true);
+              }}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronDown className="transition-transform duration-150" />
+            </Button>
+          </div>
+        </>
+      )}
+
+      {expanded && (
+        <TimelineEntryCard
+          attachments={attachments}
+          className="col-start-3 col-end-4"
+          entry={entry}
+          historyOpen={historyOpen}
+          onCollapse={() => setExpanded(false)}
+          onEdit={onEdit}
+          onHistory={onHistory}
+          onRestoreRevision={onRestoreRevision}
+          onTrash={onTrash}
+          revisions={revisions}
+          showRailPointer={false}
+        />
+      )}
     </li>
   );
 }
 
-function TimelineEntry({
+interface TimelineEntryCardProps extends EntryProps {
+  className?: string;
+  hideMeta?: boolean;
+  inlineTimestamp?: string;
+  onCollapse?: () => void;
+  showRailPointer?: boolean;
+  surface?: "card" | "inline";
+}
+
+function TimelineEntryCard({
   entry,
   attachments,
   revisions,
@@ -331,13 +375,20 @@ function TimelineEntry({
   onHistory,
   onRestoreRevision,
   onTrash,
-}: EntryProps) {
+  className,
+  hideMeta = false,
+  inlineTimestamp,
+  onCollapse,
+  showRailPointer = true,
+  surface = "card",
+}: TimelineEntryCardProps) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(entry.contentMarkdown);
   const [expanded, setExpanded] = useState(false);
   const [viewingImage, setViewingImage] = useState<Attachment | null>(null);
 
   async function save() {
+    if (!onEdit) return;
     await onEdit(entry.id, entry.entryType, content, entry.visibility);
     setEditing(false);
   }
@@ -346,55 +397,39 @@ function TimelineEntry({
   const long = isLongEntry(entry.contentMarkdown);
   const links = extractLinkPreviews(entry.contentMarkdown);
   const linkMetadata = useLinkMetadata(links);
-  const canEdit = !SYSTEM_FACT_ENTRY_TYPES.has(entry.entryType);
-  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType);
+  const canEdit = !SYSTEM_FACT_ENTRY_TYPES.has(entry.entryType) && !!onEdit;
+  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType) && !!onTrash;
 
   return (
-    <li
-      className={cn(
-        "group relative grid grid-cols-[50px_20px_minmax(0,1fr)] gap-2 py-1.5 sm:grid-cols-[56px_24px_minmax(0,1fr)] sm:gap-2.5",
-      )}
-      data-entry-id={entry.id}
-    >
-      <time
-        className="flex items-start justify-end pt-3 font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] leading-4"
-        dateTime={entry.occurredAt}
+    <>
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-col gap-2 transition-[background-color,border-color,box-shadow] duration-150",
+          surface === "card" &&
+            "rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm group-hover:border-border group-hover:bg-card group-hover:shadow-md",
+          surface === "inline" && "py-1.5",
+          showRailPointer &&
+            surface === "card" &&
+            "before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70",
+          className,
+        )}
+        onClick={(event) => event.stopPropagation()}
       >
-        <span className="text-[10px] tabular-nums tracking-[0.02em] text-muted-foreground">
-          {formatMessageTimestamp(entry.occurredAt)}
-        </span>
-      </time>
-
-      <div className="relative z-10 flex translate-x-px justify-center pt-4">
-        <span
-          aria-hidden
-          className={cn(
-            "z-10 size-2.5 rounded-full ring-[5px] ring-background transition-transform duration-150 group-hover:scale-125",
-            TYPE_DOT[entry.entryType],
-          )}
-        />
-      </div>
-
-      <div className="relative flex min-w-0 flex-col gap-2 rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 before:absolute before:left-[-5px] before:top-4 before:size-2 before:rotate-45 before:border-b before:border-l before:border-border/55 before:bg-card/70 group-hover:border-border group-hover:bg-card group-hover:shadow-md">
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span
-            className={cn(
-              "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
-              TYPE_TOKEN[entry.entryType],
-            )}
-          >
-            {ENTRY_LABELS[entry.entryType]}
-          </span>
-          {entry.durationMinutes != null && entry.durationMinutes > 0 && (
-            <span
-              aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
-              className="inline-flex h-5 min-w-[48px] items-center justify-center gap-1 rounded bg-muted/60 px-2 font-mono text-[10px] text-foreground"
-            >
-              <Clock4 className="size-2.5 text-muted-foreground" />
-              {formatDuration(entry.durationMinutes)}
-            </span>
-          )}
-        </div>
+        {surface === "inline" && inlineTimestamp ? (
+          <div className="flex min-h-6 min-w-0 items-center justify-between gap-3 pr-20">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <time
+                className="font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-semibold leading-4 tabular-nums tracking-[0.02em] text-muted-foreground"
+                dateTime={entry.occurredAt}
+              >
+                {inlineTimestamp}
+              </time>
+              <EntryMetaChips entry={entry} />
+            </div>
+          </div>
+        ) : (
+          !hideMeta && <EntryMetaChips entry={entry} />
+        )}
 
         {editing ? (
           <div className="space-y-2">
@@ -429,7 +464,8 @@ function TimelineEntry({
           <>
             <div
               className={cn(
-                "markdown max-w-[78ch] select-text",
+                "markdown select-text",
+                surface === "card" && "max-w-[78ch]",
                 long && !expanded && "markdown--collapsed",
               )}
             >
@@ -515,7 +551,7 @@ function TimelineEntry({
                   </div>
                   <Button
                     aria-label="Restore revision"
-                    onClick={() => void onRestoreRevision(revision.id)}
+                    onClick={() => void onRestoreRevision?.(revision.id)}
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -526,45 +562,62 @@ function TimelineEntry({
             </CardContent>
           </Card>
         )}
-      </div>
 
-      {!editing && (
-        <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-          {canEdit && (
-            <Button
-              aria-label="Edit entry"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => setEditing(true)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <SquarePen />
-            </Button>
-          )}
-          {canEdit && (
-            <Button
-              aria-label="Revision history"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => void onHistory(entry.id)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <History />
-            </Button>
-          )}
-          {canTrash && (
-            <Button
-              aria-label="Move entry to trash"
-              className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
-              onClick={() => void onTrash(entry.id)}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Trash2 />
-            </Button>
-          )}
-        </div>
-      )}
+        {!editing && (
+          <div
+            className={cn(
+              "absolute flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+              surface === "card" ? "right-1.5 top-2" : "right-0 top-1.5",
+            )}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {canEdit && (
+              <Button
+                aria-label="Edit entry"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => setEditing(true)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <SquarePen />
+              </Button>
+            )}
+            {canEdit && onHistory && (
+              <Button
+                aria-label="Revision history"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => void onHistory(entry.id)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <History />
+              </Button>
+            )}
+            {canTrash && onTrash && (
+              <Button
+                aria-label="Move entry to trash"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => void onTrash(entry.id)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Trash2 />
+              </Button>
+            )}
+            {onCollapse && (
+              <Button
+                aria-label="Collapse entry"
+                className="size-6 rounded-md bg-muted/45 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+                onClick={onCollapse}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronDown className="rotate-180" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       <ImageViewerDialog
         attachment={viewingImage}
@@ -572,6 +625,77 @@ function TimelineEntry({
           if (!open) setViewingImage(null);
         }}
       />
+    </>
+  );
+}
+
+function EntryMetaChips({ entry }: { entry: WorkLogEntry }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span
+        className={cn(
+          "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
+          TYPE_TOKEN[entry.entryType],
+        )}
+      >
+        {ENTRY_LABELS[entry.entryType]}
+      </span>
+      {entry.durationMinutes != null && entry.durationMinutes > 0 && (
+        <span
+          aria-label={`Time spent ${formatDuration(entry.durationMinutes)}`}
+          className="inline-flex h-5 min-w-[48px] items-center justify-center gap-1 rounded bg-muted/60 px-2 font-mono text-[10px] text-foreground"
+        >
+          <Clock4 className="size-2.5 text-muted-foreground" />
+          {formatDuration(entry.durationMinutes)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TimelineEntry({
+  entry,
+  attachments,
+  revisions,
+  historyOpen,
+  onEdit,
+  onHistory,
+  onRestoreRevision,
+  onTrash,
+}: EntryProps) {
+  return (
+    <li
+      className={cn(
+        "group relative grid grid-cols-[20px_minmax(0,1fr)] gap-2 rounded-md py-2 transition-colors hover:bg-accent/20",
+      )}
+      data-entry-id={entry.id}
+    >
+      <div className="relative z-10 flex h-9 items-center justify-center">
+        <span
+          aria-hidden
+          className={cn(
+            "z-10 size-2 rounded-full ring-[4px] ring-background transition-transform duration-150 group-hover:scale-125",
+            TYPE_DOT[entry.entryType],
+          )}
+        />
+      </div>
+
+      <div className="min-w-0">
+        <TimelineEntryCard
+          attachments={attachments}
+          entry={entry}
+          hideMeta
+          historyOpen={historyOpen}
+          inlineTimestamp={formatMessageTimestamp(entry.occurredAt)}
+          onEdit={onEdit}
+          onHistory={onHistory}
+          onRestoreRevision={onRestoreRevision}
+          onTrash={onTrash}
+          revisions={revisions}
+          showRailPointer={false}
+          surface="inline"
+        />
+      </div>
     </li>
   );
 }
@@ -728,7 +852,10 @@ function formatMessageTimestamp(value: string) {
 }
 
 function formatCompactGroupDate(value: string) {
-  return formatTimelineDayMonth(new Date(value));
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function compactDateGroupLabel(group: DateGroup) {
@@ -810,16 +937,9 @@ function dateLabel(value: string): string {
   );
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
-  return `${new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
-  }).format(date)}, ${formatTimelineDayMonth(date, today)}`;
-}
-
-function formatTimelineDayMonth(date: Date, reference = new Date()) {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  if (date.getFullYear() !== reference.getFullYear()) {
-    return `${day}/${month}/${String(date.getFullYear()).slice(-2)}`;
-  }
-  return `${day}/${month}`;
+    month: "long",
+    day: "numeric",
+  }).format(date);
 }

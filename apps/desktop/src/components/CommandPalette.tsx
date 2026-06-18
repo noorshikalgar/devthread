@@ -47,6 +47,7 @@ export function CommandPalette({
   const [regex, setRegex] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (open) {
@@ -142,6 +143,14 @@ export function CommandPalette({
     if (selectedIndex >= results.length) setSelectedIndex(0);
   }, [results, selectedIndex]);
 
+  useEffect(() => {
+    resultRefs.current = resultRefs.current.slice(0, results.length);
+    resultRefs.current[selectedIndex]?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [results, selectedIndex]);
+
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -193,7 +202,7 @@ export function CommandPalette({
             aria-label="Use regular expression"
             aria-pressed={regex}
             className={cn(
-              "h-6 w-8 shrink-0 px-0 font-mono text-[11px]",
+              "h-5 w-7 shrink-0 rounded px-0 font-mono text-[10px]",
               regex && "bg-secondary text-secondary-foreground",
             )}
             onClick={() => {
@@ -207,11 +216,11 @@ export function CommandPalette({
           >
             .*
           </Button>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="rounded border border-border/70 px-1 py-0.5 font-mono text-[9px] uppercase leading-none text-muted-foreground">
             esc
           </span>
         </div>
-        <div className="max-h-80 overflow-auto p-1">
+        <div className="max-h-80 overflow-auto p-1.5">
           {results.length === 0 && (
             <div className="flex flex-col items-center gap-1 px-3 py-8 text-center text-xs text-muted-foreground">
               <ListTodo className="size-4 opacity-60" />
@@ -226,7 +235,7 @@ export function CommandPalette({
           )}
           {Array.from(grouped.entries()).map(([group, items]) => (
             <div className="flex flex-col gap-0.5" key={group}>
-              <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {group}
               </p>
               {items.map((result) => {
@@ -235,7 +244,7 @@ export function CommandPalette({
                 return (
                   <button
                     className={cn(
-                      "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-xs",
+                      "flex w-full items-start gap-2 rounded-sm px-1.5 py-1.5 text-left text-xs",
                       active
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-accent/60",
@@ -243,16 +252,19 @@ export function CommandPalette({
                     key={result.id}
                     onClick={result.onSelect}
                     onMouseEnter={() => setSelectedIndex(index)}
+                    ref={(node) => {
+                      resultRefs.current[index] = node;
+                    }}
                     type="button"
                   >
                     {result.kind === "task" && (
-                      <FileText className="mt-0.5 size-3.5 text-muted-foreground" />
+                      <FileText className="mt-0.5 size-3 text-muted-foreground" />
                     )}
                     {result.kind === "folder" && (
-                      <Folder className="mt-0.5 size-3.5 text-muted-foreground" />
+                      <Folder className="mt-0.5 size-3 text-muted-foreground" />
                     )}
                     {result.kind === "entry" && (
-                      <ListTodo className="mt-0.5 size-3.5 text-muted-foreground" />
+                      <ListTodo className="mt-0.5 size-3 text-muted-foreground" />
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-medium text-foreground">

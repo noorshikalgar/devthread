@@ -3,6 +3,7 @@ import {
   buildReleaseContext,
   defaultReleaseTemplate,
   isTruthy,
+  RELEASE_TEMPLATE_PLACEHOLDERS,
   renderReleaseTemplate,
   type ReleaseRenderContext,
 } from "./releaseTemplate";
@@ -15,6 +16,7 @@ const baseRelease: Release = {
   name: "Jun 2026 Refresh",
   version: "0.2.0",
   descriptionMarkdown: "## Highlights\n- New feature",
+  releaseStatus: "released",
   releasedAt: FIXED_RELEASE_AT,
   folderId: null,
   createdAt: FIXED_RELEASE_AT,
@@ -225,6 +227,16 @@ describe("renderReleaseTemplate", () => {
     );
     // The filter should not affect the name variable
     expect(out).toBe("Jun 2026 Refresh");
+  });
+});
+
+describe("RELEASE_TEMPLATE_PLACEHOLDERS", () => {
+  it("keeps the insert menu focused on non-repetitive release variables", () => {
+    const snippets = RELEASE_TEMPLATE_PLACEHOLDERS.map((item) => item.snippet);
+    expect(snippets).toContain("{{name}}");
+    expect(snippets).toContain("{{tasks}}");
+    expect(snippets).not.toContain("{{notes}}");
+    expect(snippets).not.toContain("{{#if notes}}## Notes\n\n{{notes}}{{/if}}");
   });
 });
 
