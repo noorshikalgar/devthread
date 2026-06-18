@@ -30,13 +30,14 @@ describe("Composer", () => {
     expect(
       screen.queryByText(/Type @ to switch entry type/),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("What happened?")).toHaveClass(
-      "min-h-[84px]",
-    );
+    expect(screen.getByLabelText("What happened?")).toHaveClass("min-h-[84px]");
     expect(screen.getByLabelText("What happened?")).toHaveClass(
       "max-h-[132px]",
     );
-    expect(screen.getByLabelText("What happened?")).toHaveAttribute("rows", "3");
+    expect(screen.getByLabelText("What happened?")).toHaveAttribute(
+      "rows",
+      "3",
+    );
   });
 
   it("expands the compact composer when the user enters it", () => {

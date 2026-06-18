@@ -17,7 +17,10 @@ export function getCachedWorklogYear(year: number): WorklogYearData | null {
   return cache.get(year) ?? null;
 }
 
-export function setCachedWorklogYear(year: number, data: WorklogYearData): void {
+export function setCachedWorklogYear(
+  year: number,
+  data: WorklogYearData,
+): void {
   cache.set(year, data);
 }
 

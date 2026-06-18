@@ -235,25 +235,25 @@ export function TaskHeader({
                 <span className="truncate">{task.title}</span>
               </h1>
             ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  aria-label="Edit task title"
-                  className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
-                  onClick={() => setTitleDraft(task.title)}
-                  type="button"
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    aria-label="Edit task title"
+                    className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
+                    onClick={() => setTitleDraft(task.title)}
+                    type="button"
+                  >
+                    <span className="truncate">{task.title}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  align="start"
+                  className="max-w-md whitespace-normal break-words leading-5"
+                  side="bottom"
                 >
-                  <span className="truncate">{task.title}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent
-                align="start"
-                className="max-w-md whitespace-normal break-words leading-5"
-                side="bottom"
-              >
-                {task.title}
-              </TooltipContent>
-            </Tooltip>
+                  {task.title}
+                </TooltipContent>
+              </Tooltip>
             )
           ) : (
             <Input
@@ -420,70 +420,65 @@ export function TaskHeader({
             >
               <span
                 aria-hidden
-                className={cn(
-                  "size-1.5 rounded-full",
-                  STATUS_DOT[task.status],
-                )}
+                className={cn("size-1.5 rounded-full", STATUS_DOT[task.status])}
               />
               <span className="font-medium">{statusLabel}</span>
             </span>
           ) : (
-          <Popover onOpenChange={setStatusOpen} open={statusOpen}>
-            <PopoverTrigger asChild>
-              <button
-                aria-label={`Status: ${statusLabel}. Click to change.`}
-                className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-                type="button"
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    STATUS_DOT[task.status],
-                  )}
-                />
-                <span className="font-medium">{statusLabel}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1">
-              <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Status
-              </p>
-              {STATUS_ORDER.map((status) => {
-                const active = task.status === status;
-                return (
-                  <button
+            <Popover onOpenChange={setStatusOpen} open={statusOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  aria-label={`Status: ${statusLabel}. Click to change.`}
+                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                  type="button"
+                >
+                  <span
+                    aria-hidden
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0",
-                      active && "bg-accent",
+                      "size-1.5 rounded-full",
+                      STATUS_DOT[task.status],
                     )}
-                    key={status}
-                    onClick={() => {
-                      setStatusOpen(false);
-                      void changeStatus(status as TaskStatus);
-                    }}
-                    type="button"
-                  >
-                    <span
-                      aria-hidden
+                  />
+                  <span className="font-medium">{statusLabel}</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-44 p-1">
+                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status
+                </p>
+                {STATUS_ORDER.map((status) => {
+                  const active = task.status === status;
+                  return (
+                    <button
                       className={cn(
-                        "size-1.5 rounded-full",
-                        STATUS_DOT[status],
+                        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0",
+                        active && "bg-accent",
                       )}
-                    />
-                    {STATUS_LABEL[status]}
-                  </button>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
+                      key={status}
+                      onClick={() => {
+                        setStatusOpen(false);
+                        void changeStatus(status as TaskStatus);
+                      }}
+                      type="button"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          STATUS_DOT[status],
+                        )}
+                      />
+                      {STATUS_LABEL[status]}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
           )}
           <QuickLinks
             links={quickLinks}
             onAdd={
-              !readOnly &&
-              onCreateQuickLink &&
-              quickLinks.length < 3
+              !readOnly && onCreateQuickLink && quickLinks.length < 3
                 ? () => {
                     setEditingQuickLink(null);
                     setQuickLinkOpen(true);
@@ -523,83 +518,83 @@ export function TaskHeader({
                 </span>
               )
             ) : (
-            <Popover onOpenChange={setReleaseOpen} open={releaseOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  aria-label={
-                    task.releaseName
-                      ? `Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}. Click to change.`
-                      : "Assign release. Click to choose."
-                  }
-                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
-                  type="button"
-                >
-                  <Tag className="size-3 text-muted-foreground" />
-                  <span className="font-medium">
-                    {(() => {
-                      if (!task.releaseName) return "Assign release";
-                      const r = releases?.find(
-                        (x) => x.name === task.releaseName,
-                      );
-                      return r
-                        ? r.version
-                          ? `${r.name} (${r.version})`
-                          : r.name
-                        : task.releaseName;
-                    })()}
-                  </span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-56 p-1">
-                <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Release
-                </p>
-                {(!releases || releases.length === 0) && (
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    No releases yet
+              <Popover onOpenChange={setReleaseOpen} open={releaseOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    aria-label={
+                      task.releaseName
+                        ? `Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}. Click to change.`
+                        : "Assign release. Click to choose."
+                    }
+                    className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                    type="button"
+                  >
+                    <Tag className="size-3 text-muted-foreground" />
+                    <span className="font-medium">
+                      {(() => {
+                        if (!task.releaseName) return "Assign release";
+                        const r = releases?.find(
+                          (x) => x.name === task.releaseName,
+                        );
+                        return r
+                          ? r.version
+                            ? `${r.name} (${r.version})`
+                            : r.name
+                          : task.releaseName;
+                      })()}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-56 p-1">
+                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Release
                   </p>
-                )}
-                {releases?.map((r) => {
-                  const active = task.releaseName === r.name;
-                  return (
+                  {(!releases || releases.length === 0) && (
+                    <p className="px-2 py-2 text-xs text-muted-foreground">
+                      No releases yet
+                    </p>
+                  )}
+                  {releases?.map((r) => {
+                    const active = task.releaseName === r.name;
+                    return (
+                      <button
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
+                          active && "bg-accent",
+                        )}
+                        key={r.name}
+                        onClick={() => {
+                          setReleaseOpen(false);
+                          if (active) {
+                            void onRemoveReleaseTag?.();
+                          } else {
+                            void onTagRelease?.(r.name);
+                          }
+                        }}
+                        type="button"
+                      >
+                        <Tag className="size-3 text-muted-foreground" />
+                        <span className="truncate">
+                          {r.version ? `${r.name} (${r.version})` : r.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {task.releaseName && (
                     <button
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent",
-                        active && "bg-accent",
-                      )}
-                      key={r.name}
+                      className="flex w-full items-center gap-2 rounded-sm border-t border-border px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                       onClick={() => {
                         setReleaseOpen(false);
-                        if (active) {
-                          void onRemoveReleaseTag?.();
-                        } else {
-                          void onTagRelease?.(r.name);
-                        }
+                        void onRemoveReleaseTag?.();
                       }}
                       type="button"
                     >
-                      <Tag className="size-3 text-muted-foreground" />
-                      <span className="truncate">
-                        {r.version ? `${r.name} (${r.version})` : r.name}
-                      </span>
+                      <X className="size-3" />
+                      Remove release tag
                     </button>
-                  );
-                })}
-                {task.releaseName && (
-                  <button
-                    className="flex w-full items-center gap-2 rounded-sm border-t border-border px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                    onClick={() => {
-                      setReleaseOpen(false);
-                      void onRemoveReleaseTag?.();
-                    }}
-                    type="button"
-                  >
-                    <X className="size-3" />
-                    Remove release tag
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
+                  )}
+                </PopoverContent>
+              </Popover>
             ))}
         </div>
         <div className="flex flex-wrap items-center gap-2.5 text-xs">
@@ -614,9 +609,7 @@ export function TaskHeader({
                 aria-disabled={readOnly}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  readOnly
-                    ? "cursor-not-allowed"
-                    : "hover:text-foreground",
+                  readOnly ? "cursor-not-allowed" : "hover:text-foreground",
                 )}
                 onClick={() => {
                   if (readOnly) return;
@@ -653,9 +646,7 @@ export function TaskHeader({
                 aria-disabled={readOnly}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded text-foreground/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  readOnly
-                    ? "cursor-not-allowed"
-                    : "hover:text-foreground",
+                  readOnly ? "cursor-not-allowed" : "hover:text-foreground",
                 )}
                 onClick={() => {
                   if (readOnly) return;

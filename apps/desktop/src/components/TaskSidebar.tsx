@@ -112,7 +112,8 @@ function useComposerDrafts() {
   useEffect(() => {
     const handler = () => force((value) => value + 1);
     window.addEventListener("devthread:composer-drafts", handler);
-    return () => window.removeEventListener("devthread:composer-drafts", handler);
+    return () =>
+      window.removeEventListener("devthread:composer-drafts", handler);
   }, []);
   return { hasDraft: hasComposerDraft };
 }
@@ -407,19 +408,19 @@ function ActiveSidebar({
                           "bg-accent/70 text-foreground",
                       )}
                       key={task.id}
-                        onClick={() => onSelect(task.id)}
-                        type="button"
-                      >
-                        <TaskStatusDot
-                          hasDraft={hasDraft(task.id)}
-                          status={task.status}
-                        />
-                        <span className="w-full truncate text-sm font-normal text-current">
-                          {task.title}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                      onClick={() => onSelect(task.id)}
+                      type="button"
+                    >
+                      <TaskStatusDot
+                        hasDraft={hasDraft(task.id)}
+                        status={task.status}
+                      />
+                      <span className="w-full truncate text-sm font-normal text-current">
+                        {task.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
           )}
@@ -761,7 +762,7 @@ function ArchiveSidebar({
           aria-label="Archive"
           className="flex w-full min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3"
         >
-            {filtered.map((task) => (
+          {filtered.map((task) => (
             <ArchiveRow
               busy={busy}
               checked={checkedIds.has(task.id)}

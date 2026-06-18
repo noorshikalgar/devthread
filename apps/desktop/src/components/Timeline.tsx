@@ -188,9 +188,7 @@ export function Timeline({
                 key={entry.id}
                 onEdit={readOnly ? undefined : onEdit}
                 onHistory={readOnly ? undefined : onHistory}
-                onRestoreRevision={
-                  readOnly ? undefined : onRestoreRevision
-                }
+                onRestoreRevision={readOnly ? undefined : onRestoreRevision}
                 onTrash={readOnly ? undefined : onTrash}
                 revisions={historyEntryId === entry.id ? revisions : []}
               />
@@ -400,8 +398,7 @@ function TimelineEntryCard({
   const links = extractLinkPreviews(entry.contentMarkdown);
   const linkMetadata = useLinkMetadata(links);
   const canEdit = !SYSTEM_FACT_ENTRY_TYPES.has(entry.entryType) && !!onEdit;
-  const canTrash =
-    !PROTECTED_ENTRY_TYPES.has(entry.entryType) && !!onTrash;
+  const canTrash = !PROTECTED_ENTRY_TYPES.has(entry.entryType) && !!onTrash;
 
   return (
     <>

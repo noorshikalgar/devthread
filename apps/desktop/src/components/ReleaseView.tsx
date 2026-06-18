@@ -247,9 +247,7 @@ function TruncatedTaskTitle({ title }: { title: string }) {
     if (!element) return;
 
     const updateTooltip = () => {
-      setTooltip(
-        element.scrollWidth > element.clientWidth ? title : undefined,
-      );
+      setTooltip(element.scrollWidth > element.clientWidth ? title : undefined);
     };
 
     updateTooltip();
@@ -551,10 +549,7 @@ export function ReleaseView({
     return (title: string) => title.toLowerCase().includes(lower);
   }, [tasksSearch, tasksUseRegex]);
 
-  const filteredSelectedTasks = useMemo(
-    () => taggedTasks,
-    [taggedTasks],
-  );
+  const filteredSelectedTasks = useMemo(() => taggedTasks, [taggedTasks]);
   const filteredAvailableTasks = useMemo(
     () => unassignedTasks.filter((t) => tasksMatcher(t.title)),
     [tasksMatcher, unassignedTasks],
@@ -567,8 +562,7 @@ export function ReleaseView({
   const incompleteTaskCount = taggedTasks.filter(
     (task) => task.status !== "done",
   ).length;
-  const canPublishRelease =
-    taggedTasks.length > 0 && incompleteTaskCount === 0;
+  const canPublishRelease = taggedTasks.length > 0 && incompleteTaskCount === 0;
   const releaseBlockedReason =
     taggedTasks.length === 0
       ? "Release blocked: no tasks selected"
@@ -875,18 +869,24 @@ export function ReleaseView({
   );
   const draftReleases = useMemo(
     () =>
-      releasesSorted.filter((release) => getReleaseStatus(release) !== "released"),
+      releasesSorted.filter(
+        (release) => getReleaseStatus(release) !== "released",
+      ),
     [releasesSorted],
   );
   const releasedReleases = useMemo(
     () =>
-      releasesSorted.filter((release) => getReleaseStatus(release) === "released"),
+      releasesSorted.filter(
+        (release) => getReleaseStatus(release) === "released",
+      ),
     [releasesSorted],
   );
   const searchActive = releaseSearch.trim().length > 0;
   const pinnedReleases = useMemo(() => {
     if (searchActive || !pinnedReleaseNames.length) return [];
-    const releasesByName = new Map(releases.map((release) => [release.name, release]));
+    const releasesByName = new Map(
+      releases.map((release) => [release.name, release]),
+    );
     return pinnedReleaseNames
       .map((name) => releasesByName.get(name))
       .filter((release): release is Release => Boolean(release));
@@ -1212,7 +1212,8 @@ export function ReleaseView({
                         </p>
                         {RELEASE_STATUS_ORDER.map((status) => {
                           const active = selectedReleaseStatus === status;
-                          const disabled = status === "released" && !canPublishRelease;
+                          const disabled =
+                            status === "released" && !canPublishRelease;
                           return (
                             <button
                               className={cn(
@@ -1262,9 +1263,7 @@ export function ReleaseView({
                           aria-hidden
                           className="size-3 shrink-0"
                         />
-                        <span className="truncate">
-                          {releaseBlockedReason}
-                        </span>
+                        <span className="truncate">{releaseBlockedReason}</span>
                       </span>
                     )}
                 </div>
@@ -1503,9 +1502,7 @@ export function ReleaseView({
                               Selected For Release
                             </span>
                             <span className="text-xs font-medium text-muted-foreground/75">
-                              {formatSectionCount(
-                                filteredSelectedTasks.length,
-                              )}
+                              {formatSectionCount(filteredSelectedTasks.length)}
                             </span>
                           </button>
                         </div>
@@ -1554,72 +1551,72 @@ export function ReleaseView({
                           aria-label="Available Tasks"
                           className="contents"
                         >
-                        <div className="sticky top-9 z-20 flex h-9 w-full bg-background">
-                          <button
-                            aria-expanded={availableTasksExpanded}
-                            className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
-                            onClick={() =>
-                              setAvailableTasksExpanded(
-                                (expanded) => !expanded,
-                              )
-                            }
-                            type="button"
-                          >
-                            <ChevronRight
-                              className={cn(
-                                "size-4 transition-transform duration-150 ease-out",
-                                availableTasksExpanded && "rotate-90",
-                              )}
-                            />
-                            <span className="truncate">Available Tasks</span>
-                            <span className="text-xs font-medium text-muted-foreground/75">
-                              {formatSectionCount(
-                                filteredAvailableTasks.length,
-                              )}
-                            </span>
-                          </button>
-                        </div>
-                        <div
-                          aria-hidden={!availableTasksExpanded}
-                          className={cn(
-                            "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
-                            availableTasksExpanded
-                              ? "grid-rows-[1fr] translate-y-0 opacity-100"
-                              : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
-                          )}
-                        >
-                          <div className="min-w-0 overflow-hidden pt-1">
-                            {filteredAvailableTasks.length > 0 ? (
-                              <div className="space-y-1">
-                                {filteredAvailableTasks.map((task) => (
-                                  <TasksTabRow
-                                    folderName={
-                                      folderNames.get(task.folderId ?? "") ??
-                                      "No folder"
-                                    }
-                                    key={task.id}
-                                    onOpen={() => onSelectTask(task.id)}
-                                    onToggle={() =>
-                                      void onTagTask(
-                                        task.id,
-                                        selectedRelease.name,
-                                      )
-                                    }
-                                    selected={false}
-                                    disabled={releaseLocked}
-                                    task={task}
-                                  />
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="px-6 py-5 text-center text-xs text-muted-foreground">
-                                {tasksSearch.trim() || tasksUseRegex
-                                  ? "No tasks match the search."
-                                  : "No unassigned tasks available."}
-                              </p>
-                            )}
+                          <div className="sticky top-9 z-20 flex h-9 w-full bg-background">
+                            <button
+                              aria-expanded={availableTasksExpanded}
+                              className="flex h-full w-full min-w-0 items-center gap-2 rounded px-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-accent/20 hover:text-foreground"
+                              onClick={() =>
+                                setAvailableTasksExpanded(
+                                  (expanded) => !expanded,
+                                )
+                              }
+                              type="button"
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  "size-4 transition-transform duration-150 ease-out",
+                                  availableTasksExpanded && "rotate-90",
+                                )}
+                              />
+                              <span className="truncate">Available Tasks</span>
+                              <span className="text-xs font-medium text-muted-foreground/75">
+                                {formatSectionCount(
+                                  filteredAvailableTasks.length,
+                                )}
+                              </span>
+                            </button>
                           </div>
-                        </div>
+                          <div
+                            aria-hidden={!availableTasksExpanded}
+                            className={cn(
+                              "grid min-w-0 transition-[grid-template-rows,opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                              availableTasksExpanded
+                                ? "grid-rows-[1fr] translate-y-0 opacity-100"
+                                : "pointer-events-none grid-rows-[0fr] -translate-y-0.5 opacity-0",
+                            )}
+                          >
+                            <div className="min-w-0 overflow-hidden pt-1">
+                              {filteredAvailableTasks.length > 0 ? (
+                                <div className="space-y-1">
+                                  {filteredAvailableTasks.map((task) => (
+                                    <TasksTabRow
+                                      folderName={
+                                        folderNames.get(task.folderId ?? "") ??
+                                        "No folder"
+                                      }
+                                      key={task.id}
+                                      onOpen={() => onSelectTask(task.id)}
+                                      onToggle={() =>
+                                        void onTagTask(
+                                          task.id,
+                                          selectedRelease.name,
+                                        )
+                                      }
+                                      selected={false}
+                                      disabled={releaseLocked}
+                                      task={task}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="px-6 py-5 text-center text-xs text-muted-foreground">
+                                  {tasksSearch.trim() || tasksUseRegex
+                                    ? "No tasks match the search."
+                                    : "No unassigned tasks available."}
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         </section>
                       )}
                     </div>
@@ -1669,7 +1666,7 @@ export function ReleaseView({
                           )}
                         </div>
                       </ScrollArea>
-                      )}
+                    )}
                   </div>
                 )}
               </div>
@@ -1805,7 +1802,8 @@ export function ReleaseView({
 }
 
 function clampReleaseSidebarWidth(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_RELEASE_SIDEBAR_WIDTH;
+  if (!Number.isFinite(value) || value <= 0)
+    return DEFAULT_RELEASE_SIDEBAR_WIDTH;
   const viewportLimit =
     typeof window === "undefined"
       ? MAX_RELEASE_SIDEBAR_WIDTH

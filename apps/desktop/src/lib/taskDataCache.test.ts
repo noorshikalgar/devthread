@@ -7,11 +7,7 @@ import {
   updateCachedTaskData,
   type TaskData,
 } from "./taskDataCache";
-import type {
-  Attachment,
-  TaskQuickLink,
-  WorkLogEntry,
-} from "./types";
+import type { Attachment, TaskQuickLink, WorkLogEntry } from "./types";
 
 const sampleEntry: WorkLogEntry = {
   id: "e1",

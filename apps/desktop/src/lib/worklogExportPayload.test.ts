@@ -79,10 +79,7 @@ describe("buildWorklogExportSheets", () => {
     for (const title of sectionTitles) {
       const row = guide.rows.find((r) => r[0]?.value === title);
       expect(row, `missing section title: ${title}`).toBeDefined();
-      expect(
-        row![0]?.style,
-        `${title} should use guideSection (8)`,
-      ).toBe(8);
+      expect(row![0]?.style, `${title} should use guideSection (8)`).toBe(8);
       expect(row![0]?.wrap, `${title} should be marked wrap`).toBe(true);
     }
   });

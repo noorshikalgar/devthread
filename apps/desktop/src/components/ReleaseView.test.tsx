@@ -453,7 +453,9 @@ describe("ReleaseView tasks tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: /Notes/ }));
-    expect(screen.getByLabelText("Insert release variable")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Insert release variable"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     expect(screen.queryByLabelText("Insert release variable")).toBeNull();
@@ -607,16 +609,12 @@ describe("ReleaseView sidebar", () => {
     fireEvent.mouseUp(window);
 
     expect(sidebarShell).toHaveStyle({ width: "340px" });
-    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe(
-      "340",
-    );
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("340");
 
     fireEvent.doubleClick(resizer);
 
     expect(sidebarShell).toHaveStyle({ width: "280px" });
-    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe(
-      "280",
-    );
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("280");
   });
 
   it("honors shell-controlled release sidebar visibility", () => {

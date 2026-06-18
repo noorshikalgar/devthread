@@ -129,10 +129,7 @@ import {
   updateCachedTaskData,
   invalidateTaskData,
 } from "@/lib/taskDataCache";
-import {
-  getCachedWorklogYear,
-  setCachedWorklogYear,
-} from "@/lib/worklogCache";
+import { getCachedWorklogYear, setCachedWorklogYear } from "@/lib/worklogCache";
 import {
   type Attachment,
   type EntryType,
@@ -867,9 +864,7 @@ export default function App() {
       normalized.provider,
     );
     setQuickLinks((current) => {
-      const next = current.map((link) =>
-        link.id === saved.id ? saved : link,
-      );
+      const next = current.map((link) => (link.id === saved.id ? saved : link));
       updateCachedTaskData(saved.taskId, { quickLinks: next });
       return next;
     });
@@ -1313,9 +1308,7 @@ export default function App() {
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
-          archiveOpen={
-            workspaceMode === "archive" && sidebarOpen
-          }
+          archiveOpen={workspaceMode === "archive" && sidebarOpen}
           onArchiveToggle={() => {
             // First click enters the archive view (with the sidebar
             // open so the user sees the list). Subsequent clicks
@@ -1418,18 +1411,18 @@ export default function App() {
             sidebarOpen && (
               <button
                 aria-label="Resize task sidebar"
-              className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
-              onDoubleClick={() => {
-                setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
-                localStorage.setItem(
-                  SIDEBAR_WIDTH_KEY,
-                  String(DEFAULT_SIDEBAR_WIDTH),
-                );
-              }}
-              onMouseDown={startSidebarResize}
-              type="button"
-            />
-          )}
+                className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none"
+                onDoubleClick={() => {
+                  setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+                  localStorage.setItem(
+                    SIDEBAR_WIDTH_KEY,
+                    String(DEFAULT_SIDEBAR_WIDTH),
+                  );
+                }}
+                onMouseDown={startSidebarResize}
+                type="button"
+              />
+            )}
         </div>
 
         <main className="flex min-h-0 min-w-0 flex-1 select-none flex-col">
@@ -1645,9 +1638,7 @@ function AppRail({
           active={tasksActive}
           icon={ListTodo}
           label={
-            tasksActive && tasksOpen
-              ? "Hide task sidebar"
-              : "Show task sidebar"
+            tasksActive && tasksOpen ? "Hide task sidebar" : "Show task sidebar"
           }
           onClick={onTaskToggle}
           tooltip="Tasks"

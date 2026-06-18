@@ -310,8 +310,9 @@ describe("TaskHeader", () => {
     expect(await screen.findByText("DevThread flow")).toBeInTheDocument();
 
     fireEvent.click(trigger);
-    expect(await screen.findByRole("menuitem", { name: /Copy link/ }))
-      .toBeInTheDocument();
+    expect(
+      await screen.findByRole("menuitem", { name: /Copy link/ }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText("DevThread flow")).not.toBeInTheDocument(),
     );
@@ -319,8 +320,9 @@ describe("TaskHeader", () => {
     fireEvent.pointerDown(document.body);
     fireEvent.click(document.body);
     await waitFor(() =>
-      expect(screen.queryByRole("menuitem", { name: /Copy link/ }))
-        .not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole("menuitem", { name: /Copy link/ }),
+      ).not.toBeInTheDocument(),
     );
     expect(screen.queryByText("DevThread flow")).not.toBeInTheDocument();
   });
@@ -366,7 +368,9 @@ describe("TaskHeader", () => {
     expect(
       screen.queryByLabelText("Start work session"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("More task actions")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("More task actions"),
+    ).not.toBeInTheDocument();
   });
 
   it("readOnly mode replaces the status popover with a static chip", () => {
@@ -749,9 +753,7 @@ describe("App workspace mode transitions", () => {
     // Open the archive view and pick the archived task.
     fireEvent.click(screen.getByLabelText("Open archive"));
     await waitFor(() =>
-      expect(
-        screen.getByLabelText("Select Archived pick"),
-      ).toBeInTheDocument(),
+      expect(screen.getByLabelText("Select Archived pick")).toBeInTheDocument(),
     );
     // Click the row body to open it in the read-only panel
     // (the checkbox is a separate multi-select target). The title
@@ -761,9 +763,7 @@ describe("App workspace mode transitions", () => {
     fireEvent.click(archivedTitles[0]!);
     // The status chip in the archive view is the static read-only one.
     await waitFor(() =>
-      expect(
-        screen.getByLabelText("Status: Archived."),
-      ).toBeInTheDocument(),
+      expect(screen.getByLabelText("Status: Archived.")).toBeInTheDocument(),
     );
 
     // Return to the task view — the active task should be re-selected,
@@ -826,15 +826,18 @@ describe("App workspace mode transitions", () => {
     expect(
       screen.queryByLabelText("Status: Archived. Click to change."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Status: Archived.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Status: Archived."),
+    ).not.toBeInTheDocument();
   });
 
   it("hydrates the active task from the per-task cache without re-fetching", async () => {
     // First load: listEntries + listQuickLinks + listAttachments fire.
     render(<App />);
     await waitFor(() =>
-      expect(screen.getByLabelText("Status: Active. Click to change."))
-        .toBeInTheDocument(),
+      expect(
+        screen.getByLabelText("Status: Active. Click to change."),
+      ).toBeInTheDocument(),
     );
     expect(api.listEntries).toHaveBeenCalledTimes(1);
     expect(api.listQuickLinks).toHaveBeenCalledTimes(1);
@@ -858,8 +861,9 @@ describe("App workspace mode transitions", () => {
     // hydrate without any new fetch.
     fireEvent.click(screen.getByLabelText("Show task sidebar"));
     await waitFor(() =>
-      expect(screen.getByLabelText("Status: Active. Click to change."))
-        .toBeInTheDocument(),
+      expect(
+        screen.getByLabelText("Status: Active. Click to change."),
+      ).toBeInTheDocument(),
     );
     expect(vi.mocked(api.listEntries).mock.calls.length).toBe(
       afterArchiveLoads,
@@ -880,9 +884,7 @@ describe("App workspace mode transitions", () => {
       expect(screen.getByLabelText("Search archive")).toBeInTheDocument(),
     );
     // The button label flips to "Hide archive sidebar" once active.
-    expect(
-      screen.getByLabelText("Hide archive sidebar"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Hide archive sidebar")).toBeInTheDocument();
 
     // Second click on the same icon — the search input should be
     // hidden (the parent sidebar collapses to width 0). We can
@@ -903,9 +905,7 @@ describe("App workspace mode transitions", () => {
       expect(outerWrapper?.style.width).toBe("0px");
     });
     // The rail label flips to indicate "Show archive sidebar".
-    expect(
-      screen.getByLabelText("Show archive sidebar"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Show archive sidebar")).toBeInTheDocument();
     // The read-only header for the selected archived task is still
     // mounted — the archive view did not bounce back to tasks.
     expect(screen.getByLabelText("Status: Archived.")).toBeInTheDocument();
@@ -920,8 +920,6 @@ describe("App workspace mode transitions", () => {
     });
     // The rail label flips back to "Hide archive sidebar" because
     // the sidebar is now visible again.
-    expect(
-      screen.getByLabelText("Hide archive sidebar"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Hide archive sidebar")).toBeInTheDocument();
   });
 });

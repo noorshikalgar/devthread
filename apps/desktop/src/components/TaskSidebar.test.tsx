@@ -30,7 +30,8 @@ describe("TaskSidebar", () => {
   it("creates a new task immediately when the new task button is pressed", async () => {
     const create = vi.fn().mockResolvedValue(undefined);
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={create}
         onCreateFolder={vi.fn()}
@@ -53,7 +54,8 @@ describe("TaskSidebar", () => {
   it("asks for a folder name before creating a folder", async () => {
     const createFolder = vi.fn().mockResolvedValue(undefined);
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={createFolder}
@@ -101,7 +103,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -137,7 +140,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -166,11 +170,17 @@ describe("TaskSidebar", () => {
     const onTogglePin = vi.fn();
     const tasks: Task[] = [
       { ...baseTask, id: "t-active", title: "Current work", status: "active" },
-      { ...baseTask, id: "t-pinned", title: "Pinned reference", status: "planned" },
+      {
+        ...baseTask,
+        id: "t-pinned",
+        title: "Pinned reference",
+        status: "planned",
+      },
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -192,8 +202,7 @@ describe("TaskSidebar", () => {
     const all = screen.getByText("All Tasks");
 
     expect(
-      active.compareDocumentPosition(pinned) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      active.compareDocumentPosition(pinned) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       pinned.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -223,7 +232,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -260,7 +270,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -280,7 +291,8 @@ describe("TaskSidebar", () => {
 
   it("limits long search input and truncates the no-match query", () => {
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -310,7 +322,8 @@ describe("TaskSidebar", () => {
 
   it("replaces the search icon with a clear action while searching", () => {
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -347,7 +360,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -392,7 +406,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -449,7 +464,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -489,7 +505,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={create}
         onCreateFolder={vi.fn()}
@@ -520,7 +537,8 @@ describe("TaskSidebar", () => {
     });
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={[]}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -568,7 +586,8 @@ describe("TaskSidebar", () => {
     ];
 
     render(
-      <TaskSidebar mode="active"
+      <TaskSidebar
+        mode="active"
         folders={folders}
         onCreate={vi.fn()}
         onCreateFolder={vi.fn()}
@@ -597,7 +616,13 @@ describe("TaskSidebar", () => {
 
 describe("TaskSidebar (archive mode)", () => {
   const folders: Folder[] = [
-    { id: "f1", name: "Engineering", releaseName: null, createdAt: "", updatedAt: "" },
+    {
+      id: "f1",
+      name: "Engineering",
+      releaseName: null,
+      createdAt: "",
+      updatedAt: "",
+    },
   ];
   const archivedTasks: Task[] = [
     { ...baseTask, id: "a1", title: "Old spike", folderId: "f1" },
@@ -637,9 +662,7 @@ describe("TaskSidebar (archive mode)", () => {
       />,
     );
     // Checkboxes are rendered with a Select- prefix aria-label.
-    expect(
-      screen.getByLabelText("Select Old spike"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Select Old spike")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Select Stale exploration"),
     ).toBeInTheDocument();
@@ -714,9 +737,11 @@ describe("TaskSidebar (archive mode)", () => {
       />,
     );
     fireEvent.click(screen.getByLabelText("Restore Old spike"));
-    await waitFor(() => expect(onRestore).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "a1" }),
-    ));
+    await waitFor(() =>
+      expect(onRestore).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "a1" }),
+      ),
+    );
     fireEvent.click(screen.getByLabelText("Delete Old spike"));
     fireEvent.click(screen.getByRole("button", { name: "Delete task" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("a1"));

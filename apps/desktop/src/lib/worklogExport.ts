@@ -267,7 +267,9 @@ function buildSheetXml(
           // already has wrapText (e.g. guideSection, bodyWrap), we
           // don't need to mark the cell again.
           const effectiveStyle =
-            cell.wrap && cell.style === undefined ? styles.bodyWrap : cell.style;
+            cell.wrap && cell.style === undefined
+              ? styles.bodyWrap
+              : cell.style;
           const styleAttr =
             effectiveStyle !== undefined ? ` s="${effectiveStyle}"` : "";
           if (typeof cell.value === "number") {
