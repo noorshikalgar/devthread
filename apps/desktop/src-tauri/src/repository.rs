@@ -84,6 +84,7 @@ pub struct Task {
     pub next_step: Option<String>,
     pub estimated_minutes: Option<i64>,
     pub folder_id: Option<String>,
+    pub release_name: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -111,6 +112,7 @@ pub struct UpdateTaskInput {
 pub struct Folder {
     pub id: String,
     pub name: String,
+    pub release_name: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -657,7 +659,7 @@ impl Database {
     pub fn list_tasks(&self) -> Result<Vec<Task>> {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
-            "SELECT id, title, description_markdown, status, next_step, estimated_minutes, folder_id, created_at, updated_at
+            "SELECT id, title, description_markdown, status, next_step, estimated_minutes, folder_id, release_name, created_at, updated_at
              FROM tasks WHERE deleted_at IS NULL ORDER BY updated_at DESC",
         )?;
         let tasks = statement
@@ -748,7 +750,7 @@ impl Database {
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
-            "SELECT id, name, created_at, updated_at FROM folders
+            "SELECT id, name, release_name, created_at, updated_at FROM folders
              WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE ASC",
         )?;
         let folders = statement
@@ -1498,7 +1500,7 @@ fn ensure_task(transaction: &Transaction<'_>, task_id: &str) -> Result<()> {
 fn get_task(connection: &Connection, task_id: &str) -> Result<Task> {
     connection
         .query_row(
-            "SELECT id, title, description_markdown, status, next_step, estimated_minutes, folder_id, created_at, updated_at
+            "SELECT id, title, description_markdown, status, next_step, estimated_minutes, folder_id, release_name, created_at, updated_at
              FROM tasks WHERE id = ?1 AND deleted_at IS NULL",
             params![task_id],
             map_task,
@@ -1510,7 +1512,7 @@ fn get_task(connection: &Connection, task_id: &str) -> Result<Task> {
 fn get_folder(connection: &Connection, folder_id: &str) -> Result<Folder> {
     connection
         .query_row(
-            "SELECT id, name, created_at, updated_at FROM folders
+            "SELECT id, name, release_name, created_at, updated_at FROM folders
              WHERE id = ?1 AND deleted_at IS NULL",
             params![folder_id],
             map_folder,
@@ -1567,8 +1569,9 @@ fn map_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         next_step: row.get(4)?,
         estimated_minutes: row.get(5)?,
         folder_id: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        release_name: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -1576,8 +1579,9 @@ fn map_folder(row: &Row<'_>) -> rusqlite::Result<Folder> {
     Ok(Folder {
         id: row.get(0)?,
         name: row.get(1)?,
-        created_at: row.get(2)?,
-        updated_at: row.get(3)?,
+        release_name: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
     })
 }
 
@@ -1705,6 +1709,44 @@ mod tests {
             folder_id: None,
         });
         assert!(matches!(result, Err(RepositoryError::Invalid(_))));
+    }
+
+    #[test]
+    fn updating_task_status_preserves_release_tag() {
+        let database = Database::memory().unwrap();
+        let release = database
+            .create_release(CreateReleaseInput {
+                name: "v0.3".into(),
+                version: Some("0.3.0".into()),
+                description_markdown: None,
+                release_status: None,
+                folder_id: None,
+            })
+            .unwrap();
+        let task = task(&database);
+        database.tag_task_release(&task.id, &release.name).unwrap();
+
+        let updated = database
+            .update_task(UpdateTaskInput {
+                id: task.id.clone(),
+                title: task.title,
+                description_markdown: task.description_markdown,
+                status: "done".into(),
+                next_step: task.next_step,
+                estimated_minutes: task.estimated_minutes,
+                folder_id: task.folder_id,
+            })
+            .unwrap();
+
+        assert_eq!(updated.status, "done");
+        assert_eq!(updated.release_name.as_deref(), Some("v0.3"));
+
+        let listed = database.list_tasks().unwrap();
+        let listed_task = listed
+            .iter()
+            .find(|candidate| candidate.id == task.id)
+            .unwrap();
+        assert_eq!(listed_task.release_name.as_deref(), Some("v0.3"));
     }
 
     #[test]
