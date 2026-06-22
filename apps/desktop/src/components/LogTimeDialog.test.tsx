@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LogTimeDialog, type LogTimeInput } from "./LogTimeDialog";
 import { renderWithProviders as render } from "../test-utils";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+});
 
 describe("LogTimeDialog", () => {
   const taskTitle = "Refine sidebar";
@@ -24,7 +26,7 @@ describe("LogTimeDialog", () => {
 
     const duration = screen.getByLabelText("Time spent");
     fireEvent.change(duration, { target: { value: "1d 3h" } });
-    expect(screen.getByText("= 1d 3h")).toBeInTheDocument();
+    expect(screen.getByText(/^= 1d 3h/)).toBeInTheDocument();
 
     // Open the calendar popover and select day 5 (past, so not disabled)
     fireEvent.click(screen.getByRole("button", { name: /\d{4}/ }));
@@ -36,7 +38,7 @@ describe("LogTimeDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Log time" }));
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
     const input = onSubmit.mock.calls[0][0] as LogTimeInput;
     expect(input.durationMinutes).toBe(8 * 60 + 3 * 60);
     expect(input.occurredAt).toMatch(/T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
@@ -88,5 +90,35 @@ describe("LogTimeDialog", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     const input = onSubmit.mock.calls[0][0] as LogTimeInput;
     expect(input.contentMarkdown).toBe("Logged 45m on Refine sidebar.");
+  });
+
+  it("back-calculates the start time from the current time and duration", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LogTimeDialog
+        now={() => new Date(2026, 5, 5, 16, 0, 0)}
+        onOpenChange={() => undefined}
+        onSubmit={onSubmit}
+        open
+        taskTitle={taskTitle}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Time spent"), {
+      target: { value: "3h" },
+    });
+
+    expect(screen.getByText("= 3h · starts 1:00 PM")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log time" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const input = onSubmit.mock.calls[0][0] as LogTimeInput;
+    const occurredAt = new Date(input.occurredAt);
+    expect(occurredAt.getFullYear()).toBe(2026);
+    expect(occurredAt.getMonth()).toBe(5);
+    expect(occurredAt.getDate()).toBe(5);
+    expect(occurredAt.getHours()).toBe(13);
+    expect(occurredAt.getMinutes()).toBe(0);
   });
 });
