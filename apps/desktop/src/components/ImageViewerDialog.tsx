@@ -97,19 +97,19 @@ export function ImageViewerDialog({ attachment, onOpenChange }: Props) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="flex max-h-[calc(100vh-32px)] w-auto max-w-[calc(100vw-32px)] flex-col items-center gap-3 border-0 bg-transparent p-0 shadow-none sm:max-w-[calc(100vw-32px)]"
+        className="left-0 top-0 flex h-dvh max-h-none w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-none sm:rounded-none"
         showCloseButton={false}
       >
         {attachment && (
-          <figure className="flex flex-col items-center gap-3">
+          <figure className="relative flex h-full w-full items-center justify-center">
             <div
-              className="relative flex max-h-[calc(100vh-180px)] max-w-[calc(100vw-32px)] items-center justify-center overflow-hidden"
+              className="flex h-full w-full items-center justify-center overflow-hidden px-4 pb-20 pt-4"
               onWheel={onWheel}
             >
               <img
                 alt={attachment.originalName}
                 className={cn(
-                  "max-h-[calc(100vh-180px)] max-w-[calc(100vw-32px)] rounded-md object-contain select-none",
+                  "max-h-full max-w-full object-contain select-none",
                   zoom > 1
                     ? dragging
                       ? "cursor-grabbing"
@@ -125,14 +125,14 @@ export function ImageViewerDialog({ attachment, onOpenChange }: Props) {
                   transformOrigin: "center center",
                 }}
               />
-              <DialogClose
-                aria-label="Close image viewer"
-                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/90 text-foreground shadow-md ring-1 ring-border backdrop-blur transition-opacity hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <X className="h-4 w-4" />
-              </DialogClose>
             </div>
-            <figcaption className="flex items-center gap-2 rounded-md bg-background/80 px-2 py-1 backdrop-blur">
+            <DialogClose
+              aria-label="Close image viewer"
+              className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-background/90 text-foreground shadow-md ring-1 ring-border backdrop-blur transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <X className="h-4 w-4" />
+            </DialogClose>
+            <figcaption className="fixed bottom-5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md bg-background/85 px-2 py-1 shadow-lg ring-1 ring-border/70 backdrop-blur">
               <Button
                 aria-label="Zoom out"
                 onClick={zoomOut}

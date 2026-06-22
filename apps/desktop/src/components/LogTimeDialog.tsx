@@ -39,6 +39,7 @@ interface Props {
 
 export interface LogTimeInput {
   occurredAt: string;
+  startedAt: string;
   durationMinutes: number;
   contentMarkdown: string;
   visibility: Visibility;
@@ -85,6 +86,13 @@ function timeFromParts(hour: string, minute: string, period: string) {
 function formatTimeLabel(value: string) {
   const { hour, minute, period } = timeParts(value);
   return `${Number(hour)}:${minute} ${period}`;
+}
+
+function formatDateTimeLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export function LogTimeDialog({
@@ -165,14 +173,16 @@ export function LogTimeDialog({
     setError("");
     setSaving(true);
     try {
-      const [hours, minutes] = time.split(":").map(Number);
-      const stamp = new Date(date);
-      stamp.setHours(hours, minutes, 0, 0);
+      const [startHours, startMinutes] = time.split(":").map(Number);
+      const startedAt = new Date(date);
+      startedAt.setHours(startHours, startMinutes, 0, 0);
+      const endedAt = new Date(startedAt.getTime() + parsedMinutes * 60_000);
       const content =
         note.trim() ||
-        `Logged ${formatDuration(parsedMinutes)} on ${taskTitle}.`;
+        `Logged ${formatDuration(parsedMinutes)} from ${formatDateTimeLabel(startedAt)} to ${formatDateTimeLabel(endedAt)} on ${taskTitle}.`;
       await onSubmit({
-        occurredAt: stamp.toISOString(),
+        occurredAt: endedAt.toISOString(),
+        startedAt: startedAt.toISOString(),
         durationMinutes: parsedMinutes,
         contentMarkdown: content,
         visibility,

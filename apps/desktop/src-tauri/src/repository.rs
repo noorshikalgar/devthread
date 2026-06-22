@@ -19,6 +19,8 @@ const ESTIMATE_ENTRY_TYPE_MIGRATION: &str =
     include_str!("../migrations/006_estimate_entry_type.sql");
 const QUICK_LINK_MIGRATION: &str = include_str!("../migrations/007_quick_links.sql");
 const RELEASE_MIGRATION: &str = include_str!("../migrations/008_releases.sql");
+const WORKLOG_STARTED_AT_MIGRATION: &str =
+    include_str!("../migrations/010_worklog_started_at.sql");
 const MAX_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
 const MAX_QUICK_LINKS_PER_TASK: i64 = 3;
 const TASK_STATUSES: &[&str] = &["planned", "active", "blocked", "paused", "done", "archived"];
@@ -150,6 +152,8 @@ pub struct WorkLogEntry {
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_minutes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -175,6 +179,8 @@ pub struct CreateEntryInput {
     pub duration_minutes: Option<i64>,
     #[serde(default)]
     pub occurred_at: Option<String>,
+    #[serde(default)]
+    pub started_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -336,6 +342,7 @@ impl Database {
         Self::ensure_worklog_entry_type(connection)?;
         Self::ensure_status_entry_type(connection)?;
         Self::ensure_estimate_entry_type(connection)?;
+        Self::ensure_work_log_started_at_column(connection)?;
         connection.execute_batch(FOLDER_MIGRATION)?;
         connection.execute_batch(QUICK_LINK_MIGRATION)?;
         connection.execute_batch(RELEASE_MIGRATION)?;
@@ -425,6 +432,19 @@ impl Database {
             "ALTER TABLE work_log_entries ADD COLUMN duration_minutes INTEGER",
             [],
         )?;
+        Ok(())
+    }
+
+    fn ensure_work_log_started_at_column(connection: &Connection) -> Result<()> {
+        let mut pragma_columns = connection.prepare("PRAGMA table_info(work_log_entries)")?;
+        let names: Vec<String> = pragma_columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .map(|entry| entry.map_err(RepositoryError::Database))
+            .collect::<Result<Vec<_>>>()?;
+        if names.iter().any(|name| name == "started_at") {
+            return Ok(());
+        }
+        connection.execute_batch(WORKLOG_STARTED_AT_MIGRATION)?;
         Ok(())
     }
 
@@ -1048,7 +1068,7 @@ impl Database {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
             "SELECT id, task_id, entry_type, content_markdown, visibility, occurred_at,
-             created_at, updated_at, duration_minutes FROM work_log_entries
+             created_at, updated_at, duration_minutes, started_at FROM work_log_entries
              WHERE task_id = ?1 AND deleted_at IS NULL
              ORDER BY occurred_at DESC, id DESC LIMIT ?2 OFFSET ?3",
         )?;
@@ -1117,8 +1137,8 @@ impl Database {
         transaction.execute(
             "INSERT INTO work_log_entries
              (id, task_id, entry_type, content_markdown, visibility, occurred_at,
-              created_at, updated_at, duration_minutes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?6, ?7)",
+              created_at, updated_at, duration_minutes, started_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?8, ?8, ?7, ?9)",
             params![
                 id,
                 input.task_id,
@@ -1127,6 +1147,8 @@ impl Database {
                 input.visibility,
                 occurred_at,
                 input.duration_minutes,
+                now,
+                input.started_at,
             ],
         )?;
         transaction.execute(
@@ -1452,7 +1474,7 @@ fn write_revision(transaction: &Transaction<'_>, entry_id: &str, source: &str) -
     let entry = transaction
         .query_row(
             "SELECT id, task_id, entry_type, content_markdown, visibility, occurred_at,
-             created_at, updated_at, duration_minutes FROM work_log_entries
+             created_at, updated_at, duration_minutes, started_at FROM work_log_entries
              WHERE id = ?1 AND deleted_at IS NULL",
             params![entry_id],
             map_entry,
@@ -1539,7 +1561,7 @@ fn get_entry(connection: &Connection, entry_id: &str) -> Result<WorkLogEntry> {
     connection
         .query_row(
             "SELECT id, task_id, entry_type, content_markdown, visibility, occurred_at,
-             created_at, updated_at, duration_minutes FROM work_log_entries
+             created_at, updated_at, duration_minutes, started_at FROM work_log_entries
              WHERE id = ?1 AND deleted_at IS NULL",
             params![entry_id],
             map_entry,
@@ -1596,6 +1618,7 @@ fn map_entry(row: &Row<'_>) -> rusqlite::Result<WorkLogEntry> {
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
         duration_minutes: row.get(8)?,
+        started_at: row.get(9)?,
     })
 }
 
@@ -1691,6 +1714,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: None,
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap()
     }
@@ -1753,6 +1777,7 @@ mod tests {
     fn worklog_entry_type_is_accepted_and_round_trips() {
         let database = Database::memory().unwrap();
         let task = task(&database);
+        let started_at = "2026-06-05T13:00:00Z".to_owned();
         let logged = database
             .create_entry(CreateEntryInput {
                 task_id: task.id.clone(),
@@ -1761,14 +1786,17 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: Some(8 * 60 + 3 * 60),
                 occurred_at: None,
+                started_at: Some(started_at.clone()),
             })
             .unwrap();
         assert_eq!(logged.entry_type, "worklog");
         assert_eq!(logged.duration_minutes, Some(8 * 60 + 3 * 60));
+        assert_eq!(logged.started_at.as_deref(), Some(started_at.as_str()));
 
         let listed = database.list_entries(&task.id, 50, 0).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].entry_type, "worklog");
+        assert_eq!(listed[0].started_at.as_deref(), Some(started_at.as_str()));
     }
 
     #[test]
@@ -1783,6 +1811,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: None,
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap();
         assert_eq!(logged.entry_type, "status");
@@ -1817,6 +1846,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: Some(480),
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap();
         assert_eq!(logged.entry_type, "estimate");
@@ -1836,6 +1866,7 @@ mod tests {
                     visibility: "private".into(),
                     duration_minutes: (entry_type == "worklog").then_some(30),
                     occurred_at: None,
+                started_at: None,
                 })
                 .unwrap();
             let result = database.trash_entry(&entry.id);
@@ -1855,6 +1886,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: Some(90),
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap();
         database
@@ -1865,6 +1897,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: Some(90),
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap();
 
@@ -1968,6 +2001,7 @@ mod tests {
                 visibility: "private".into(),
                 duration_minutes: Some(120),
                 occurred_at: None,
+                started_at: None,
             })
             .unwrap();
         assert_eq!(logged.entry_type, "worklog");

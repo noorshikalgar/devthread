@@ -43,6 +43,7 @@ describe("LogTimeDialog", () => {
     expect(input.durationMinutes).toBe(8 * 60 + 3 * 60);
     expect(input.occurredAt).toMatch(/T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     expect(input.occurredAt).toContain("-05T");
+    expect(input.startedAt).toMatch(/T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     expect(input.contentMarkdown).toContain("Punted the sidebar to v2.");
     expect(input.visibility).toBe("private");
   });
@@ -89,7 +90,9 @@ describe("LogTimeDialog", () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     const input = onSubmit.mock.calls[0][0] as LogTimeInput;
-    expect(input.contentMarkdown).toBe("Logged 45m on Refine sidebar.");
+    expect(input.contentMarkdown).toMatch(
+      /^Logged 45m from .+ to .+ on Refine sidebar\.$/,
+    );
   });
 
   it("back-calculates the start time from the current time and duration", async () => {
@@ -114,11 +117,18 @@ describe("LogTimeDialog", () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const input = onSubmit.mock.calls[0][0] as LogTimeInput;
+    const startedAt = new Date(input.startedAt);
+    expect(startedAt.getFullYear()).toBe(2026);
+    expect(startedAt.getMonth()).toBe(5);
+    expect(startedAt.getDate()).toBe(5);
+    expect(startedAt.getHours()).toBe(13);
+    expect(startedAt.getMinutes()).toBe(0);
+
     const occurredAt = new Date(input.occurredAt);
     expect(occurredAt.getFullYear()).toBe(2026);
     expect(occurredAt.getMonth()).toBe(5);
     expect(occurredAt.getDate()).toBe(5);
-    expect(occurredAt.getHours()).toBe(13);
+    expect(occurredAt.getHours()).toBe(16);
     expect(occurredAt.getMinutes()).toBe(0);
   });
 });

@@ -649,6 +649,14 @@ function EntryMetaChips({ entry }: { entry: WorkLogEntry }) {
           {formatDuration(entry.durationMinutes)}
         </span>
       )}
+      {entry.startedAt && (
+        <span
+          aria-label={`Started at ${formatMessageTimestamp(entry.startedAt)}`}
+          className="inline-flex h-5 items-center justify-center rounded border border-border/70 px-2 font-mono text-[10px] text-foreground/80"
+        >
+          Started {formatMessageTimestamp(entry.startedAt)}
+        </span>
+      )}
     </div>
   );
 }
