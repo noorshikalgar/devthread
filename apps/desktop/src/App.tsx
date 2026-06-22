@@ -928,6 +928,7 @@ export default function App() {
 
   async function logTime(input: {
     occurredAt: string;
+    startedAt: string;
     durationMinutes: number;
     contentMarkdown: string;
     visibility: Visibility;
@@ -940,6 +941,7 @@ export default function App() {
       input.visibility,
       input.durationMinutes,
       input.occurredAt,
+      input.startedAt,
     );
     setEntries((current) => {
       const next = [entry, ...current];

@@ -128,6 +128,7 @@ describe("Timeline", () => {
       ...entry,
       id: "entry-timed",
       durationMinutes: 11 * 60 + 15,
+      startedAt: "2026-06-05T13:00:00Z",
     };
     render(
       <Timeline
@@ -145,6 +146,7 @@ describe("Timeline", () => {
     );
 
     expect(screen.getByLabelText("Time spent 1d 3h 15m")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Started at/)).toBeInTheDocument();
   });
 
   it("renders timeline rail dates as readable full labels without a year", () => {

@@ -66,6 +66,7 @@ export interface WorkLogEntry {
   createdAt: string;
   updatedAt: string;
   durationMinutes: number | null;
+  startedAt?: string | null;
 }
 
 export interface WorklogMetricEntry {

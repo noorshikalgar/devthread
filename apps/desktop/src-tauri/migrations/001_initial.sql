@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS work_log_entries (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   duration_minutes INTEGER,
+  started_at TEXT,
   deleted_at TEXT
 );
 
