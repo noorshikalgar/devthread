@@ -239,7 +239,7 @@ export function TaskHeader({
                 <TooltipTrigger asChild>
                   <button
                     aria-label="Edit task title"
-                    className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight hover:bg-accent/60"
+                    className="-mx-1.5 -my-0.5 flex min-w-0 flex-1 items-center rounded px-1.5 py-0.5 text-left text-[20px] font-semibold leading-tight tracking-tight transition-colors duration-fast hover:bg-accent/60"
                     onClick={() => setTitleDraft(task.title)}
                     type="button"
                   >
@@ -309,9 +309,9 @@ export function TaskHeader({
                     <button
                       aria-pressed={timelineViewMode === option.value}
                       className={cn(
-                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
                         timelineViewMode === option.value &&
-                          "bg-background text-foreground shadow-sm",
+                          "bg-background text-foreground shadow-xs",
                       )}
                       key={option.value}
                       onClick={() => onTimelineViewModeChange(option.value)}
@@ -429,7 +429,7 @@ export function TaskHeader({
               <PopoverTrigger asChild>
                 <button
                   aria-label={`Status: ${statusLabel}. Click to change.`}
-                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                  className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground transition-colors duration-fast hover:bg-accent"
                   type="button"
                 >
                   <span
@@ -526,7 +526,7 @@ export function TaskHeader({
                         ? `Release: ${releases?.find((r) => r.name === task.releaseName)?.name ?? task.releaseName}. Click to change.`
                         : "Assign release. Click to choose."
                     }
-                    className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground hover:bg-accent"
+                    className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-[11px] text-foreground transition-colors duration-fast hover:bg-accent"
                     type="button"
                   >
                     <Tag className="size-3 text-muted-foreground" />

@@ -71,7 +71,7 @@ interface ChartTooltipProps {
 function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/20">
+    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
       <p className="font-medium text-popover-foreground">{String(label)}</p>
       {payload.map((entry, index) => (
         <p

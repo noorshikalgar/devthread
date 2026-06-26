@@ -456,7 +456,7 @@ export function Composer({
             {mention.active && filteredOptions.length > 0 && (
               <div
                 aria-label="Entry type suggestions"
-                className="absolute left-2 top-9 z-50 w-80 max-w-[calc(100%-1rem)] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+                className="absolute left-2 top-9 z-50 w-80 max-w-[calc(100%-1rem)] animate-in rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg fade-in-0 zoom-in-95 duration-fast"
                 ref={mentionList}
                 role="listbox"
               >
@@ -467,7 +467,7 @@ export function Composer({
                     <button
                       aria-selected={active}
                       className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs",
+                        "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors duration-fast",
                         active
                           ? "bg-accent text-accent-foreground"
                           : "hover:bg-accent/60",
@@ -528,7 +528,7 @@ export function Composer({
           <div className="flex gap-2 overflow-x-auto pb-1">
             {links.map((link) => (
               <a
-                className="flex min-w-[200px] max-w-[280px] flex-col rounded-md border border-border bg-muted/40 px-3 py-2 text-xs hover:bg-accent"
+                className="flex min-w-[200px] max-w-[280px] flex-col rounded-md border border-border bg-muted/40 px-3 py-2 text-xs transition-colors duration-fast hover:bg-accent"
                 href={safeExternalUrl(link.url) ?? "#"}
                 key={link.url}
                 onClick={(event) => {
@@ -633,7 +633,7 @@ export function Composer({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                className="h-7 gap-1.5 px-3 text-xs font-medium shadow-sm transition-transform active:scale-[0.98] [&_svg]:size-3.5"
+                className="h-7 gap-1.5 px-3 text-xs font-medium [&_svg]:size-3.5"
                 disabled={submitDisabled}
                 onClick={() => void submit()}
                 size="sm"

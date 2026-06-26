@@ -222,8 +222,10 @@ export function CommandPalette({
         </div>
         <div className="max-h-80 overflow-auto p-1.5">
           {results.length === 0 && (
-            <div className="flex flex-col items-center gap-1 px-3 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-4 opacity-60" />
+            <div className="flex flex-col items-center gap-2 px-3 py-8 text-center text-xs text-muted-foreground">
+              <div className="flex size-9 items-center justify-center rounded-full bg-muted/60">
+                <ListTodo className="size-4 opacity-70" />
+              </div>
               <span>
                 {query.trim()
                   ? regex && !createMatcher(query.trim(), true)
@@ -244,7 +246,7 @@ export function CommandPalette({
                 return (
                   <button
                     className={cn(
-                      "flex w-full items-start gap-2 rounded-sm px-1.5 py-1.5 text-left text-xs",
+                      "flex w-full items-start gap-2 rounded-sm px-1.5 py-1.5 text-left text-xs transition-colors duration-fast",
                       active
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-accent/60",

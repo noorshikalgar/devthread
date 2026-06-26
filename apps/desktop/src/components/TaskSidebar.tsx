@@ -374,13 +374,13 @@ function ActiveSidebar({
             >
               <button
                 aria-expanded={openActiveTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors duration-fast hover:text-foreground"
                 onClick={() => setOpenActiveTasks((open) => !open)}
                 type="button"
               >
                 <ChevronRight
                   className={cn(
-                    "size-3.5 transition-transform duration-150 ease-out",
+                    "size-3.5 transition-transform duration-base ease-emphasized",
                     openActiveTasks && "rotate-90",
                   )}
                 />
@@ -432,13 +432,13 @@ function ActiveSidebar({
             >
               <button
                 aria-expanded={openPinnedTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors duration-fast hover:text-foreground"
                 onClick={() => setOpenPinnedTasks((open) => !open)}
                 type="button"
               >
                 <ChevronRight
                   className={cn(
-                    "size-3.5 transition-transform duration-150 ease-out",
+                    "size-3.5 transition-transform duration-base ease-emphasized",
                     openPinnedTasks && "rotate-90",
                   )}
                 />
@@ -479,7 +479,7 @@ function ActiveSidebar({
           )}
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
-            <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
+            <div className="px-0.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
               {isSearching ? "Search results" : "All Tasks"}
             </div>
             {isSearching
@@ -555,8 +555,10 @@ function ActiveSidebar({
           </div>
 
           {!hasAnyContent && (
-            <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-5 opacity-60" strokeWidth={1.75} />
+            <div className="flex flex-col items-center gap-3 px-2 py-10 text-center text-xs text-muted-foreground animate-in fade-in-0 duration-base">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">
+                <ListTodo className="size-4 opacity-70" strokeWidth={1.75} />
+              </div>
               {searchTerm ? (
                 <span className="max-w-full truncate">
                   No tasks match “{noResultsQuery}”.

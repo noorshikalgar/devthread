@@ -10,21 +10,21 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 export const STATUS_DOT: Record<TaskStatus, string> = {
-  planned: "bg-slate-400",
-  active: "bg-emerald-500",
-  blocked: "bg-amber-500",
-  paused: "bg-sky-500",
-  done: "bg-violet-500",
-  archived: "bg-zinc-400",
+  planned: "bg-muted-foreground/50",
+  active: "bg-success",
+  blocked: "bg-destructive",
+  paused: "bg-info",
+  done: "bg-primary",
+  archived: "bg-muted-foreground/30",
 };
 
 export const STATUS_BG: Record<TaskStatus, string> = {
-  planned: "bg-slate-500/15 text-slate-600 dark:text-slate-300",
-  active: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
-  blocked: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-  paused: "bg-sky-500/15 text-sky-600 dark:text-sky-300",
-  done: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
-  archived: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
+  planned: "bg-muted text-muted-foreground",
+  active: "bg-success/15 text-success",
+  blocked: "bg-destructive/15 text-destructive",
+  paused: "bg-info/15 text-info",
+  done: "bg-primary/10 text-primary",
+  archived: "bg-muted/60 text-muted-foreground/70",
 };
 
 export const STATUS_ORDER: TaskStatus[] = [
@@ -49,27 +49,27 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
 };
 
 export const ENTRY_DOT: Record<EntryType, string> = {
-  progress: "bg-sky-500",
-  next_step: "bg-sky-500",
-  finding: "bg-emerald-500",
-  blocker: "bg-amber-500",
-  decision: "bg-violet-500",
+  progress: "bg-info",
+  next_step: "bg-info",
+  finding: "bg-success",
+  blocker: "bg-warning",
+  decision: "bg-[hsl(var(--chart-4))]",
   note: "bg-muted-foreground",
-  worklog: "bg-cyan-500",
-  status: "bg-blue-500",
-  estimate: "bg-fuchsia-500",
+  worklog: "bg-[hsl(var(--chart-3))]",
+  status: "bg-[hsl(var(--chart-1))]",
+  estimate: "bg-[hsl(var(--chart-2))]",
 };
 
 export const ENTRY_BG: Record<EntryType, string> = {
-  progress: "bg-sky-500/15 text-sky-600 dark:text-sky-300",
-  next_step: "bg-sky-500/15 text-sky-600 dark:text-sky-300",
-  finding: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
-  blocker: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-  decision: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
+  progress: "bg-info/15 text-info",
+  next_step: "bg-info/15 text-info",
+  finding: "bg-success/15 text-success",
+  blocker: "bg-warning/15 text-warning",
+  decision: "bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))]",
   note: "bg-muted text-muted-foreground",
-  worklog: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300",
-  status: "bg-blue-500/15 text-blue-600 dark:text-blue-300",
-  estimate: "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300",
+  worklog: "bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))]",
+  status: "bg-[hsl(var(--chart-1)/0.15)] text-[hsl(var(--chart-1))]",
+  estimate: "bg-[hsl(var(--chart-2)/0.15)] text-[hsl(var(--chart-2))]",
 };
 
 export const VISIBILITY_LABEL: Record<Visibility, string> = {
@@ -79,5 +79,5 @@ export const VISIBILITY_LABEL: Record<Visibility, string> = {
 
 export const VISIBILITY_BG: Record<Visibility, string> = {
   private: "bg-muted text-muted-foreground",
-  report: "bg-sky-500/15 text-sky-600 dark:text-sky-300",
+  report: "bg-info/15 text-info",
 };

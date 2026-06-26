@@ -192,7 +192,7 @@ export function WorklogHeatmap({
               <button
                 aria-label={`${day.key} ${formatHM(day.minutes)}`}
                 className={cn(
-                  "aspect-square rounded-[3px] border border-border/45 transition duration-150 hover:scale-110 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "aspect-square rounded-[3px] border border-border/45 transition duration-base ease-emphasized hover:scale-110 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   hasTime ? HEATMAP_LEVELS[bucket]! : "bg-muted/35",
                   !isInSelectedRange && "opacity-25",
                   isSelected &&
@@ -231,7 +231,7 @@ export function WorklogHeatmap({
       {hover && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-50 max-w-[200px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg shadow-black/30"
+          className="pointer-events-none fixed z-50 max-w-[200px] animate-in rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg fade-in-0 zoom-in-95 duration-fast"
           style={{ top: hover.top, left: hover.left, width: TOOLTIP_WIDTH }}
         >
           <p className="font-medium text-popover-foreground">

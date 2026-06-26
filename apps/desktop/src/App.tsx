@@ -81,7 +81,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -2754,7 +2756,7 @@ function WorklogPeriodBreakdown({
                 <span
                   className={cn(
                     "block h-full rounded-full",
-                    hitGoal ? "bg-emerald-400/70" : "bg-primary/55",
+                    hitGoal ? "bg-success/70" : "bg-primary/55",
                   )}
                   style={{ width: `${fillPercent}%` }}
                 />
@@ -2771,7 +2773,7 @@ function WorklogPeriodBreakdown({
                 className={cn(
                   "text-right font-mono text-[10px] tabular-nums",
                   hitGoal
-                    ? "text-emerald-400"
+                    ? "text-success"
                     : rawPercent >= 75
                       ? "text-foreground"
                       : "text-muted-foreground",
@@ -3092,9 +3094,10 @@ function RailButton({
           aria-label={label}
           aria-pressed={active}
           className={cn(
-            "relative rounded-md",
+            "relative rounded-md transition-all duration-base ease-emphasized",
+            "before:absolute before:left-[-9px] before:top-1/2 before:h-0 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:transition-all before:duration-base before:ease-emphasized",
             active &&
-              "bg-secondary text-secondary-foreground before:absolute before:left-[-9px] before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+              "bg-secondary text-secondary-foreground before:h-5",
           )}
           onClick={onClick}
           size="icon-sm"
@@ -3128,8 +3131,8 @@ function StatusBar({
       <div className="flex min-w-0 items-center gap-2.5">
         <span className="inline-flex items-center gap-1.5 text-foreground/85">
           <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/45" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/45" />
+            <span className="relative inline-flex size-2 rounded-full bg-success" />
           </span>
           Local-first
         </span>
@@ -3683,12 +3686,9 @@ function SettingsDialog({
                       </p>
                     </div>
                     <label className="flex shrink-0 items-center gap-2 text-xs">
-                      <input
+                      <Switch
                         checked={updateAutoCheck}
-                        onChange={(event) =>
-                          onUpdateAutoCheckChange(event.target.checked)
-                        }
-                        type="checkbox"
+                        onCheckedChange={onUpdateAutoCheckChange}
                       />
                       <span>{updateAutoCheck ? "Enabled" : "Disabled"}</span>
                     </label>
@@ -3770,12 +3770,7 @@ function SettingsDialog({
                     </p>
                   )}
                   {updateState === "downloading" && (
-                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-[width]"
-                        style={{ width: `${downloadProgress}%` }}
-                      />
-                    </div>
+                    <Progress className="mt-4" value={downloadProgress} />
                   )}
                 </div>
               </div>
@@ -3828,7 +3823,7 @@ function SettingsTabButton({
   return (
     <button
       className={cn(
-        "relative flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
+        "relative flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors duration-fast hover:bg-accent hover:text-foreground",
         active && "bg-secondary text-secondary-foreground",
       )}
       onClick={onClick}

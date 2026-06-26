@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Kbd as KbdBase } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
 const isMac =
@@ -118,11 +119,7 @@ export function ShortcutsTab() {
 
 function Kbd({ keys }: { keys: string }) {
   if (!isMac) {
-    return (
-      <kbd className="inline-flex items-center rounded border border-border bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
-        {keys}
-      </kbd>
-    );
+    return <KbdBase className="h-auto px-2 py-0.5 text-[11px]">{keys}</KbdBase>;
   }
   const parts = keys.split(/(\s|\/)/).filter(Boolean);
   return (
@@ -136,15 +133,15 @@ function Kbd({ keys }: { keys: string }) {
             {part === " " ? "+" : "/"}
           </span>
         ) : (
-          <kbd
+          <KbdBase
             className={cn(
-              "inline-flex min-w-[1.5rem] items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground",
+              "h-auto min-w-[1.5rem] justify-center px-1.5 py-0.5 text-[11px]",
               part.length > 1 && "px-2",
             )}
             key={`${part}-${index}`}
           >
             {part}
-          </kbd>
+          </KbdBase>
         ),
       )}
     </span>

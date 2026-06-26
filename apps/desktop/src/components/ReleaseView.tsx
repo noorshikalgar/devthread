@@ -72,9 +72,9 @@ const RELEASE_STATUS_LABEL: Record<ReleaseStatus, string> = {
   released: "Released",
 };
 const RELEASE_STATUS_DOT: Record<ReleaseStatus, string> = {
-  draft: "bg-slate-400",
-  pre_release: "bg-amber-500",
-  released: "bg-emerald-500",
+  draft: "bg-muted-foreground/50",
+  pre_release: "bg-warning",
+  released: "bg-success",
 };
 
 function loadPinnedReleaseNames(): string[] {
@@ -230,12 +230,12 @@ interface TasksTabRowProps {
 }
 
 const RELEASE_STATUS_BADGE: Record<Task["status"], string> = {
-  planned: "border-slate-500/35 bg-slate-500/10 text-slate-500",
-  active: "border-emerald-500/35 bg-emerald-500/10 text-emerald-500",
-  blocked: "border-amber-500/35 bg-amber-500/10 text-amber-500",
-  paused: "border-sky-500/35 bg-sky-500/10 text-sky-500",
-  done: "border-violet-500/35 bg-violet-500/10 text-violet-500",
-  archived: "border-zinc-500/35 bg-zinc-500/10 text-zinc-500",
+  planned: "border-border bg-muted/50 text-muted-foreground",
+  active: "border-success/35 bg-success/10 text-success",
+  blocked: "border-destructive/35 bg-destructive/10 text-destructive",
+  paused: "border-info/35 bg-info/10 text-info",
+  done: "border-border bg-muted/30 text-muted-foreground/70",
+  archived: "border-border bg-muted/20 text-muted-foreground/50",
 };
 
 function TruncatedTaskTitle({ title }: { title: string }) {
@@ -1258,7 +1258,7 @@ export function ReleaseView({
                   </span>
                   {selectedReleaseStatus === "pre_release" &&
                     releaseBlockedReason && (
-                      <span className="inline-flex min-w-0 items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                      <span className="inline-flex min-w-0 items-center gap-1 rounded border border-warning/25 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                         <AlertTriangle
                           aria-hidden
                           className="size-3 shrink-0"
