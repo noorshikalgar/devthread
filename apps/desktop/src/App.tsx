@@ -1262,6 +1262,19 @@ export default function App() {
       setSidebarOpen((open) => !open);
     },
     onOpenWorklog: () => setWorkspaceMode("worklog"),
+    onOpenReleases: () => {
+      if (workspaceMode !== "releases") {
+        setWorkspaceMode("releases");
+        setReleaseSidebarOpen(true);
+        localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "true");
+        return;
+      }
+      setReleaseSidebarOpen((open) => {
+        const next = !open;
+        localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, String(next));
+        return next;
+      });
+    },
     onEditTitle: () => {
       if (selectedTask) setPendingTitleEdit(true);
     },

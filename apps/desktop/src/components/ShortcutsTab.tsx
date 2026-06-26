@@ -1,9 +1,18 @@
-import { KeyboardIcon } from "lucide-react";
+import {
+  ArrowUpDown,
+  Compass,
+  FileText,
+  KeyboardIcon,
+  PenLine,
+  Search,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Kbd as KbdBase } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
@@ -19,65 +28,134 @@ const joinMod = (...parts: string[]) =>
 interface Shortcut {
   keys: string;
   description: string;
+  /** Letter in the description that matches the mnemonic key, highlighted so the binding "snaps" to the action. */
+  mnemonic?: string;
 }
 
 interface Group {
   label: string;
+  icon: typeof Compass;
   shortcuts: Shortcut[];
 }
 
 const GROUPS: Group[] = [
   {
-    label: "Global",
+    label: "Workspaces",
+    icon: Compass,
     shortcuts: [
       { keys: joinMod(MOD, "K"), description: "Open command palette" },
       { keys: joinMod(MOD, ","), description: "Open settings" },
-      { keys: joinMod(MOD, "N"), description: "New task" },
-      { keys: joinMod(MOD, SHIFT, "N"), description: "New folder" },
       { keys: joinMod(MOD, "B"), description: "Toggle task sidebar" },
-      { keys: joinMod(MOD, SHIFT, "A"), description: "Toggle archive view" },
-      { keys: joinMod(MOD, SHIFT, "W"), description: "Open worklog view" },
+      {
+        keys: joinMod(MOD, SHIFT, "A"),
+        description: "Archive view",
+        mnemonic: "A",
+      },
+      {
+        keys: joinMod(MOD, SHIFT, "W"),
+        description: "Worklog view",
+        mnemonic: "W",
+      },
+      {
+        keys: joinMod(MOD, SHIFT, "R"),
+        description: "Releases view",
+        mnemonic: "R",
+      },
     ],
   },
   {
-    label: "Task header",
+    label: "Tasks",
+    icon: ArrowUpDown,
     shortcuts: [
-      { keys: joinMod(MOD, "E"), description: "Edit title" },
-      { keys: joinMod(MOD, "L"), description: "Open log-time dialog" },
-      { keys: joinMod(MOD, "F"), description: "Focus timeline search" },
+      { keys: joinMod(MOD, "N"), description: "New task", mnemonic: "N" },
+      {
+        keys: joinMod(MOD, SHIFT, "N"),
+        description: "New folder",
+        mnemonic: "N",
+      },
+      { keys: joinMod(MOD, "↓"), description: "Next task in sidebar" },
+      { keys: joinMod(MOD, "↑"), description: "Previous task in sidebar" },
+    ],
+  },
+  {
+    label: "Task detail",
+    icon: FileText,
+    shortcuts: [
+      { keys: joinMod(MOD, "E"), description: "Edit title", mnemonic: "E" },
+      {
+        keys: joinMod(MOD, "L"),
+        description: "Log time",
+        mnemonic: "L",
+      },
+      {
+        keys: joinMod(MOD, "F"),
+        description: "Find in timeline",
+        mnemonic: "F",
+      },
       {
         keys: joinMod(MOD, SHIFT, "C"),
-        description: "Copy task summary (Markdown)",
+        description: "Copy summary as Markdown",
+        mnemonic: "C",
       },
       {
         keys: joinMod(MOD, SHIFT, "E"),
-        description: "Copy task summary (CSV)",
+        description: "Export summary as CSV",
+        mnemonic: "E",
       },
-      { keys: joinMod(MOD, "⌫"), description: "Archive / restore" },
-      { keys: joinMod(MOD, SHIFT, "⌫"), description: "Delete (with confirm)" },
+      { keys: joinMod(MOD, "⌫"), description: "Archive / restore task" },
+      {
+        keys: joinMod(MOD, SHIFT, "⌫"),
+        description: "Delete task (with confirm)",
+      },
     ],
   },
   {
     label: "Composer",
+    icon: PenLine,
     shortcuts: [
       { keys: "@", description: "Open entry-type picker" },
       { keys: `↑ / ↓`, description: "Move mention selection" },
       { keys: `Enter / Tab`, description: "Insert selected type" },
       { keys: `Esc`, description: "Close mention picker" },
       { keys: joinMod(MOD, "↵"), description: "Submit entry" },
-      { keys: joinMod(MOD, SHIFT, "P"), description: "Toggle visibility" },
-    ],
-  },
-  {
-    label: "Navigation",
-    shortcuts: [
-      { keys: joinMod(MOD, "↓"), description: "Next task in sidebar" },
-      { keys: joinMod(MOD, "↑"), description: "Previous task in sidebar" },
+      {
+        keys: joinMod(MOD, SHIFT, "P"),
+        description: "Toggle Private / Report visibility",
+        mnemonic: "P",
+      },
     ],
   },
 ];
 
+function highlightMnemonic(description: string, mnemonic?: string) {
+  if (!mnemonic) return description;
+  const index = description.indexOf(mnemonic);
+  if (index === -1) return description;
+  return (
+    <>
+      {description.slice(0, index)}
+      <span className="font-semibold text-foreground underline decoration-primary/60 decoration-2 underline-offset-2">
+        {description[index]}
+      </span>
+      {description.slice(index + 1)}
+    </>
+  );
+}
+
 export function ShortcutsTab() {
+  const [query, setQuery] = useState("");
+
+  const filteredGroups = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return GROUPS;
+    return GROUPS.map((group) => ({
+      ...group,
+      shortcuts: group.shortcuts.filter((shortcut) =>
+        shortcut.description.toLowerCase().includes(term),
+      ),
+    })).filter((group) => group.shortcuts.length > 0);
+  }, [query]);
+
   return (
     <>
       <DialogHeader>
@@ -87,24 +165,40 @@ export function ShortcutsTab() {
         </DialogTitle>
         <DialogDescription>
           {isMac
-            ? "Keyboard shortcuts use ⌘ (Command). They work anywhere in the app, including while typing in inputs."
-            : "Keyboard shortcuts use Ctrl. They work anywhere in the app, including while typing in inputs."}
+            ? "Shortcuts use ⌘ (Command). They work anywhere, including while typing — the mnemonic letter is underlined so it sticks."
+            : "Shortcuts use Ctrl. They work anywhere, including while typing — the mnemonic letter is underlined so it sticks."}
         </DialogDescription>
       </DialogHeader>
-      <div className="mt-6 space-y-6 overflow-y-auto pr-2">
-        {GROUPS.map((group) => (
+      <div className="relative mt-4">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          aria-label="Filter shortcuts"
+          className="h-8 pl-7 text-xs"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Filter shortcuts…"
+          value={query}
+        />
+      </div>
+      <div className="mt-4 space-y-6 overflow-y-auto pr-2">
+        {filteredGroups.length === 0 && (
+          <p className="py-8 text-center text-xs text-muted-foreground">
+            No shortcuts match “{query}”.
+          </p>
+        )}
+        {filteredGroups.map((group) => (
           <section key={group.label}>
-            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <h3 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <group.icon className="size-3.5" />
               {group.label}
             </h3>
             <div className="mt-2 divide-y divide-border/60 rounded-md border border-border/60">
               {group.shortcuts.map((shortcut) => (
                 <div
                   className="flex items-center justify-between gap-3 px-3 py-2"
-                  key={shortcut.keys}
+                  key={shortcut.keys + shortcut.description}
                 >
                   <span className="text-sm text-foreground">
-                    {shortcut.description}
+                    {highlightMnemonic(shortcut.description, shortcut.mnemonic)}
                   </span>
                   <Kbd keys={shortcut.keys} />
                 </div>
