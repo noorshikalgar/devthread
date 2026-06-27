@@ -147,11 +147,19 @@ function ReleaseSidebarRow({
         aria-hidden
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          dimmed ? "bg-muted-foreground/35" : "bg-primary",
+          dimmed ? "bg-muted-foreground/35" : RELEASE_STATUS_DOT[release.releaseStatus],
         )}
       />
       <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
         {release.name}
+        {release.version && (
+          <span className="ml-1.5 text-xs text-muted-foreground/70">
+            {release.version}
+          </span>
+        )}
+      </span>
+      <span className="hidden shrink-0 text-[10px] text-muted-foreground/70 group-hover/release:hidden sm:inline">
+        {RELEASE_STATUS_LABEL[release.releaseStatus]}
       </span>
       <span
         aria-label={isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`}
