@@ -1413,7 +1413,7 @@ function TaskRow({
         </ContextMenuItem>
         {onTogglePin && (
           <ContextMenuItem onSelect={() => onTogglePin(task.id)}>
-            <Pin className="size-3.5 text-muted-foreground" />
+            <Pin className="size-3.5 rotate-45 text-muted-foreground" />
             {isPinned ? "Unpin task" : "Pin task"}
           </ContextMenuItem>
         )}
