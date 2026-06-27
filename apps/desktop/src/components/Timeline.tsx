@@ -1,13 +1,13 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
-  ChevronDown,
-  Clock4,
-  ExternalLink,
-  History,
-  RotateCcw,
-  SquarePen,
-  Trash2,
-} from "lucide-react";
+  CaretDown as ChevronDown,
+  Clock as Clock4,
+  ArrowSquareOut as ExternalLink,
+  ClockCounterClockwise as History,
+  ArrowCounterClockwise as RotateCcw,
+  NotePencil as SquarePen,
+  Trash as Trash2,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

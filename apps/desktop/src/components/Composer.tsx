@@ -1,15 +1,15 @@
 import {
-  CircleAlert,
-  CircleCheck,
-  CircleDot,
-  CircleHelp,
+  WarningCircle as CircleAlert,
+  CheckCircle as CircleCheck,
+  Record as CircleDot,
+  Question as CircleHelp,
   Eraser,
-  ImagePlus,
+  Image as ImagePlus,
   Lightbulb,
-  Send,
-  StickyNote,
+  PaperPlaneTilt as Send,
+  Note as StickyNote,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import {
   ClipboardEvent,
   KeyboardEvent,

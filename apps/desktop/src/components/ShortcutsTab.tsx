@@ -1,11 +1,11 @@
 import {
-  ArrowUpDown,
+  ArrowsDownUp as ArrowUpDown,
   Compass,
   FileText,
-  KeyboardIcon,
-  PenLine,
-  Search,
-} from "lucide-react";
+  Keyboard as KeyboardIcon,
+  PencilLine as PenLine,
+  MagnifyingGlass as Search,
+} from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
 import {
   DialogDescription,

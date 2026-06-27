@@ -1,13 +1,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Archive,
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  ListTodo,
-  Search,
+  ChartBar as BarChart3,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
+  ListChecks as ListTodo,
+  MagnifyingGlass as Search,
   Tag,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 

@@ -1,21 +1,21 @@
 import {
-  AlertTriangle,
-  Braces,
+  Warning as AlertTriangle,
+  BracketsCurly as Braces,
   Calendar,
   Check,
-  ChevronRight,
+  CaretRight as ChevronRight,
   Copy,
-  ExternalLink,
+  ArrowSquareOut as ExternalLink,
   FileText,
   ListChecks,
-  Pin,
-  PinOff,
+  PushPin as Pin,
+  PushPinSlash as PinOff,
   Plus,
-  Regex,
-  Search,
-  Trash2,
+  Asterisk as Regex,
+  MagnifyingGlass as Search,
+  Trash as Trash2,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
@@ -177,9 +177,9 @@ function ReleaseSidebarRow({
           tabIndex={0}
         >
           {isPinned ? (
-            <PinOff className="size-3.5 rotate-45" strokeWidth={1.75} />
+            <PinOff className="size-3.5" />
           ) : (
-            <Pin className="size-3.5 rotate-45" strokeWidth={1.75} />
+            <Pin className="size-3.5" />
           )}
         </span>
         <span
@@ -319,7 +319,7 @@ function TasksTabRow({
         <Check
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
-          strokeWidth={2.5}
+          weight="bold"
         />
       </span>
       <span
@@ -964,12 +964,11 @@ export function ReleaseView({
                   onClick={() => setReleaseSearch("")}
                   type="button"
                 >
-                  <X className="size-3.5" strokeWidth={1.75} />
+                  <X className="size-3.5" />
                 </button>
               ) : (
                 <Search
                   className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-                  strokeWidth={1.75}
                 />
               )}
               <Input
@@ -1033,7 +1032,6 @@ export function ReleaseView({
                             "size-3.5 shrink-0 transition-transform",
                             pinnedExpanded && "rotate-90",
                           )}
-                          strokeWidth={1.75}
                         />
                         <span className="min-w-0 flex-1 truncate">
                           Pinned releases
@@ -1070,7 +1068,7 @@ export function ReleaseView({
                       type="button"
                       variant="ghost"
                     >
-                      <Plus className="size-3.5" strokeWidth={1.75} />
+                      <Plus className="size-3.5" />
                     </Button>
                   </div>
                   <div className="flex min-w-0 flex-col gap-px overflow-hidden">
@@ -1090,7 +1088,6 @@ export function ReleaseView({
                     <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
                       <Calendar
                         className="size-5 opacity-60"
-                        strokeWidth={1.75}
                       />
                       <span>
                         {draftReleases.length
@@ -1125,7 +1122,6 @@ export function ReleaseView({
                     <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
                       <Calendar
                         className="size-5 opacity-60"
-                        strokeWidth={1.75}
                       />
                       <span>
                         {releasedReleases.length

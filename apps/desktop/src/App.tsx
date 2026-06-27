@@ -1,34 +1,34 @@
 import {
   Archive,
-  ArchiveRestore,
+  TrayArrowUp as ArchiveRestore,
   ArrowDown,
-  BarChart3,
+  ChartBar as BarChart3,
   Calendar,
   Check,
-  Clock4,
-  ClipboardPaste,
+  Clock as Clock4,
+  ClipboardText as ClipboardPaste,
   Copy,
   Download,
-  ExternalLink,
+  ArrowSquareOut as ExternalLink,
   FileText,
-  GripVertical,
+  DotsSixVertical as GripVertical,
   Info,
-  KeyboardIcon,
-  ListTodo,
+  Keyboard as KeyboardIcon,
+  ListChecks as ListTodo,
   Moon,
-  MoreHorizontal,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  Settings,
+  DotsThree as MoreHorizontal,
+  ArrowsClockwise as RefreshCw,
+  ArrowCounterClockwise as RotateCcw,
+  MagnifyingGlass as Search,
+  Gear as Settings,
   Scissors,
   SlidersHorizontal,
   Sun,
   Tag,
-  Trash2,
+  Trash as Trash2,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type Icon as LucideIcon,
+} from "@phosphor-icons/react";
 import { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
@@ -3528,7 +3528,7 @@ function SummaryTab({
                         <Check
                           aria-hidden
                           className="pointer-events-none size-3 text-primary opacity-0 peer-checked:opacity-100"
-                          strokeWidth={3}
+                          weight="bold"
                         />
                       </span>
                       <span className="min-w-0 truncate text-xs font-medium leading-5">
@@ -3975,7 +3975,7 @@ function SettingsTabButton({
       onClick={onClick}
       type="button"
     >
-      <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
+      <Icon className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{label}</span>
       {marker && (
         <span
@@ -4210,7 +4210,6 @@ function ThreadColumn({
               >
                 <MoreHorizontal
                   className="size-4 opacity-80"
-                  strokeWidth={1.75}
                 />
                 {activeMoreFilter?.label ?? "More"}
               </Button>

@@ -1,23 +1,23 @@
 import {
-  ArchiveRestore,
+  TrayArrowUp as ArchiveRestore,
   Check,
-  ChevronRight,
+  CaretRight as ChevronRight,
   Copy,
-  FileSpreadsheet,
+  Table as FileSpreadsheet,
   FileText,
   Folder,
   FolderMinus,
   FolderOpen,
   FolderPlus,
-  ListTodo,
+  ListChecks as ListTodo,
   Pencil,
-  Pin,
+  PushPin as Pin,
   Plus,
-  Search,
+  MagnifyingGlass as Search,
   Tag,
-  Trash2,
+  Trash as Trash2,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -304,12 +304,11 @@ function ActiveSidebar({
               onClick={() => setQuery("")}
               type="button"
             >
-              <X className="size-3.5" strokeWidth={1.75} />
+              <X className="size-3.5" />
             </button>
           ) : (
             <Search
               className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-              strokeWidth={1.75}
             />
           )}
           <Input
@@ -493,7 +492,7 @@ function ActiveSidebar({
                         size="icon-sm"
                         variant="ghost"
                       >
-                        <FolderPlus className="size-3.5" strokeWidth={1.75} />
+                        <FolderPlus className="size-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>New folder</TooltipContent>
@@ -508,7 +507,7 @@ function ActiveSidebar({
                         size="icon-sm"
                         variant="ghost"
                       >
-                        <Plus className="size-3.5" strokeWidth={1.75} />
+                        <Plus className="size-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>New task</TooltipContent>
@@ -591,7 +590,7 @@ function ActiveSidebar({
           {!hasAnyContent && (
             <div className="flex flex-col items-center gap-3 px-2 py-10 text-center text-xs text-muted-foreground animate-in fade-in-0 duration-base">
               <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">
-                <ListTodo className="size-4 opacity-70" strokeWidth={1.75} />
+                <ListTodo className="size-4 opacity-70" />
               </div>
               {searchTerm ? (
                 <span className="max-w-full truncate">
@@ -743,7 +742,7 @@ function ArchiveSidebar({
             type="button"
             variant="outline"
           >
-            <ArchiveRestore className="mr-1 size-3.5" strokeWidth={1.75} />
+            <ArchiveRestore className="mr-1 size-3.5" />
             Restore selected
           </Button>
         </div>
@@ -758,12 +757,11 @@ function ArchiveSidebar({
               onClick={() => setQuery("")}
               type="button"
             >
-              <X className="size-3.5" strokeWidth={1.75} />
+              <X className="size-3.5" />
             </button>
           ) : (
             <Search
               className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-              strokeWidth={1.75}
             />
           )}
           <Input
@@ -804,7 +802,7 @@ function ArchiveSidebar({
           ))}
           {!filtered.length && (
             <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-5 opacity-60" strokeWidth={1.75} />
+              <ListTodo className="size-5 opacity-60" />
               {searchTerm ? (
                 <span className="max-w-full truncate">
                   No archived tasks match “{noResultsQuery}”.
@@ -915,7 +913,6 @@ function FolderGroup({
                     "size-3.5 shrink-0 transition-colors duration-150 ease-out group-hover/folder:text-foreground",
                     open ? "text-foreground/80" : "text-muted-foreground/90",
                   )}
-                  strokeWidth={1.75}
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -943,7 +940,7 @@ function FolderGroup({
                     }}
                     type="button"
                   >
-                    <Plus className="size-3.5" strokeWidth={1.75} />
+                    <Plus className="size-3.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>New task in {folder.name}</TooltipContent>
@@ -1413,7 +1410,7 @@ function TaskRow({
         </ContextMenuItem>
         {onTogglePin && (
           <ContextMenuItem onSelect={() => onTogglePin(task.id)}>
-            <Pin className="size-3.5 rotate-45 text-muted-foreground" />
+            <Pin className="size-3.5 text-muted-foreground" />
             {isPinned ? "Unpin task" : "Pin task"}
           </ContextMenuItem>
         )}
@@ -1544,7 +1541,7 @@ function ArchiveRow({
           <Check
             aria-hidden
             className="pointer-events-none absolute size-3 text-primary-foreground"
-            strokeWidth={3}
+            weight="bold"
           />
         )}
       </span>
@@ -1573,7 +1570,7 @@ function ArchiveRow({
               type="button"
               variant="ghost"
             >
-              <ArchiveRestore className="size-3.5" strokeWidth={1.75} />
+              <ArchiveRestore className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Restore to active</TooltipContent>
@@ -1592,7 +1589,7 @@ function ArchiveRow({
               type="button"
               variant="ghost"
             >
-              <Trash2 className="size-3.5" strokeWidth={1.75} />
+              <Trash2 className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete permanently</TooltipContent>

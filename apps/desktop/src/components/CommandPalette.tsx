@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Folder, ListTodo, Search } from "lucide-react";
+import {
+  Folder,
+  ListChecks as ListTodo,
+  MagnifyingGlass as Search,
+} from "@phosphor-icons/react";
 import type {
   Folder as FolderModel,
   Release,
