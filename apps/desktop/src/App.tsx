@@ -2195,6 +2195,9 @@ function WorklogMetricsView({
                 setSelectedPeriod(null);
                 setSelectedDay(day);
               }}
+              selectedDay={
+                inspector.kind === "day" && inspector.key ? inspector.key : null
+              }
               settings={worklogSettings}
             />
             <WorklogTaskBreakdown
@@ -2203,6 +2206,12 @@ function WorklogMetricsView({
               onSelectTask={onSelectTask}
             />
           </div>
+
+          <WorklogInspectorPanel
+            entries={inspector.entries}
+            label={inspector.label}
+            onSelectTask={onSelectTask}
+          />
 
           <WorklogPeriodBreakdown
             dailyGoalMinutes={dailyGoalMinutes}
@@ -2559,6 +2568,59 @@ function WorklogTaskBreakdown({
         <p className="mt-2 grid flex-1 place-items-center py-6 text-center text-xs font-normal text-foreground/70">
           No task time in this range.
         </p>
+      )}
+    </div>
+  );
+}
+
+function WorklogInspectorPanel({
+  entries,
+  label,
+  onSelectTask,
+}: {
+  entries: WorklogMetricEntry[];
+  label: string;
+  onSelectTask: (id: string) => void;
+}) {
+  const totals = buildTaskWorklogTotals(entries);
+  const totalMinutes = entries.reduce(
+    (sum, entry) => sum + entry.durationMinutes,
+    0,
+  );
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">{label}</h2>
+        {totals.length > 0 && (
+          <span className="font-mono text-xs text-foreground/70">
+            {formatDuration(totalMinutes)}
+          </span>
+        )}
+      </div>
+      {totals.length === 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No worklog entries in this range. Select a day on the heatmap or
+          chart to inspect it.
+        </p>
+      ) : (
+        <div className="mt-3 divide-y divide-border/60">
+          {totals.map((item) => (
+            <button
+              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-1.5 text-left transition-colors duration-fast hover:bg-accent/40"
+              key={item.taskId}
+              onClick={() => onSelectTask(item.taskId)}
+              type="button"
+            >
+              <span className="truncate text-xs font-medium text-foreground">
+                {item.taskTitle}
+              </span>
+              <span className="font-mono text-xs text-foreground">
+                {formatDuration(item.minutes)}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
