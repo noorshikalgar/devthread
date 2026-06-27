@@ -10,8 +10,10 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FileText,
   GripVertical,
   Info,
+  KeyboardIcon,
   ListTodo,
   Moon,
   MoreHorizontal,
@@ -20,10 +22,12 @@ import {
   Search,
   Settings,
   Scissors,
+  SlidersHorizontal,
   Sun,
   Tag,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -3495,39 +3499,47 @@ function SettingsDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="grid h-[580px] w-[min(860px,calc(100vw-32px))] max-w-none grid-cols-[180px_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-        <aside className="border-r border-border bg-card/60 p-3">
+      <DialogContent className="grid h-[min(640px,82vh)] w-[min(880px,calc(100vw-32px))] max-w-none grid-cols-[200px_minmax(0,1fr)] gap-0 overflow-hidden p-0">
+        <aside className="flex flex-col border-r border-border bg-card/60 p-3">
           <DialogTitle className="px-2 py-2 text-base">Settings</DialogTitle>
-          <div className="mt-3 space-y-1">
+          <div className="mt-2 space-y-0.5">
             <SettingsTabButton
               active={tab === "general"}
+              icon={SlidersHorizontal}
               label="General"
               onClick={() => setTab("general")}
             />
             <SettingsTabButton
               active={tab === "summary"}
+              icon={FileText}
               label="Summary"
               onClick={() => setTab("summary")}
             />
             <SettingsTabButton
               active={tab === "shortcuts"}
+              icon={KeyboardIcon}
               label="Shortcuts"
               onClick={() => setTab("shortcuts")}
             />
             <SettingsTabButton
               active={tab === "updates"}
+              icon={Download}
               label="Updates"
               marker={updateState === "available"}
               onClick={() => setTab("updates")}
             />
             <SettingsTabButton
               active={tab === "about"}
+              icon={Info}
               label="About"
               onClick={() => setTab("about")}
             />
           </div>
+          <div className="mt-auto px-2 pt-3 font-mono text-[10px] text-muted-foreground/70">
+            DevThread v{appVersion}
+          </div>
         </aside>
-        <section className="flex min-h-0 min-w-0 flex-col p-6">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-y-auto p-6">
           {tab === "general" ? (
             <>
               <DialogHeader>
@@ -3536,9 +3548,9 @@ function SettingsDialog({
                   Workspace preferences stored locally on this device.
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-6 max-w-sm space-y-2">
+              <div className="mt-6 max-w-sm space-y-2 rounded-md border border-border p-4">
                 <label
-                  className="text-xs font-medium text-muted-foreground"
+                  className="text-xs font-medium text-foreground"
                   htmlFor="theme-select"
                 >
                   Theme
@@ -3590,7 +3602,7 @@ function SettingsDialog({
                 </Select>
               </div>
 
-              <div className="mt-8 max-w-sm space-y-2 border-t border-border pt-6">
+              <div className="mt-4 max-w-sm space-y-2 rounded-md border border-border p-4">
                 <h3 className="text-sm font-medium">Worklog</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Used by the worklog charts. Set your target hours per workday
@@ -3814,11 +3826,13 @@ function SettingsDialog({
 
 function SettingsTabButton({
   active,
+  icon: Icon,
   label,
   marker,
   onClick,
 }: {
   active: boolean;
+  icon: LucideIcon;
   label: string;
   marker?: boolean;
   onClick: () => void;
@@ -3826,17 +3840,18 @@ function SettingsTabButton({
   return (
     <button
       className={cn(
-        "relative flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors duration-fast hover:bg-accent hover:text-foreground",
+        "relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors duration-fast hover:bg-accent hover:text-foreground",
         active && "bg-secondary text-secondary-foreground",
       )}
       onClick={onClick}
       type="button"
     >
-      <span>{label}</span>
+      <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
+      <span className="min-w-0 truncate">{label}</span>
       {marker && (
         <span
           aria-hidden
-          className="ml-auto size-1.5 rounded-full bg-destructive"
+          className="ml-auto size-1.5 shrink-0 rounded-full bg-destructive"
         />
       )}
     </button>
