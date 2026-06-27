@@ -504,8 +504,21 @@ export default function App() {
     }
 
     async function handleContextMenu(event: globalThis.MouseEvent) {
+      // A Radix ContextMenuTrigger/DropdownMenuTrigger already called
+      // preventDefault() to open its own menu — defer to it entirely
+      // instead of also spawning our copy/paste menu underneath.
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-radix-popper-content-wrapper]")) return;
+      // A Radix menu (context/dropdown) is already open elsewhere on the
+      // page — this click is dismissing it, not requesting our menu.
+      // The browser may have auto-selected a word under the cursor as
+      // part of its native right-click handling; clear that too.
+      if (document.querySelector('[role="menu"][data-state="open"]')) {
+        event.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
       event.preventDefault();
       const editorRoot = target?.closest(".cm-editor") as HTMLElement | null;
       const editorView = editorRoot
@@ -525,6 +538,9 @@ export default function App() {
 
       if (!selectedText && !linkUrl && !editableTarget) {
         setContextMenu(null);
+        // Plain UI text (task rows, menu items, etc.) shouldn't end up
+        // selected just because the browser auto-selects on right-click.
+        window.getSelection()?.removeAllRanges();
         return;
       }
       let canPaste = false;
@@ -4244,7 +4260,7 @@ function ThreadColumn({
       {goLatestVisible && (
         <Button
           aria-label="Go to latest"
-          className="absolute bottom-24 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
+          className="absolute bottom-32 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
           onClick={() =>
             viewportRef.current?.scrollTo({
               top: viewportRef.current.scrollHeight,
