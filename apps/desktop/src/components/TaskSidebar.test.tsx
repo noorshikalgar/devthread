@@ -197,9 +197,9 @@ describe("TaskSidebar", () => {
       />,
     );
 
-    const active = screen.getByText("Active tasks");
-    const pinned = screen.getByText("Pinned tasks");
-    const all = screen.getByText("All Tasks");
+    const active = screen.getByText(/^Active tasks/);
+    const pinned = screen.getByText(/^Pinned tasks/);
+    const all = screen.getByText(/^All Tasks/);
 
     expect(
       active.compareDocumentPosition(pinned) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -388,8 +388,8 @@ describe("TaskSidebar", () => {
     });
 
     expect(screen.queryByText("Atlas Notes")).not.toBeInTheDocument();
-    expect(screen.queryByText("Active tasks")).not.toBeInTheDocument();
-    expect(screen.getByText("Search results")).toBeInTheDocument();
+    expect(screen.queryByText(/^Active tasks/)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Search results/)).toBeInTheDocument();
     expect(screen.getByText("Testing Task for Bugs")).toBeInTheDocument();
   });
 

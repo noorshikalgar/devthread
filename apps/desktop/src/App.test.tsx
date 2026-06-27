@@ -625,7 +625,14 @@ describe("TaskHeader", () => {
     fireEvent.click(
       await screen.findByLabelText("Status: Active. Click to change."),
     );
-    fireEvent.click(screen.getByText("Done"));
+    // The sidebar's status filter chips also render a "Done" label, so
+    // disambiguate: the popover's status option is a plain rounded-sm row,
+    // the filter chip is a rounded-full pill.
+    const doneOptions = await screen.findAllByText("Done");
+    const popoverDone = doneOptions.find((el) =>
+      el.closest("button")?.className.includes("rounded-sm"),
+    );
+    fireEvent.click(popoverDone!);
 
     await waitFor(() =>
       expect(api.createEntry).toHaveBeenCalledWith(

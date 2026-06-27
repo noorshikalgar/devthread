@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Folder as FolderModel, Release, Task } from "@/lib/types";
-import { STATUS_DOT } from "@/lib/status";
+import type { Folder as FolderModel, Release, Task, TaskStatus } from "@/lib/types";
+import { STATUS_DOT, STATUS_LABEL } from "@/lib/status";
 import { hasComposerDraft } from "@/lib/composerDraftStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,6 +101,13 @@ type Props = ActiveModeProps | ArchiveModeProps;
 
 const UNCATEGORIZED = "__ungrouped__";
 const SEARCH_INPUT_MAX_LENGTH = 80;
+const STATUS_FILTER_OPTIONS: TaskStatus[] = [
+  "planned",
+  "active",
+  "blocked",
+  "paused",
+  "done",
+];
 const SEARCH_MESSAGE_MAX_LENGTH = 28;
 
 // Subscribe to composer-draft store changes so the sidebar
@@ -174,18 +181,20 @@ function ActiveSidebar({
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [openActiveTasks, setOpenActiveTasks] = useState(true);
   const [openPinnedTasks, setOpenPinnedTasks] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const searchTerm = query.trim();
   const isSearching = searchTerm.length > 0;
 
   const filtered = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return tasks.filter((task) => {
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (!term) return true;
       return `${task.title} ${task.status} ${task.nextStep ?? ""}`
         .toLowerCase()
         .includes(term);
     });
-  }, [tasks, searchTerm]);
+  }, [tasks, searchTerm, statusFilter]);
 
   const grouped = useMemo(() => {
     const byFolder = new Map<string, Task[]>();
@@ -351,6 +360,33 @@ function ActiveSidebar({
             value={query}
           />
         </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(["all", ...STATUS_FILTER_OPTIONS] as const).map((status) => {
+            const active = statusFilter === status;
+            return (
+              <button
+                aria-pressed={active}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors duration-fast",
+                  active
+                    ? "border-transparent bg-secondary text-secondary-foreground"
+                    : "border-border/70 text-muted-foreground hover:border-ring/40 hover:text-foreground",
+                )}
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                type="button"
+              >
+                {status !== "all" && (
+                  <span
+                    aria-hidden
+                    className={cn("size-1.5 rounded-full", STATUS_DOT[status])}
+                  />
+                )}
+                {status === "all" ? "All" : STATUS_LABEL[status]}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
@@ -375,7 +411,9 @@ function ActiveSidebar({
                     openActiveTasks && "rotate-90",
                   )}
                 />
-                <span className="min-w-0 flex-1 truncate">Active tasks</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {`Active tasks · ${activeTasks.length}`}
+                </span>
               </button>
               <div
                 aria-hidden={!openActiveTasks}
@@ -433,7 +471,9 @@ function ActiveSidebar({
                     openPinnedTasks && "rotate-90",
                   )}
                 />
-                <span className="min-w-0 flex-1 truncate">Pinned tasks</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {`Pinned tasks · ${pinnedTasks.length}`}
+                </span>
               </button>
               <div
                 aria-hidden={!openPinnedTasks}
@@ -471,7 +511,7 @@ function ActiveSidebar({
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
             <div className="px-0.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {isSearching ? "Search results" : "All Tasks"}
+              {`${isSearching ? "Search results" : "All Tasks"} · ${filtered.length}`}
             </div>
             {isSearching
               ? filtered.map((task) => (
