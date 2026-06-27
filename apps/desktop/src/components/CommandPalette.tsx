@@ -32,6 +32,28 @@ interface Props {
 }
 
 const MAX_RESULTS = 30;
+const MAX_RECENTS = 5;
+const RECENT_TASKS_KEY = "devthread:command-palette-recent-tasks";
+
+function loadRecentTaskIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_TASKS_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentTaskId(id: string) {
+  const current = loadRecentTaskIds().filter((existing) => existing !== id);
+  current.unshift(id);
+  localStorage.setItem(
+    RECENT_TASKS_KEY,
+    JSON.stringify(current.slice(0, MAX_RECENTS)),
+  );
+}
 
 export function CommandPalette({
   open,
@@ -46,6 +68,7 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [regex, setRegex] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -53,6 +76,7 @@ export function CommandPalette({
     if (open) {
       setQuery("");
       setSelectedIndex(0);
+      setRecentTaskIds(loadRecentTaskIds());
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -65,7 +89,26 @@ export function CommandPalette({
 
   const results = useMemo<Result[]>(() => {
     const term = query.trim();
-    if (!term) return [];
+    if (!term) {
+      const out: Result[] = [];
+      for (const id of recentTaskIds) {
+        const task = taskById.get(id);
+        if (!task) continue;
+        out.push({
+          id: `task:${task.id}`,
+          kind: "task",
+          title: task.title,
+          hint: `Task · ${task.status}`,
+          group: "Recent",
+          onSelect: () => {
+            pushRecentTaskId(task.id);
+            onSelectTask(task.id);
+            onOpenChange(false);
+          },
+        });
+      }
+      return out;
+    }
     const matcher = createMatcher(term, regex);
     if (!matcher) return [];
     const out: Result[] = [];
@@ -78,6 +121,7 @@ export function CommandPalette({
           hint: `Task · ${task.status}`,
           group: "Tasks",
           onSelect: () => {
+            pushRecentTaskId(task.id);
             onSelectTask(task.id);
             onOpenChange(false);
           },
@@ -123,6 +167,7 @@ export function CommandPalette({
     folders,
     entries,
     taskById,
+    recentTaskIds,
     onSelectTask,
     onSelectFolder,
     onSelectEntry,
@@ -231,7 +276,7 @@ export function CommandPalette({
                   ? regex && !createMatcher(query.trim(), true)
                     ? "Regex pattern is not valid yet."
                     : `No matches for “${query.trim()}”.`
-                  : "Type to search tasks, folders, or timeline updates."}
+                  : "Type to search tasks, folders, or timeline updates. Tasks you open will show up here."}
               </span>
             </div>
           )}
