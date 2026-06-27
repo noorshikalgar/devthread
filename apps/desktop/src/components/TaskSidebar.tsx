@@ -284,16 +284,7 @@ function ActiveSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
-        <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo
-            className="size-4 shrink-0 text-current"
-            strokeWidth={1.75}
-          />
-          <span className="truncate text-sm font-medium text-current">
-            Tasks
-          </span>
-        </div>
+      <div className="flex items-center justify-end gap-2 px-3.5 pb-3 pt-4">
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -698,16 +689,7 @@ function ArchiveSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
-        <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo
-            className="size-4 shrink-0 text-current"
-            strokeWidth={1.75}
-          />
-          <span className="truncate text-sm font-medium text-current">
-            {title}
-          </span>
-        </div>
+      <div className="flex items-center justify-end gap-2 px-3.5 pb-3 pt-4">
         <div className="flex shrink-0 items-center gap-1">
           <Button
             aria-label="Restore selected"

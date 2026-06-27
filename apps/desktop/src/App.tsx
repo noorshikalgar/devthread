@@ -50,6 +50,7 @@ import { ReleaseView } from "@/components/ReleaseView";
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline, type TimelineViewMode } from "@/components/Timeline";
+import { TopBar } from "@/components/TopBar";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
@@ -1322,6 +1323,12 @@ export default function App() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground select-none">
+      <TopBar
+        onSearchOpen={() => setPaletteOpen(true)}
+        selectedTask={selectedTask}
+        updateAvailable={updateState === "available"}
+        workspaceMode={workspaceMode}
+      />
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
@@ -1352,7 +1359,6 @@ export default function App() {
               return next;
             });
           }}
-          onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
             if (workspaceMode !== "tasks") {
@@ -1622,7 +1628,6 @@ function AppRail({
   archiveOpen,
   onArchiveToggle,
   onReleasesToggle,
-  onSearchOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
@@ -1637,7 +1642,6 @@ function AppRail({
   archiveOpen: boolean;
   onArchiveToggle: () => void;
   onReleasesToggle: () => void;
-  onSearchOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
@@ -1660,20 +1664,6 @@ function AppRail({
           onClick={onTaskToggle}
           tooltip="Tasks"
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label="Open global search"
-              className="rounded-md"
-              onClick={onSearchOpen}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Search />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Search</TooltipContent>
-        </Tooltip>
         <RailButton
           active={worklogActive}
           icon={BarChart3}
