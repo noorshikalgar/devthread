@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Folder as FolderModel, Release, Task, TaskStatus } from "@/lib/types";
@@ -1548,6 +1549,7 @@ function ArchiveRow({
       <button
         className="min-w-0 flex-1 text-left"
         onClick={onSelect}
+        title={`Archived ${formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}`}
         type="button"
       >
         <span className="block w-full truncate text-sm font-normal text-current">
