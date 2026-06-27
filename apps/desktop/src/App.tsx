@@ -168,7 +168,7 @@ const UPDATE_INTERVAL_OPTIONS = [
   { value: "24h", label: "Every 24 hours", ms: 24 * 60 * 60 * 1000 },
 ] as const;
 type UpdateInterval = (typeof UPDATE_INTERVAL_OPTIONS)[number]["value"];
-const DEFAULT_SIDEBAR_WIDTH = 280;
+const DEFAULT_SIDEBAR_WIDTH = 320;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const APP_VERSION = __APP_VERSION__;
@@ -269,6 +269,53 @@ export default function App() {
     loadWorklogSettings(),
   );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("tasks");
+  const [navHistory, setNavHistory] = useState<{
+    stack: { mode: WorkspaceMode; taskId: string | null }[];
+    index: number;
+  }>(() => ({
+    stack: [{ mode: "tasks", taskId: localStorage.getItem(SELECTED_TASK_KEY) }],
+    index: 0,
+  }));
+  const skipHistoryPush = useRef(false);
+  useEffect(() => {
+    if (skipHistoryPush.current) {
+      skipHistoryPush.current = false;
+      return;
+    }
+    setNavHistory((prev) => {
+      const top = prev.stack[prev.index];
+      if (top && top.mode === workspaceMode && top.taskId === selectedId) {
+        return prev;
+      }
+      const trimmed = [
+        ...prev.stack.slice(0, prev.index + 1),
+        { mode: workspaceMode, taskId: selectedId },
+      ];
+      return { stack: trimmed, index: trimmed.length - 1 };
+    });
+  }, [workspaceMode, selectedId]);
+  const goBackNav = useCallback(() => {
+    setNavHistory((prev) => {
+      if (prev.index <= 0) return prev;
+      const nextIndex = prev.index - 1;
+      const entry = prev.stack[nextIndex];
+      skipHistoryPush.current = true;
+      setWorkspaceMode(entry.mode);
+      setSelectedId(entry.taskId);
+      return { ...prev, index: nextIndex };
+    });
+  }, []);
+  const goForwardNav = useCallback(() => {
+    setNavHistory((prev) => {
+      if (prev.index >= prev.stack.length - 1) return prev;
+      const nextIndex = prev.index + 1;
+      const entry = prev.stack[nextIndex];
+      skipHistoryPush.current = true;
+      setWorkspaceMode(entry.mode);
+      setSelectedId(entry.taskId);
+      return { ...prev, index: nextIndex };
+    });
+  }, []);
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateMessage, setUpdateMessage] = useState(
@@ -297,6 +344,9 @@ export default function App() {
   >([]);
   const [worklogLoading, setWorklogLoading] = useState(false);
   const [releases, setReleases] = useState<Release[]>([]);
+  const [pendingReleaseName, setPendingReleaseName] = useState<string | null>(
+    null,
+  );
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
@@ -456,6 +506,7 @@ export default function App() {
     async function handleContextMenu(event: globalThis.MouseEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-radix-popper-content-wrapper]")) return;
+      event.preventDefault();
       const editorRoot = target?.closest(".cm-editor") as HTMLElement | null;
       const editorView = editorRoot
         ? CodeMirrorEditorView.findFromDOM(editorRoot)
@@ -463,7 +514,7 @@ export default function App() {
       const editableTarget =
         editorView?.contentDOM ??
         ((target?.closest(
-          'input, textarea, [contenteditable="true"]',
+          'input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]',
         ) as HTMLElement | null) ||
           null);
       const selectedText = editorView
@@ -472,7 +523,6 @@ export default function App() {
       const link = target?.closest("a[href]") as HTMLAnchorElement | null;
       const linkUrl = safeExternalUrl(link?.getAttribute("href"));
 
-      event.preventDefault();
       if (!selectedText && !linkUrl && !editableTarget) {
         setContextMenu(null);
         return;
@@ -1190,14 +1240,25 @@ export default function App() {
   }
 
   function selectFolder(folderId: string | null) {
-    if (!sidebarOpen) setSidebarOpen(true);
     const firstTask = tasks.find((task) => task.folderId === folderId);
-    if (firstTask) setSelectedId(firstTask.id);
+    if (firstTask) jumpToTask(firstTask.id);
+  }
+
+  function jumpToTask(taskId: string) {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    setWorkspaceMode(task?.status === "archived" ? "archive" : "tasks");
+    setSidebarOpen(true);
+    setSelectedId(taskId);
+  }
+
+  function jumpToRelease(name: string) {
+    setWorkspaceMode("releases");
+    setPendingReleaseName(name);
   }
 
   function selectEntry(taskId: string, entryId: string) {
-    if (selectedId !== taskId) {
-      setSelectedId(taskId);
+    if (selectedId !== taskId || workspaceMode === "releases" || workspaceMode === "worklog") {
+      jumpToTask(taskId);
     }
     setTimeout(() => {
       const node = document.querySelector(`[data-entry-id="${entryId}"]`);
@@ -1328,6 +1389,10 @@ export default function App() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground select-none">
       <TopBar
+        canGoBack={navHistory.index > 0}
+        canGoForward={navHistory.index < navHistory.stack.length - 1}
+        onGoBack={goBackNav}
+        onGoForward={goForwardNav}
         onSearchOpen={() => setPaletteOpen(true)}
         selectedTask={selectedTask}
         updateAvailable={updateState === "available"}
@@ -1499,13 +1564,11 @@ export default function App() {
               folders={folders}
               onReleasesChanged={loadReleases}
               onRemoveTaskTag={handleRemoveTaskTag}
-              onSelectTask={(id: string) => {
-                setSelectedId(id);
-                setWorkspaceMode("tasks");
-                setSidebarOpen(true);
-              }}
+              onRequestedReleaseNameHandled={() => setPendingReleaseName(null)}
+              onSelectTask={jumpToTask}
               onTagTask={handleTagTask}
               releases={releases}
+              requestedReleaseName={pendingReleaseName}
               sidebarOpen={releaseSidebarOpen}
               tasks={sidebarTasks}
             />
@@ -1585,8 +1648,10 @@ export default function App() {
         onOpenChange={setPaletteOpen}
         onSelectEntry={selectEntry}
         onSelectFolder={selectFolder}
-        onSelectTask={setSelectedId}
+        onSelectRelease={jumpToRelease}
+        onSelectTask={jumpToTask}
         open={paletteOpen}
+        releases={releases}
         tasks={tasks}
       />
       <SettingsDialog
@@ -1739,13 +1804,19 @@ function getCodeMirrorSelectedText(view: CodeMirrorEditorView) {
 }
 
 function getEditableSelectedText(target: HTMLElement | null) {
-  if (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement
-  ) {
+  if (target instanceof HTMLTextAreaElement) {
     const start = target.selectionStart ?? 0;
     const end = target.selectionEnd ?? 0;
     return start === end ? "" : target.value.slice(start, end);
+  }
+  if (target instanceof HTMLInputElement) {
+    try {
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? 0;
+      return start === end ? "" : target.value.slice(start, end);
+    } catch {
+      return "";
+    }
   }
   return window.getSelection()?.toString() ?? "";
 }
@@ -4187,7 +4258,7 @@ function ThreadColumn({
           <ArrowDown className="size-4" />
         </Button>
       )}
-      <div className="border-t border-border bg-card/40 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-[920px]">
           <Composer
             onSubmit={onSubmit}
