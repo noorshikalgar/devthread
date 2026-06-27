@@ -102,9 +102,10 @@ type Props = ActiveModeProps | ArchiveModeProps;
 
 const UNCATEGORIZED = "__ungrouped__";
 const SEARCH_INPUT_MAX_LENGTH = 80;
+// "active" is deliberately excluded — the Active tasks section above
+// already covers that filter, so a chip for it would be redundant.
 const STATUS_FILTER_OPTIONS: TaskStatus[] = [
   "planned",
-  "active",
   "blocked",
   "paused",
   "done",
@@ -294,41 +295,7 @@ function ActiveSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
-      <div className="flex items-center justify-end gap-2 px-3.5 pb-3 pt-4">
-        <div className="flex shrink-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="New folder"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                onClick={openCreateFolderDialog}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <FolderPlus strokeWidth={1.75} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New folder</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="New task"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                disabled={creating}
-                onClick={() => void handleCreate()}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <Plus strokeWidth={1.75} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New task</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      <div className="px-3.5 pb-4">
+      <div className="px-3.5 pb-4 pt-4">
         <div className="relative">
           {query ? (
             <button
@@ -511,8 +478,43 @@ function ActiveSidebar({
           )}
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
-            <div className="px-0.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {`${isSearching ? "Search results" : "All Tasks"} · ${filtered.length}`}
+            <div className="flex items-center justify-between gap-2 px-0.5 pb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                {`${isSearching ? "Search results" : "All Tasks"} · ${filtered.length}`}
+              </span>
+              {!isSearching && (
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label="New folder"
+                        className="size-6 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                        onClick={openCreateFolderDialog}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <FolderPlus className="size-3.5" strokeWidth={1.75} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>New folder</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label="New task"
+                        className="size-6 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                        disabled={creating}
+                        onClick={() => void handleCreate()}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <Plus className="size-3.5" strokeWidth={1.75} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>New task</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
             </div>
             {isSearching
               ? filtered.map((task) => (
