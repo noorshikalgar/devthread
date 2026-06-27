@@ -1,7 +1,7 @@
 import {
   Archive,
   ArchiveRestore,
-  ArrowUp,
+  ArrowDown,
   BarChart3,
   Calendar,
   Check,
@@ -4015,7 +4015,7 @@ function ThreadColumn({
 }) {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
-  const [goTopVisible, setGoTopVisible] = useState(false);
+  const [goLatestVisible, setGoLatestVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -4041,12 +4041,19 @@ function ThreadColumn({
     if (!viewport) return;
     viewportRef.current = viewport;
 
+    // The timeline reads oldest-to-newest, so "jump to latest" means the
+    // bottom of the scroll area, not the top.
     function handleScroll() {
-      const top = viewportRef.current?.scrollTop ?? 0;
-      setGoTopVisible(top > 700);
+      const el = viewportRef.current;
+      if (!el) return;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setGoLatestVisible(distanceFromBottom > 400);
     }
 
     handleScroll();
+    // Land on the latest entry, right above the composer, instead of
+    // the oldest one at the top of a long history.
+    viewport.scrollTo?.({ top: viewport.scrollHeight });
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
   }, [taskId]);
@@ -4164,17 +4171,20 @@ function ThreadColumn({
           {children}
         </div>
       </ScrollArea>
-      {goTopVisible && (
+      {goLatestVisible && (
         <Button
-          aria-label="Go to top"
+          aria-label="Go to latest"
           className="absolute bottom-24 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
           onClick={() =>
-            viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+            viewportRef.current?.scrollTo({
+              top: viewportRef.current.scrollHeight,
+              behavior: "smooth",
+            })
           }
           size="icon-sm"
           variant="secondary"
         >
-          <ArrowUp className="size-4" />
+          <ArrowDown className="size-4" />
         </Button>
       )}
       <div className="border-t border-border bg-card/40 px-4 py-3 sm:px-6 lg:px-8">
