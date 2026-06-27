@@ -1542,6 +1542,7 @@ export default function App() {
               />
               <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
                 <ThreadColumn
+                  composerVisibilityToggleRef={composerVisibilityToggleRef}
                   entryTypeFilter={entryTypeFilter}
                   onEntryTypeFilterChange={setEntryTypeFilter}
                   onRegexChange={setTimelineRegex}
@@ -1552,11 +1553,6 @@ export default function App() {
                   searchInputRef={timelineSearchInputRef}
                   taskId={selectedTask.id}
                 >
-                  <Composer
-                    onSubmit={createEntry}
-                    taskId={selectedTask.id}
-                    visibilityToggleRef={composerVisibilityToggleRef}
-                  />
                   <Timeline
                     attachments={attachments}
                     entries={visibleEntries}
@@ -3936,6 +3932,7 @@ function ThreadColumn({
   entryTypeFilter,
   onEntryTypeFilterChange,
   searchInputRef,
+  composerVisibilityToggleRef,
 }: {
   children: React.ReactNode;
   taskId: string;
@@ -3952,13 +3949,10 @@ function ThreadColumn({
   entryTypeFilter: EntryType | "all";
   onEntryTypeFilterChange: (value: EntryType | "all") => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  composerVisibilityToggleRef?: { current: (() => void) | null };
 }) {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
-  const stickyComposerRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
-  const compactComposerExpandedRef = useRef(false);
-  const [compactComposerVisible, setCompactComposerVisible] = useState(false);
-  const [compactComposerExpanded, setCompactComposerExpanded] = useState(false);
   const [goTopVisible, setGoTopVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
@@ -3979,10 +3973,6 @@ function ThreadColumn({
     regex && !!search.trim() && !safelyCompileRegex(search).valid;
 
   useEffect(() => {
-    compactComposerExpandedRef.current = compactComposerExpanded;
-  }, [compactComposerExpanded]);
-
-  useEffect(() => {
     const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
@@ -3991,24 +3981,12 @@ function ThreadColumn({
 
     function handleScroll() {
       const top = viewportRef.current?.scrollTop ?? 0;
-      setCompactComposerVisible(top > 140);
-      if (top <= 140) setCompactComposerExpanded(false);
-      else if (
-        compactComposerExpandedRef.current &&
-        !stickyComposerRef.current?.contains(document.activeElement)
-      ) {
-        setCompactComposerExpanded(false);
-      }
       setGoTopVisible(top > 700);
     }
 
     handleScroll();
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [taskId]);
-
-  useEffect(() => {
-    setCompactComposerExpanded(false);
   }, [taskId]);
 
   return (
@@ -4119,21 +4097,6 @@ function ThreadColumn({
           </DropdownMenu>
         </div>
       </div>
-      {compactComposerVisible && (
-        <div
-          className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8"
-          ref={stickyComposerRef}
-        >
-          <div className="mx-auto w-full max-w-[920px]">
-            <Composer
-              compact={!compactComposerExpanded}
-              onCompactExpand={() => setCompactComposerExpanded(true)}
-              onSubmit={onSubmit}
-              taskId={taskId}
-            />
-          </div>
-        </div>
-      )}
       <ScrollArea className="min-h-0 flex-1" ref={scrollRootRef}>
         <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-6 lg:px-8">
           {children}
@@ -4142,7 +4105,7 @@ function ThreadColumn({
       {goTopVisible && (
         <Button
           aria-label="Go to top"
-          className="absolute bottom-4 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
+          className="absolute bottom-24 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
           onClick={() =>
             viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" })
           }
@@ -4152,6 +4115,15 @@ function ThreadColumn({
           <ArrowUp className="size-4" />
         </Button>
       )}
+      <div className="border-t border-border bg-card/40 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-[920px]">
+          <Composer
+            onSubmit={onSubmit}
+            taskId={taskId}
+            visibilityToggleRef={composerVisibilityToggleRef}
+          />
+        </div>
+      </div>
     </div>
   );
 }
