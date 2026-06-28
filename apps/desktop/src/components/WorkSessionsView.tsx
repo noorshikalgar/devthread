@@ -329,8 +329,19 @@ function ActiveSession({
         </span>
       </div>
 
-      <div className="text-8xl font-semibold tabular-nums tracking-tight text-foreground">
-        {formatSessionClock(session.remainingSeconds)}
+      <div className="relative flex items-center justify-center">
+        <div
+          aria-hidden
+          className={cn(
+            "absolute size-72 rounded-full blur-3xl will-change-transform",
+            session.status === "paused" ? "" : "animate-breathe",
+            isWork ? "bg-primary" : "bg-success",
+          )}
+          style={{ opacity: session.status === "paused" ? 0.12 : undefined }}
+        />
+        <div className="relative text-8xl font-semibold tabular-nums tracking-tight text-foreground">
+          {formatSessionClock(session.remainingSeconds)}
+        </div>
       </div>
 
       <div className="h-1.5 w-64 overflow-hidden rounded-full bg-muted">
