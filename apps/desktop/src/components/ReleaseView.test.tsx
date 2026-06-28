@@ -555,7 +555,7 @@ describe("ReleaseView sidebar", () => {
     expect(within(nav).queryByText("v0.3")).not.toBeInTheDocument();
   });
 
-  it("keeps released releases collapsed at the bottom until expanded", () => {
+  it("hides released releases until the Released tab is selected", () => {
     const releasedRelease: Release = {
       ...release,
       name: "Released June 2026",
@@ -579,12 +579,13 @@ describe("ReleaseView sidebar", () => {
     expect(screen.queryByText("Released June 2026")).not.toBeInTheDocument();
 
     const releasedToggle = screen.getByRole("button", { name: "Released" });
-    expect(releasedToggle).toHaveAttribute("aria-expanded", "false");
+    expect(releasedToggle).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(releasedToggle);
 
-    expect(releasedToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Released June 2026")).toBeInTheDocument();
+    expect(releasedToggle).toHaveAttribute("aria-pressed", "true");
+    expect(within(nav).getByText("Released June 2026")).toBeInTheDocument();
+    expect(within(nav).queryByText("v0.3")).not.toBeInTheDocument();
   });
 
   it("resizes and resets the release sidebar width", () => {
@@ -602,19 +603,19 @@ describe("ReleaseView sidebar", () => {
 
     const resizer = screen.getByLabelText("Resize release sidebar");
     const sidebarShell = resizer.parentElement as HTMLElement;
-    expect(sidebarShell).toHaveStyle({ width: "280px" });
+    expect(sidebarShell).toHaveStyle({ width: "320px" });
 
-    fireEvent.mouseDown(resizer, { clientX: 280 });
-    fireEvent.mouseMove(window, { clientX: 340 });
+    fireEvent.mouseDown(resizer, { clientX: 320 });
+    fireEvent.mouseMove(window, { clientX: 380 });
     fireEvent.mouseUp(window);
 
-    expect(sidebarShell).toHaveStyle({ width: "340px" });
-    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("340");
+    expect(sidebarShell).toHaveStyle({ width: "380px" });
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("380");
 
     fireEvent.doubleClick(resizer);
 
-    expect(sidebarShell).toHaveStyle({ width: "280px" });
-    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("280");
+    expect(sidebarShell).toHaveStyle({ width: "320px" });
+    expect(localStorage.getItem("devthread:release-sidebar-width")).toBe("320");
   });
 
   it("honors shell-controlled release sidebar visibility", () => {

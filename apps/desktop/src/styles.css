@@ -23,12 +23,24 @@
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
     --chart-1: 217 91% 60%;
     --chart-2: 24 95% 53%;
     --chart-3: 173 80% 40%;
     --chart-4: 262 83% 58%;
     --chart-grid: 240 5.9% 90%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 50%;
+    --info-foreground: 0 0% 100%;
+    --shadow-color: 220 20% 14%;
+    --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.05);
+    --shadow-sm: 0 1px 2px -1px hsl(var(--shadow-color) / 0.08), 0 1px 3px 0 hsl(var(--shadow-color) / 0.06);
+    --shadow-md: 0 4px 6px -2px hsl(var(--shadow-color) / 0.06), 0 6px 10px -3px hsl(var(--shadow-color) / 0.1);
+    --shadow-lg: 0 8px 16px -4px hsl(var(--shadow-color) / 0.1), 0 12px 24px -6px hsl(var(--shadow-color) / 0.12);
+    --shadow-xl: 0 16px 32px -8px hsl(var(--shadow-color) / 0.14), 0 24px 48px -12px hsl(var(--shadow-color) / 0.16);
   }
 
   .dark {
@@ -56,6 +68,18 @@
     --chart-3: 173 80% 40%;
     --chart-4: 262 83% 58%;
     --chart-grid: 240 3.7% 25%;
+    --success: 142 64% 45%;
+    --success-foreground: 144 60% 8%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 38 60% 10%;
+    --info: 217 91% 65%;
+    --info-foreground: 217 60% 10%;
+    --shadow-color: 0 0% 0%;
+    --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.3);
+    --shadow-sm: 0 1px 2px -1px hsl(var(--shadow-color) / 0.4), 0 1px 3px 0 hsl(var(--shadow-color) / 0.3);
+    --shadow-md: 0 4px 6px -2px hsl(var(--shadow-color) / 0.35), 0 6px 10px -3px hsl(var(--shadow-color) / 0.45);
+    --shadow-lg: 0 8px 16px -4px hsl(var(--shadow-color) / 0.45), 0 12px 24px -6px hsl(var(--shadow-color) / 0.5);
+    --shadow-xl: 0 16px 32px -8px hsl(var(--shadow-color) / 0.55), 0 24px 48px -12px hsl(var(--shadow-color) / 0.6);
   }
 
   .theme-default-dark {
@@ -571,7 +595,17 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings:
       "rlig" 1,
-      "calt" 1;
+      "calt" 1,
+      "ss01" 1;
+    letter-spacing: -0.011em;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.25);
+  }
+
+  :focus-visible {
+    outline: none;
   }
 
   * {

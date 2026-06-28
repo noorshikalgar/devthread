@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Folder, ListTodo, Search } from "lucide-react";
-import type { Folder as FolderModel, Task, WorkLogEntry } from "@/lib/types";
+import {
+  Folder,
+  ListChecks as ListTodo,
+  MagnifyingGlass as Search,
+} from "@phosphor-icons/react";
+import type {
+  Folder as FolderModel,
+  Release,
+  Task,
+  WorkLogEntry,
+} from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -9,13 +18,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { RELEASE_STATUS_DOT, STATUS_DOT } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 interface Result {
   id: string;
-  kind: "task" | "folder" | "entry";
+  kind: "task" | "folder" | "entry" | "release";
   title: string;
-  hint: string;
+  meta?: string;
+  dotColor?: string;
   group: string;
   onSelect: () => void;
 }
@@ -26,12 +37,36 @@ interface Props {
   tasks: Task[];
   folders: FolderModel[];
   entries: WorkLogEntry[];
+  releases: Release[];
   onSelectTask: (id: string) => void;
   onSelectFolder: (id: string) => void;
   onSelectEntry: (taskId: string, entryId: string) => void;
+  onSelectRelease: (name: string) => void;
 }
 
 const MAX_RESULTS = 30;
+const MAX_RECENTS = 10;
+const RECENT_TASKS_KEY = "devthread:command-palette-recent-tasks";
+
+function loadRecentTaskIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_TASKS_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentTaskId(id: string) {
+  const current = loadRecentTaskIds().filter((existing) => existing !== id);
+  current.unshift(id);
+  localStorage.setItem(
+    RECENT_TASKS_KEY,
+    JSON.stringify(current.slice(0, MAX_RECENTS)),
+  );
+}
 
 export function CommandPalette({
   open,
@@ -39,13 +74,16 @@ export function CommandPalette({
   tasks,
   folders,
   entries,
+  releases,
   onSelectTask,
   onSelectFolder,
   onSelectEntry,
+  onSelectRelease,
 }: Props) {
   const [query, setQuery] = useState("");
   const [regex, setRegex] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -53,6 +91,7 @@ export function CommandPalette({
     if (open) {
       setQuery("");
       setSelectedIndex(0);
+      setRecentTaskIds(loadRecentTaskIds());
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -63,9 +102,35 @@ export function CommandPalette({
     return map;
   }, [tasks]);
 
+  const folderById = useMemo(() => {
+    const map = new Map<string, FolderModel>();
+    for (const folder of folders) map.set(folder.id, folder);
+    return map;
+  }, [folders]);
+
   const results = useMemo<Result[]>(() => {
     const term = query.trim();
-    if (!term) return [];
+    if (!term) {
+      const out: Result[] = [];
+      for (const id of recentTaskIds) {
+        const task = taskById.get(id);
+        if (!task) continue;
+        out.push({
+          id: `task:${task.id}`,
+          kind: "task",
+          title: task.title,
+          meta: task.folderId ? folderById.get(task.folderId)?.name : undefined,
+          dotColor: STATUS_DOT[task.status],
+          group: "Recent",
+          onSelect: () => {
+            pushRecentTaskId(task.id);
+            onSelectTask(task.id);
+            onOpenChange(false);
+          },
+        });
+      }
+      return out;
+    }
     const matcher = createMatcher(term, regex);
     if (!matcher) return [];
     const out: Result[] = [];
@@ -75,9 +140,11 @@ export function CommandPalette({
           id: `task:${task.id}`,
           kind: "task",
           title: task.title,
-          hint: `Task · ${task.status}`,
+          meta: task.folderId ? folderById.get(task.folderId)?.name : undefined,
+          dotColor: STATUS_DOT[task.status],
           group: "Tasks",
           onSelect: () => {
+            pushRecentTaskId(task.id);
             onSelectTask(task.id);
             onOpenChange(false);
           },
@@ -90,7 +157,6 @@ export function CommandPalette({
           id: `folder:${folder.id}`,
           kind: "folder",
           title: folder.name,
-          hint: "Folder",
           group: "Folders",
           onSelect: () => {
             onSelectFolder(folder.id);
@@ -106,10 +172,26 @@ export function CommandPalette({
           id: `entry:${entry.id}`,
           kind: "entry",
           title: truncate(entry.contentMarkdown, 80),
-          hint: `Update · ${task?.title ?? "Unknown task"}`,
+          meta: task?.title ?? "Unknown task",
           group: "Timeline",
           onSelect: () => {
             onSelectEntry(entry.taskId, entry.id);
+            onOpenChange(false);
+          },
+        });
+      }
+    }
+    for (const release of releases) {
+      if (matcher(`${release.name} ${release.version ?? ""}`)) {
+        out.push({
+          id: `release:${release.name}`,
+          kind: "release",
+          title: release.name,
+          meta: release.version,
+          dotColor: RELEASE_STATUS_DOT[release.releaseStatus],
+          group: "Releases",
+          onSelect: () => {
+            onSelectRelease(release.name);
             onOpenChange(false);
           },
         });
@@ -120,12 +202,16 @@ export function CommandPalette({
     query,
     regex,
     tasks,
+    releases,
     folders,
     entries,
     taskById,
+    folderById,
+    recentTaskIds,
     onSelectTask,
     onSelectFolder,
     onSelectEntry,
+    onSelectRelease,
     onOpenChange,
   ]);
 
@@ -222,14 +308,16 @@ export function CommandPalette({
         </div>
         <div className="max-h-80 overflow-auto p-1.5">
           {results.length === 0 && (
-            <div className="flex flex-col items-center gap-1 px-3 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-4 opacity-60" />
+            <div className="flex flex-col items-center gap-2 px-3 py-8 text-center text-xs text-muted-foreground">
+              <div className="flex size-9 items-center justify-center rounded-full bg-muted/60">
+                <ListTodo className="size-4 opacity-70" />
+              </div>
               <span>
                 {query.trim()
                   ? regex && !createMatcher(query.trim(), true)
                     ? "Regex pattern is not valid yet."
                     : `No matches for “${query.trim()}”.`
-                  : "Type to search tasks, folders, or timeline updates."}
+                  : "Type to search tasks, folders, or timeline updates. Tasks you open will show up here."}
               </span>
             </div>
           )}
@@ -244,7 +332,7 @@ export function CommandPalette({
                 return (
                   <button
                     className={cn(
-                      "flex w-full items-start gap-2 rounded-sm px-1.5 py-1.5 text-left text-xs",
+                      "flex w-full items-center gap-2 rounded-sm px-1.5 py-1.5 text-left text-xs transition-colors duration-fast",
                       active
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-accent/60",
@@ -257,23 +345,27 @@ export function CommandPalette({
                     }}
                     type="button"
                   >
-                    {result.kind === "task" && (
-                      <FileText className="mt-0.5 size-3 text-muted-foreground" />
+                    {result.dotColor ? (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          result.dotColor,
+                        )}
+                      />
+                    ) : result.kind === "folder" ? (
+                      <Folder className="size-3 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ListTodo className="size-3 shrink-0 text-muted-foreground" />
                     )}
-                    {result.kind === "folder" && (
-                      <Folder className="mt-0.5 size-3 text-muted-foreground" />
-                    )}
-                    {result.kind === "entry" && (
-                      <ListTodo className="mt-0.5 size-3 text-muted-foreground" />
-                    )}
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate font-medium text-foreground">
-                        {result.title}
-                      </span>
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {result.hint}
-                      </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {result.title}
                     </span>
+                    {result.meta && (
+                      <span className="max-w-[120px] shrink-0 truncate text-[10px] text-muted-foreground">
+                        {result.meta}
+                      </span>
+                    )}
                   </button>
                 );
               })}

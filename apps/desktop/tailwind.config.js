@@ -1,4 +1,5 @@
 import { APP_THEMES } from "./src/lib/themes";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -48,15 +49,38 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
       },
       borderRadius: {
+        "2xl": "calc(var(--radius) + 8px)",
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xs: "calc(var(--radius) - 6px)",
+      },
+      boxShadow: {
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        focus: "0 0 0 1px hsl(var(--background)), 0 0 0 3px hsl(var(--ring) / 0.45)",
       },
       fontFamily: {
         sans: [
+          "Geist Sans",
           "Inter",
           "ui-sans-serif",
           "system-ui",
@@ -67,6 +91,7 @@ export default {
           "sans-serif",
         ],
         mono: [
+          "Geist Mono",
           "JetBrains Mono",
           "ui-monospace",
           "SFMono-Regular",
@@ -75,6 +100,14 @@ export default {
           "Consolas",
           "monospace",
         ],
+      },
+      transitionTimingFunction: {
+        emphasized: "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
+      transitionDuration: {
+        fast: "120ms",
+        base: "180ms",
+        slow: "280ms",
       },
       keyframes: {
         "accordion-down": {
@@ -85,12 +118,27 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "scale-in": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        "pulse-dot": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.4" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        shimmer: "shimmer 2s linear infinite",
+        "scale-in": "scale-in 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "pulse-dot": "pulse-dot 1.6s ease-in-out infinite",
       },
     },
   },
-  plugins: [],
+  plugins: [tailwindcssAnimate],
 };

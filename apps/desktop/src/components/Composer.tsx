@@ -1,15 +1,15 @@
 import {
-  CircleAlert,
-  CircleCheck,
-  CircleDot,
-  CircleHelp,
+  WarningCircle as CircleAlert,
+  CheckCircle as CircleCheck,
+  Record as CircleDot,
+  Question as CircleHelp,
   Eraser,
-  ImagePlus,
+  Image as ImagePlus,
   Lightbulb,
-  Send,
-  StickyNote,
+  PaperPlaneTilt as Send,
+  Note as StickyNote,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import {
   ClipboardEvent,
   KeyboardEvent,
@@ -41,7 +41,6 @@ import {
 } from "@/lib/types";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -425,236 +424,226 @@ export function Composer({
   }
 
   return (
-    <Card
+    <div
       aria-label="Add work update"
       className={cn(
-        "overflow-visible border-border/70 bg-card/95 shadow-sm transition-[border-color,box-shadow,background-color]",
-        focused &&
-          "border-[rgba(255,255,255,0.28)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]",
+        "relative space-y-2 rounded-2xl border border-border/60 bg-card/70 p-2.5 backdrop-blur-sm transition-[border-color,background-color]",
+        focused && "border-[rgba(255,255,255,0.28)] bg-card/90",
       )}
     >
-      <CardContent className="relative space-y-2 p-2.5">
-        <div className="flex flex-col gap-1.5">
-          <div className="relative">
-            <Textarea
-              aria-label="What happened?"
-              autoFocus
-              className="max-h-[132px] min-h-[84px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
-              onBlur={() => setFocused(false)}
-              onChange={(event) => changeContent(event.target.value)}
-              onFocus={() => setFocused(true)}
-              onKeyDown={keyDown}
-              onPaste={paste}
-              onSelect={(event) =>
-                updateMention((event.target as HTMLTextAreaElement).value)
-              }
-              placeholder="Type an update, blocker, note, progress..."
-              ref={textarea}
-              rows={3}
-              value={content}
-            />
-            {mention.active && filteredOptions.length > 0 && (
-              <div
-                aria-label="Entry type suggestions"
-                className="absolute left-2 top-9 z-50 w-80 max-w-[calc(100%-1rem)] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl"
-                ref={mentionList}
-                role="listbox"
-              >
-                {filteredOptions.map((option, index) => {
-                  const active = index === mentionIndex;
-                  const Icon = option.Icon ?? CircleHelp;
-                  return (
-                    <button
-                      aria-selected={active}
-                      className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs",
-                        active
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/60",
-                      )}
-                      data-mention-index={index}
-                      key={option.type}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        selectMention(option);
-                      }}
-                      onMouseEnter={() => setMentionIndex(index)}
-                      role="option"
-                      type="button"
-                    >
-                      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                        {option.label}
-                      </span>
-                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                        @{option.aliases[0]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!!images.length && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2">
-            {images.map((image) => (
-              <div className="relative" key={image.id}>
-                <img
-                  alt={image.name}
-                  className="block h-24 w-full rounded-md border border-border bg-muted object-cover"
-                  src={image.previewUrl}
-                />
-                <Button
-                  aria-label={`Remove ${image.name}`}
-                  className="absolute right-1.5 top-1.5"
-                  onClick={() =>
-                    setImages((current) =>
-                      current.filter((candidate) => candidate.id !== image.id),
-                    )
-                  }
-                  size="icon-sm"
-                  variant="secondary"
-                >
-                  <X />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!!links.length && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {links.map((link) => (
-              <a
-                className="flex min-w-[200px] max-w-[280px] flex-col rounded-md border border-border bg-muted/40 px-3 py-2 text-xs hover:bg-accent"
-                href={safeExternalUrl(link.url) ?? "#"}
-                key={link.url}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void openExternalUrl(link.url);
-                }}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <span className="font-medium text-foreground">{link.host}</span>
-                <span className="truncate text-[10px] text-muted-foreground">
-                  {link.label || link.url}
-                </span>
-              </a>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/55 pt-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <Select
-              onValueChange={(value) => setEntryType(value as EntryType)}
-              value={entryType}
+      <div className="flex flex-col gap-1.5">
+        <div className="relative">
+          <Textarea
+            aria-label="What happened?"
+            autoFocus
+            className="max-h-[132px] min-h-[84px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
+            onBlur={() => setFocused(false)}
+            onChange={(event) => changeContent(event.target.value)}
+            onFocus={() => setFocused(true)}
+            onKeyDown={keyDown}
+            onPaste={paste}
+            onSelect={(event) =>
+              updateMention((event.target as HTMLTextAreaElement).value)
+            }
+            placeholder="Type an update, blocker, note, progress..."
+            ref={textarea}
+            rows={3}
+            value={content}
+          />
+          {mention.active && filteredOptions.length > 0 && (
+            <div
+              aria-label="Entry type suggestions"
+              className="absolute left-2 top-9 z-50 w-80 max-w-[calc(100%-1rem)] animate-in rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg fade-in-0 zoom-in-95 duration-fast"
+              ref={mentionList}
+              role="listbox"
             >
-              <SelectTrigger
-                aria-label="Entry type"
-                className="h-7 w-auto gap-1 rounded-md border-0 bg-muted/55 px-2 text-xs font-medium shadow-none hover:bg-muted"
-              >
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {ENTRY_TYPES.filter((type) =>
-                  COMPOSER_ENTRY_TYPES.includes(type),
-                ).map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {MENTION_OPTIONS.find((option) => option.type === type)
-                      ?.label ?? type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border/60" />
-            <input
-              accept="image/*"
-              className="sr-only"
-              multiple
-              onChange={(event) => {
-                void addImages([...(event.target.files ?? [])]);
-                event.target.value = "";
-              }}
-              ref={fileInput}
-              type="file"
-            />
-            {(content.trim() || images.length > 0) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    aria-label="Clear draft"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={resetComposer}
-                    size="icon-sm"
-                    variant="ghost"
+              {filteredOptions.map((option, index) => {
+                const active = index === mentionIndex;
+                const Icon = option.Icon ?? CircleHelp;
+                return (
+                  <button
+                    aria-selected={active}
+                    className={cn(
+                      "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors duration-fast",
+                      active
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-accent/60",
+                    )}
+                    data-mention-index={index}
+                    key={option.type}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      selectMention(option);
+                    }}
+                    onMouseEnter={() => setMentionIndex(index)}
+                    role="option"
+                    type="button"
                   >
-                    <Eraser />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Clear draft</TooltipContent>
-              </Tooltip>
-            )}
+                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {option.label}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      @{option.aliases[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!!images.length && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2">
+          {images.map((image) => (
+            <div className="relative" key={image.id}>
+              <img
+                alt={image.name}
+                className="block h-24 w-full rounded-md border border-border bg-muted object-cover"
+                src={image.previewUrl}
+              />
+              <Button
+                aria-label={`Remove ${image.name}`}
+                className="absolute right-1.5 top-1.5"
+                onClick={() =>
+                  setImages((current) =>
+                    current.filter((candidate) => candidate.id !== image.id),
+                  )
+                }
+                size="icon-sm"
+                variant="secondary"
+              >
+                <X />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!!links.length && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {links.map((link) => (
+            <a
+              className="flex min-w-[200px] max-w-[280px] flex-col rounded-md border border-border bg-muted/40 px-3 py-2 text-xs transition-colors duration-fast hover:bg-accent"
+              href={safeExternalUrl(link.url) ?? "#"}
+              key={link.url}
+              onClick={(event) => {
+                event.preventDefault();
+                void openExternalUrl(link.url);
+              }}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <span className="font-medium text-foreground">{link.host}</span>
+              <span className="truncate text-[10px] text-muted-foreground">
+                {link.label || link.url}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Select
+            onValueChange={(value) => setEntryType(value as EntryType)}
+            value={entryType}
+          >
+            <SelectTrigger
+              aria-label="Entry type"
+              className="h-7 w-auto gap-1 rounded-md border-0 bg-muted/55 px-2 text-xs font-medium shadow-none hover:bg-muted"
+            >
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {ENTRY_TYPES.filter((type) =>
+                COMPOSER_ENTRY_TYPES.includes(type),
+              ).map((type) => (
+                <SelectItem key={type} value={type}>
+                  {MENTION_OPTIONS.find((option) => option.type === type)
+                    ?.label ?? type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border/60" />
+          <input
+            accept="image/*"
+            className="sr-only"
+            multiple
+            onChange={(event) => {
+              void addImages([...(event.target.files ?? [])]);
+              event.target.value = "";
+            }}
+            ref={fileInput}
+            type="file"
+          />
+          {(content.trim() || images.length > 0) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  aria-label="Attach images"
-                  className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
-                  onClick={() => fileInput.current?.click()}
-                  size="sm"
+                  aria-label="Clear draft"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={resetComposer}
+                  size="icon-sm"
                   variant="ghost"
                 >
-                  <ImagePlus />
-                  <span>Attach image</span>
+                  <Eraser />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Attach or paste images</TooltipContent>
+              <TooltipContent>Clear draft</TooltipContent>
             </Tooltip>
-            <span
-              aria-label="Hint: Type @ to change the content type (progress, blocker, etc)"
-              className="inline-flex items-center gap-1 rounded bg-muted/35 px-1.5 py-1 text-[11px] text-muted-foreground"
-            >
-              <span className="font-medium text-muted-foreground/90">
-                Hint:{" "}
-              </span>
-              <span>
-                Type <span className="font-mono text-foreground/75">@</span> to
-                change the content type
-              </span>
-              <span className="hidden sm:inline">
-                {" "}
-                (progress, blocker, etc)
-              </span>
-            </span>
-          </div>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                className="h-7 gap-1.5 px-3 text-xs font-medium shadow-sm transition-transform active:scale-[0.98] [&_svg]:size-3.5"
-                disabled={submitDisabled}
-                onClick={() => void submit()}
+                aria-label="Attach images"
+                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                onClick={() => fileInput.current?.click()}
                 size="sm"
+                variant="ghost"
               >
-                <Send />
-                {saving ? "Adding…" : "Add"}
+                <ImagePlus />
+                <span>Attach image</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              {metaKey} + ↵ to add · Type @ to switch type
-            </TooltipContent>
+            <TooltipContent>Attach or paste images</TooltipContent>
           </Tooltip>
+          <span
+            aria-label="Hint: Type @ to change the content type (progress, blocker, etc)"
+            className="inline-flex items-center gap-1 rounded bg-muted/35 px-1.5 py-1 text-[11px] text-muted-foreground"
+          >
+            <span className="font-medium text-muted-foreground/90">Hint: </span>
+            <span>
+              Type <span className="font-mono text-foreground/75">@</span> to
+              change the content type
+            </span>
+            <span className="hidden sm:inline"> (progress, blocker, etc)</span>
+          </span>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="h-7 gap-1.5 px-3 text-xs font-medium [&_svg]:size-3.5"
+              disabled={submitDisabled}
+              onClick={() => void submit()}
+              size="sm"
+            >
+              <Send />
+              {saving ? "Adding…" : "Add"}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {metaKey} + ↵ to add · Type @ to switch type
+          </TooltipContent>
+        </Tooltip>
+      </div>
 
-        {error && (
-          <p className="text-[11px] text-destructive">
-            {error} Draft retained.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      {error && (
+        <p className="text-[11px] text-destructive">{error} Draft retained.</p>
+      )}
+    </div>
   );
 }
 

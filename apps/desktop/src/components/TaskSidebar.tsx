@@ -1,27 +1,28 @@
 import {
-  ArchiveRestore,
+  TrayArrowUp as ArchiveRestore,
   Check,
-  ChevronRight,
+  CaretRight as ChevronRight,
   Copy,
-  FileSpreadsheet,
+  Table as FileSpreadsheet,
   FileText,
   Folder,
   FolderMinus,
   FolderOpen,
   FolderPlus,
-  ListTodo,
+  ListChecks as ListTodo,
   Pencil,
-  Pin,
+  PushPin as Pin,
   Plus,
-  Search,
+  MagnifyingGlass as Search,
   Tag,
-  Trash2,
+  Trash as Trash2,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
+import { formatDistanceToNow } from "date-fns";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Folder as FolderModel, Release, Task } from "@/lib/types";
-import { STATUS_DOT } from "@/lib/status";
+import type { Folder as FolderModel, Release, Task, TaskStatus } from "@/lib/types";
+import { STATUS_DOT, STATUS_LABEL } from "@/lib/status";
 import { hasComposerDraft } from "@/lib/composerDraftStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,6 +102,14 @@ type Props = ActiveModeProps | ArchiveModeProps;
 
 const UNCATEGORIZED = "__ungrouped__";
 const SEARCH_INPUT_MAX_LENGTH = 80;
+// "active" is deliberately excluded — the Active tasks section above
+// already covers that filter, so a chip for it would be redundant.
+const STATUS_FILTER_OPTIONS: TaskStatus[] = [
+  "planned",
+  "blocked",
+  "paused",
+  "done",
+];
 const SEARCH_MESSAGE_MAX_LENGTH = 28;
 
 // Subscribe to composer-draft store changes so the sidebar
@@ -174,18 +183,20 @@ function ActiveSidebar({
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [openActiveTasks, setOpenActiveTasks] = useState(true);
   const [openPinnedTasks, setOpenPinnedTasks] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const searchTerm = query.trim();
   const isSearching = searchTerm.length > 0;
 
   const filtered = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return tasks.filter((task) => {
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (!term) return true;
       return `${task.title} ${task.status} ${task.nextStep ?? ""}`
         .toLowerCase()
         .includes(term);
     });
-  }, [tasks, searchTerm]);
+  }, [tasks, searchTerm, statusFilter]);
 
   const grouped = useMemo(() => {
     const byFolder = new Map<string, Task[]>();
@@ -284,50 +295,7 @@ function ActiveSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
-        <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo
-            className="size-4 shrink-0 text-current"
-            strokeWidth={1.75}
-          />
-          <span className="truncate text-sm font-medium text-current">
-            Tasks
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="New folder"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                onClick={openCreateFolderDialog}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <FolderPlus strokeWidth={1.75} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New folder</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="New task"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                disabled={creating}
-                onClick={() => void handleCreate()}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <Plus strokeWidth={1.75} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New task</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      <div className="px-3.5 pb-4">
+      <div className="px-3.5 pb-4 pt-4">
         <div className="relative">
           {query ? (
             <button
@@ -336,12 +304,11 @@ function ActiveSidebar({
               onClick={() => setQuery("")}
               type="button"
             >
-              <X className="size-3.5" strokeWidth={1.75} />
+              <X className="size-3.5" />
             </button>
           ) : (
             <Search
               className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-              strokeWidth={1.75}
             />
           )}
           <Input
@@ -360,6 +327,33 @@ function ActiveSidebar({
             value={query}
           />
         </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(["all", ...STATUS_FILTER_OPTIONS] as const).map((status) => {
+            const active = statusFilter === status;
+            return (
+              <button
+                aria-pressed={active}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors duration-fast",
+                  active
+                    ? "border-transparent bg-secondary text-secondary-foreground"
+                    : "border-border/70 text-muted-foreground hover:border-ring/40 hover:text-foreground",
+                )}
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                type="button"
+              >
+                {status !== "all" && (
+                  <span
+                    aria-hidden
+                    className={cn("size-1.5 rounded-full", STATUS_DOT[status])}
+                  />
+                )}
+                {status === "all" ? "All" : STATUS_LABEL[status]}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
@@ -374,17 +368,19 @@ function ActiveSidebar({
             >
               <button
                 aria-expanded={openActiveTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors duration-fast hover:text-foreground"
                 onClick={() => setOpenActiveTasks((open) => !open)}
                 type="button"
               >
                 <ChevronRight
                   className={cn(
-                    "size-3.5 transition-transform duration-150 ease-out",
+                    "size-3.5 transition-transform duration-base ease-emphasized",
                     openActiveTasks && "rotate-90",
                   )}
                 />
-                <span className="min-w-0 flex-1 truncate">Active tasks</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {`Active tasks · ${activeTasks.length}`}
+                </span>
               </button>
               <div
                 aria-hidden={!openActiveTasks}
@@ -432,17 +428,19 @@ function ActiveSidebar({
             >
               <button
                 aria-expanded={openPinnedTasks}
-                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold text-foreground hover:text-foreground"
+                className="flex min-w-0 items-center gap-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors duration-fast hover:text-foreground"
                 onClick={() => setOpenPinnedTasks((open) => !open)}
                 type="button"
               >
                 <ChevronRight
                   className={cn(
-                    "size-3.5 transition-transform duration-150 ease-out",
+                    "size-3.5 transition-transform duration-base ease-emphasized",
                     openPinnedTasks && "rotate-90",
                   )}
                 />
-                <span className="min-w-0 flex-1 truncate">Pinned tasks</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {`Pinned tasks · ${pinnedTasks.length}`}
+                </span>
               </button>
               <div
                 aria-hidden={!openPinnedTasks}
@@ -479,8 +477,43 @@ function ActiveSidebar({
           )}
 
           <div className="flex min-w-0 flex-col gap-px overflow-hidden px-3.5 pb-3">
-            <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
-              {isSearching ? "Search results" : "All Tasks"}
+            <div className="flex items-center justify-between gap-2 px-0.5 pb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                {`${isSearching ? "Search results" : "All Tasks"} · ${filtered.length}`}
+              </span>
+              {!isSearching && (
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label="New folder"
+                        className="size-6 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                        onClick={openCreateFolderDialog}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <FolderPlus className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>New folder</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label="New task"
+                        className="size-6 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                        disabled={creating}
+                        onClick={() => void handleCreate()}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <Plus className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>New task</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
             </div>
             {isSearching
               ? filtered.map((task) => (
@@ -555,8 +588,10 @@ function ActiveSidebar({
           </div>
 
           {!hasAnyContent && (
-            <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-5 opacity-60" strokeWidth={1.75} />
+            <div className="flex flex-col items-center gap-3 px-2 py-10 text-center text-xs text-muted-foreground animate-in fade-in-0 duration-base">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">
+                <ListTodo className="size-4 opacity-70" />
+              </div>
               {searchTerm ? (
                 <span className="max-w-full truncate">
                   No tasks match “{noResultsQuery}”.
@@ -696,16 +731,7 @@ function ArchiveSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card/95 text-card-foreground">
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
-        <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-          <ListTodo
-            className="size-4 shrink-0 text-current"
-            strokeWidth={1.75}
-          />
-          <span className="truncate text-sm font-medium text-current">
-            {title}
-          </span>
-        </div>
+      <div className="flex items-center justify-end gap-2 px-3.5 pb-3 pt-4">
         <div className="flex shrink-0 items-center gap-1">
           <Button
             aria-label="Restore selected"
@@ -716,7 +742,7 @@ function ArchiveSidebar({
             type="button"
             variant="outline"
           >
-            <ArchiveRestore className="mr-1 size-3.5" strokeWidth={1.75} />
+            <ArchiveRestore className="mr-1 size-3.5" />
             Restore selected
           </Button>
         </div>
@@ -731,12 +757,11 @@ function ArchiveSidebar({
               onClick={() => setQuery("")}
               type="button"
             >
-              <X className="size-3.5" strokeWidth={1.75} />
+              <X className="size-3.5" />
             </button>
           ) : (
             <Search
               className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-              strokeWidth={1.75}
             />
           )}
           <Input
@@ -777,7 +802,7 @@ function ArchiveSidebar({
           ))}
           {!filtered.length && (
             <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-              <ListTodo className="size-5 opacity-60" strokeWidth={1.75} />
+              <ListTodo className="size-5 opacity-60" />
               {searchTerm ? (
                 <span className="max-w-full truncate">
                   No archived tasks match “{noResultsQuery}”.
@@ -888,7 +913,6 @@ function FolderGroup({
                     "size-3.5 shrink-0 transition-colors duration-150 ease-out group-hover/folder:text-foreground",
                     open ? "text-foreground/80" : "text-muted-foreground/90",
                   )}
-                  strokeWidth={1.75}
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -916,7 +940,7 @@ function FolderGroup({
                     }}
                     type="button"
                   >
-                    <Plus className="size-3.5" strokeWidth={1.75} />
+                    <Plus className="size-3.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>New task in {folder.name}</TooltipContent>
@@ -1517,13 +1541,14 @@ function ArchiveRow({
           <Check
             aria-hidden
             className="pointer-events-none absolute size-3 text-primary-foreground"
-            strokeWidth={3}
+            weight="bold"
           />
         )}
       </span>
       <button
         className="min-w-0 flex-1 text-left"
         onClick={onSelect}
+        title={`Archived ${formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}`}
         type="button"
       >
         <span className="block w-full truncate text-sm font-normal text-current">
@@ -1545,7 +1570,7 @@ function ArchiveRow({
               type="button"
               variant="ghost"
             >
-              <ArchiveRestore className="size-3.5" strokeWidth={1.75} />
+              <ArchiveRestore className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Restore to active</TooltipContent>
@@ -1564,7 +1589,7 @@ function ArchiveRow({
               type="button"
               variant="ghost"
             >
-              <Trash2 className="size-3.5" strokeWidth={1.75} />
+              <Trash2 className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete permanently</TooltipContent>

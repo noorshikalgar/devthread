@@ -197,9 +197,9 @@ describe("TaskSidebar", () => {
       />,
     );
 
-    const active = screen.getByText("Active tasks");
-    const pinned = screen.getByText("Pinned tasks");
-    const all = screen.getByText("All Tasks");
+    const active = screen.getByText(/^Active tasks/);
+    const pinned = screen.getByText(/^Pinned tasks/);
+    const all = screen.getByText(/^All Tasks/);
 
     expect(
       active.compareDocumentPosition(pinned) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -388,8 +388,8 @@ describe("TaskSidebar", () => {
     });
 
     expect(screen.queryByText("Atlas Notes")).not.toBeInTheDocument();
-    expect(screen.queryByText("Active tasks")).not.toBeInTheDocument();
-    expect(screen.getByText("Search results")).toBeInTheDocument();
+    expect(screen.queryByText(/^Active tasks/)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Search results/)).toBeInTheDocument();
     expect(screen.getByText("Testing Task for Bugs")).toBeInTheDocument();
   });
 
@@ -629,7 +629,7 @@ describe("TaskSidebar (archive mode)", () => {
     { ...baseTask, id: "a2", title: "Stale exploration", folderId: null },
   ];
 
-  it("renders the Archive title and 'Restore selected' button (disabled until a checkbox is checked)", () => {
+  it("renders the 'Restore selected' button (disabled until a checkbox is checked)", () => {
     const onRestore = vi.fn().mockResolvedValue(undefined);
     render(
       <TaskSidebar
@@ -642,9 +642,8 @@ describe("TaskSidebar (archive mode)", () => {
         tasks={archivedTasks}
       />,
     );
-    // The header title is "Archive" and the bulk button reads
-    // "Restore selected".
-    expect(screen.getByText("Archive")).toBeInTheDocument();
+    // The workspace title ("Archive") now lives in the app's top bar, not
+    // this panel header, so we only assert on the bulk-action button here.
     const restoreSelected = screen.getByLabelText("Restore selected");
     expect(restoreSelected).toBeDisabled();
   });

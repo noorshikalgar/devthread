@@ -1,5 +1,9 @@
 import { format } from "date-fns";
-import { CalendarIcon, Clock4, RotateCcw } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  Clock as Clock4,
+  ArrowCounterClockwise as RotateCcw,
+} from "@phosphor-icons/react";
 import { FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";

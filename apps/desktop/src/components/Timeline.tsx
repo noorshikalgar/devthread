@@ -1,13 +1,13 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
-  ChevronDown,
-  Clock4,
-  ExternalLink,
-  History,
-  RotateCcw,
-  SquarePen,
-  Trash2,
-} from "lucide-react";
+  CaretDown as ChevronDown,
+  Clock as Clock4,
+  ArrowSquareOut as ExternalLink,
+  ClockCounterClockwise as History,
+  ArrowCounterClockwise as RotateCcw,
+  NotePencil as SquarePen,
+  Trash as Trash2,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,6 +24,7 @@ import { formatDuration } from "@/lib/duration";
 import { openExternalUrl, safeExternalUrl } from "@/lib/openExternal";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { extractLinkPreviews, isLongEntry } from "@/lib/content";
+import { ENTRY_BG, ENTRY_DOT, ENTRY_LABEL } from "@/lib/status";
 import {
   type Attachment,
   type EntryType,
@@ -55,46 +56,6 @@ interface Props {
 }
 
 export type TimelineViewMode = "normal" | "compact";
-
-const ENTRY_LABELS: Record<EntryType, string> = {
-  note: "Note",
-  progress: "Progress",
-  finding: "Finding",
-  blocker: "Blocker",
-  decision: "Decision",
-  next_step: "Next step",
-  worklog: "Worklog",
-  status: "Status",
-  estimate: "Estimate",
-};
-
-const TYPE_DOT: Record<EntryType, string> = {
-  progress: "bg-sky-500",
-  next_step: "bg-sky-500",
-  finding: "bg-emerald-500",
-  blocker: "bg-amber-500",
-  decision: "bg-violet-500",
-  note: "bg-muted-foreground",
-  worklog: "bg-cyan-500",
-  status: "bg-blue-500",
-  estimate: "bg-fuchsia-500",
-};
-
-const TYPE_TOKEN: Record<EntryType, string> = {
-  progress: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  next_step: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  finding:
-    "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  blocker:
-    "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  decision:
-    "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
-  note: "border-border bg-muted/45 text-muted-foreground",
-  worklog: "border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  status: "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  estimate:
-    "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
-};
 
 const PROTECTED_ENTRY_TYPES = new Set<EntryType>([
   "progress",
@@ -137,11 +98,25 @@ export function Timeline({
     );
   }
 
-  const groups = groupByDate(entries);
+  // `entries` arrives newest-first (the data layer sorts that way for
+  // search/pagination), but the timeline reads top-to-bottom like a
+  // chat log: oldest at the top, most recent right above the composer.
+  // Reverse only for display — grouping itself still relies on same-day
+  // entries being contiguous, which holds regardless of sort direction.
+  const groups = groupByDate(entries)
+    .map((group) => ({ ...group, items: [...group.items].reverse() }))
+    .reverse();
   const compact = viewMode === "compact";
 
   return (
     <section aria-label="Task timeline" className="flex flex-col gap-5 pt-5">
+      {hasMore && !readOnly && onLoadMore && (
+        <div className="flex justify-center pb-2">
+          <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
+            Load older updates
+          </Button>
+        </div>
+      )}
       {groups.map((group) => (
         <div key={group.label} className="group/day flex flex-col gap-2">
           {compact ? (
@@ -196,14 +171,6 @@ export function Timeline({
           </ol>
         </div>
       ))}
-
-      {hasMore && !readOnly && onLoadMore && (
-        <div className="flex justify-center pt-2">
-          <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
-            Load older updates
-          </Button>
-        </div>
-      )}
     </section>
   );
 }
@@ -267,7 +234,7 @@ function CompactTimelineEntry({
           aria-hidden
           className={cn(
             "z-10 size-2 rounded-full ring-[3px] ring-background transition-transform duration-150 group-hover:scale-110",
-            TYPE_DOT[entry.entryType],
+            ENTRY_DOT[entry.entryType],
           )}
         />
         <span
@@ -294,10 +261,10 @@ function CompactTimelineEntry({
           <span
             className={cn(
               "inline-flex h-[17px] min-w-0 items-center justify-center rounded border px-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.03em]",
-              TYPE_TOKEN[entry.entryType],
+              ENTRY_BG[entry.entryType],
             )}
           >
-            <span className="truncate">{ENTRY_LABELS[entry.entryType]}</span>
+            <span className="truncate">{ENTRY_LABEL[entry.entryType]}</span>
           </span>
 
           {hasDuration && (
@@ -404,7 +371,7 @@ function TimelineEntryCard({
     <>
       <div
         className={cn(
-          "relative flex min-w-0 flex-col gap-2 transition-[background-color,border-color,box-shadow] duration-150",
+          "relative flex min-w-0 flex-col gap-2 transition-[background-color,border-color,box-shadow] duration-base ease-emphasized",
           surface === "card" &&
             "rounded-md border border-border/55 bg-card/70 px-3 py-2.5 pr-9 shadow-sm group-hover:border-border group-hover:bg-card group-hover:shadow-md",
           surface === "inline" && "py-1.5",
@@ -419,7 +386,7 @@ function TimelineEntryCard({
           <div className="flex min-h-6 min-w-0 items-center justify-between gap-3 pr-20">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <time
-                className="font-['SF_Mono','JetBrains_Mono','IBM_Plex_Mono',ui-monospace,monospace] text-[11px] font-semibold leading-4 tabular-nums tracking-[0.02em] text-muted-foreground"
+                className="font-mono text-[11px] font-semibold leading-4 tabular-nums tracking-[0.02em] text-muted-foreground"
                 dateTime={entry.occurredAt}
               >
                 {inlineTimestamp}
@@ -635,10 +602,10 @@ function EntryMetaChips({ entry }: { entry: WorkLogEntry }) {
       <span
         className={cn(
           "inline-flex h-5 items-center rounded border px-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
-          TYPE_TOKEN[entry.entryType],
+          ENTRY_BG[entry.entryType],
         )}
       >
-        {ENTRY_LABELS[entry.entryType]}
+        {ENTRY_LABEL[entry.entryType]}
       </span>
       {entry.durationMinutes != null && entry.durationMinutes > 0 && (
         <span
@@ -683,7 +650,7 @@ function TimelineEntry({
           aria-hidden
           className={cn(
             "z-10 size-2 rounded-full ring-[4px] ring-background transition-transform duration-150 group-hover:scale-125",
-            TYPE_DOT[entry.entryType],
+            ENTRY_DOT[entry.entryType],
           )}
         />
       </div>

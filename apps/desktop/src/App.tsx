@@ -1,30 +1,34 @@
 import {
   Archive,
-  ArchiveRestore,
-  ArrowUp,
-  BarChart3,
+  TrayArrowUp as ArchiveRestore,
+  ArrowDown,
+  ChartBar as BarChart3,
   Calendar,
   Check,
-  Clock4,
-  ClipboardPaste,
+  Clock as Clock4,
+  ClipboardText as ClipboardPaste,
   Copy,
   Download,
-  ExternalLink,
-  GripVertical,
+  ArrowSquareOut as ExternalLink,
+  FileText,
+  DotsSixVertical as GripVertical,
   Info,
-  ListTodo,
+  Keyboard as KeyboardIcon,
+  ListChecks as ListTodo,
   Moon,
-  MoreHorizontal,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  Settings,
+  DotsThree as MoreHorizontal,
+  ArrowsClockwise as RefreshCw,
+  ArrowCounterClockwise as RotateCcw,
+  MagnifyingGlass as Search,
+  Gear as Settings,
   Scissors,
+  SlidersHorizontal,
   Sun,
   Tag,
-  Trash2,
+  Trash as Trash2,
   X,
-} from "lucide-react";
+  type Icon as LucideIcon,
+} from "@phosphor-icons/react";
 import { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
@@ -50,6 +54,7 @@ import { ReleaseView } from "@/components/ReleaseView";
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline, type TimelineViewMode } from "@/components/Timeline";
+import { TopBar } from "@/components/TopBar";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
@@ -81,7 +86,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -161,7 +168,7 @@ const UPDATE_INTERVAL_OPTIONS = [
   { value: "24h", label: "Every 24 hours", ms: 24 * 60 * 60 * 1000 },
 ] as const;
 type UpdateInterval = (typeof UPDATE_INTERVAL_OPTIONS)[number]["value"];
-const DEFAULT_SIDEBAR_WIDTH = 280;
+const DEFAULT_SIDEBAR_WIDTH = 320;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const APP_VERSION = __APP_VERSION__;
@@ -262,6 +269,53 @@ export default function App() {
     loadWorklogSettings(),
   );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("tasks");
+  const [navHistory, setNavHistory] = useState<{
+    stack: { mode: WorkspaceMode; taskId: string | null }[];
+    index: number;
+  }>(() => ({
+    stack: [{ mode: "tasks", taskId: localStorage.getItem(SELECTED_TASK_KEY) }],
+    index: 0,
+  }));
+  const skipHistoryPush = useRef(false);
+  useEffect(() => {
+    if (skipHistoryPush.current) {
+      skipHistoryPush.current = false;
+      return;
+    }
+    setNavHistory((prev) => {
+      const top = prev.stack[prev.index];
+      if (top && top.mode === workspaceMode && top.taskId === selectedId) {
+        return prev;
+      }
+      const trimmed = [
+        ...prev.stack.slice(0, prev.index + 1),
+        { mode: workspaceMode, taskId: selectedId },
+      ];
+      return { stack: trimmed, index: trimmed.length - 1 };
+    });
+  }, [workspaceMode, selectedId]);
+  const goBackNav = useCallback(() => {
+    setNavHistory((prev) => {
+      if (prev.index <= 0) return prev;
+      const nextIndex = prev.index - 1;
+      const entry = prev.stack[nextIndex];
+      skipHistoryPush.current = true;
+      setWorkspaceMode(entry.mode);
+      setSelectedId(entry.taskId);
+      return { ...prev, index: nextIndex };
+    });
+  }, []);
+  const goForwardNav = useCallback(() => {
+    setNavHistory((prev) => {
+      if (prev.index >= prev.stack.length - 1) return prev;
+      const nextIndex = prev.index + 1;
+      const entry = prev.stack[nextIndex];
+      skipHistoryPush.current = true;
+      setWorkspaceMode(entry.mode);
+      setSelectedId(entry.taskId);
+      return { ...prev, index: nextIndex };
+    });
+  }, []);
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateMessage, setUpdateMessage] = useState(
@@ -290,6 +344,9 @@ export default function App() {
   >([]);
   const [worklogLoading, setWorklogLoading] = useState(false);
   const [releases, setReleases] = useState<Release[]>([]);
+  const [pendingReleaseName, setPendingReleaseName] = useState<string | null>(
+    null,
+  );
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
@@ -447,8 +504,22 @@ export default function App() {
     }
 
     async function handleContextMenu(event: globalThis.MouseEvent) {
+      // A Radix ContextMenuTrigger/DropdownMenuTrigger already called
+      // preventDefault() to open its own menu — defer to it entirely
+      // instead of also spawning our copy/paste menu underneath.
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-radix-popper-content-wrapper]")) return;
+      // A Radix menu (context/dropdown) is already open elsewhere on the
+      // page — this click is dismissing it, not requesting our menu.
+      // The browser may have auto-selected a word under the cursor as
+      // part of its native right-click handling; clear that too.
+      if (document.querySelector('[role="menu"][data-state="open"]')) {
+        event.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+      event.preventDefault();
       const editorRoot = target?.closest(".cm-editor") as HTMLElement | null;
       const editorView = editorRoot
         ? CodeMirrorEditorView.findFromDOM(editorRoot)
@@ -456,7 +527,7 @@ export default function App() {
       const editableTarget =
         editorView?.contentDOM ??
         ((target?.closest(
-          'input, textarea, [contenteditable="true"]',
+          'input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]',
         ) as HTMLElement | null) ||
           null);
       const selectedText = editorView
@@ -465,9 +536,11 @@ export default function App() {
       const link = target?.closest("a[href]") as HTMLAnchorElement | null;
       const linkUrl = safeExternalUrl(link?.getAttribute("href"));
 
-      event.preventDefault();
       if (!selectedText && !linkUrl && !editableTarget) {
         setContextMenu(null);
+        // Plain UI text (task rows, menu items, etc.) shouldn't end up
+        // selected just because the browser auto-selects on right-click.
+        window.getSelection()?.removeAllRanges();
         return;
       }
       let canPaste = false;
@@ -1183,14 +1256,25 @@ export default function App() {
   }
 
   function selectFolder(folderId: string | null) {
-    if (!sidebarOpen) setSidebarOpen(true);
     const firstTask = tasks.find((task) => task.folderId === folderId);
-    if (firstTask) setSelectedId(firstTask.id);
+    if (firstTask) jumpToTask(firstTask.id);
+  }
+
+  function jumpToTask(taskId: string) {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    setWorkspaceMode(task?.status === "archived" ? "archive" : "tasks");
+    setSidebarOpen(true);
+    setSelectedId(taskId);
+  }
+
+  function jumpToRelease(name: string) {
+    setWorkspaceMode("releases");
+    setPendingReleaseName(name);
   }
 
   function selectEntry(taskId: string, entryId: string) {
-    if (selectedId !== taskId) {
-      setSelectedId(taskId);
+    if (selectedId !== taskId || workspaceMode === "releases" || workspaceMode === "worklog") {
+      jumpToTask(taskId);
     }
     setTimeout(() => {
       const node = document.querySelector(`[data-entry-id="${entryId}"]`);
@@ -1260,6 +1344,19 @@ export default function App() {
       setSidebarOpen((open) => !open);
     },
     onOpenWorklog: () => setWorkspaceMode("worklog"),
+    onOpenReleases: () => {
+      if (workspaceMode !== "releases") {
+        setWorkspaceMode("releases");
+        setReleaseSidebarOpen(true);
+        localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, "true");
+        return;
+      }
+      setReleaseSidebarOpen((open) => {
+        const next = !open;
+        localStorage.setItem(RELEASE_SIDEBAR_OPEN_KEY, String(next));
+        return next;
+      });
+    },
     onEditTitle: () => {
       if (selectedTask) setPendingTitleEdit(true);
     },
@@ -1307,6 +1404,16 @@ export default function App() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground select-none">
+      <TopBar
+        canGoBack={navHistory.index > 0}
+        canGoForward={navHistory.index < navHistory.stack.length - 1}
+        onGoBack={goBackNav}
+        onGoForward={goForwardNav}
+        onSearchOpen={() => setPaletteOpen(true)}
+        selectedTask={selectedTask}
+        updateAvailable={updateState === "available"}
+        workspaceMode={workspaceMode}
+      />
       <div className="flex min-h-0 flex-1 border-t border-border">
         <AppRail
           archiveActive={workspaceMode === "archive"}
@@ -1337,7 +1444,6 @@ export default function App() {
               return next;
             });
           }}
-          onSearchOpen={() => setPaletteOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
             if (workspaceMode !== "tasks") {
@@ -1474,13 +1580,11 @@ export default function App() {
               folders={folders}
               onReleasesChanged={loadReleases}
               onRemoveTaskTag={handleRemoveTaskTag}
-              onSelectTask={(id: string) => {
-                setSelectedId(id);
-                setWorkspaceMode("tasks");
-                setSidebarOpen(true);
-              }}
+              onRequestedReleaseNameHandled={() => setPendingReleaseName(null)}
+              onSelectTask={jumpToTask}
               onTagTask={handleTagTask}
               releases={releases}
+              requestedReleaseName={pendingReleaseName}
               sidebarOpen={releaseSidebarOpen}
               tasks={sidebarTasks}
             />
@@ -1517,6 +1621,7 @@ export default function App() {
               />
               <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1">
                 <ThreadColumn
+                  composerVisibilityToggleRef={composerVisibilityToggleRef}
                   entryTypeFilter={entryTypeFilter}
                   onEntryTypeFilterChange={setEntryTypeFilter}
                   onRegexChange={setTimelineRegex}
@@ -1527,11 +1632,6 @@ export default function App() {
                   searchInputRef={timelineSearchInputRef}
                   taskId={selectedTask.id}
                 >
-                  <Composer
-                    onSubmit={createEntry}
-                    taskId={selectedTask.id}
-                    visibilityToggleRef={composerVisibilityToggleRef}
-                  />
                   <Timeline
                     attachments={attachments}
                     entries={visibleEntries}
@@ -1564,8 +1664,10 @@ export default function App() {
         onOpenChange={setPaletteOpen}
         onSelectEntry={selectEntry}
         onSelectFolder={selectFolder}
-        onSelectTask={setSelectedId}
+        onSelectRelease={jumpToRelease}
+        onSelectTask={jumpToTask}
         open={paletteOpen}
+        releases={releases}
         tasks={tasks}
       />
       <SettingsDialog
@@ -1607,7 +1709,6 @@ function AppRail({
   archiveOpen,
   onArchiveToggle,
   onReleasesToggle,
-  onSearchOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
@@ -1622,7 +1723,6 @@ function AppRail({
   archiveOpen: boolean;
   onArchiveToggle: () => void;
   onReleasesToggle: () => void;
-  onSearchOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
@@ -1645,20 +1745,6 @@ function AppRail({
           onClick={onTaskToggle}
           tooltip="Tasks"
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label="Open global search"
-              className="rounded-md"
-              onClick={onSearchOpen}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Search />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Search</TooltipContent>
-        </Tooltip>
         <RailButton
           active={worklogActive}
           icon={BarChart3}
@@ -1734,13 +1820,19 @@ function getCodeMirrorSelectedText(view: CodeMirrorEditorView) {
 }
 
 function getEditableSelectedText(target: HTMLElement | null) {
-  if (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement
-  ) {
+  if (target instanceof HTMLTextAreaElement) {
     const start = target.selectionStart ?? 0;
     const end = target.selectionEnd ?? 0;
     return start === end ? "" : target.value.slice(start, end);
+  }
+  if (target instanceof HTMLInputElement) {
+    try {
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? 0;
+      return start === end ? "" : target.value.slice(start, end);
+    } catch {
+      return "";
+    }
   }
   return window.getSelection()?.toString() ?? "";
 }
@@ -2190,6 +2282,9 @@ function WorklogMetricsView({
                 setSelectedPeriod(null);
                 setSelectedDay(day);
               }}
+              selectedDay={
+                inspector.kind === "day" && inspector.key ? inspector.key : null
+              }
               settings={worklogSettings}
             />
             <WorklogTaskBreakdown
@@ -2198,6 +2293,12 @@ function WorklogMetricsView({
               onSelectTask={onSelectTask}
             />
           </div>
+
+          <WorklogInspectorPanel
+            entries={inspector.entries}
+            label={inspector.label}
+            onSelectTask={onSelectTask}
+          />
 
           <WorklogPeriodBreakdown
             dailyGoalMinutes={dailyGoalMinutes}
@@ -2559,6 +2660,59 @@ function WorklogTaskBreakdown({
   );
 }
 
+function WorklogInspectorPanel({
+  entries,
+  label,
+  onSelectTask,
+}: {
+  entries: WorklogMetricEntry[];
+  label: string;
+  onSelectTask: (id: string) => void;
+}) {
+  const totals = buildTaskWorklogTotals(entries);
+  const totalMinutes = entries.reduce(
+    (sum, entry) => sum + entry.durationMinutes,
+    0,
+  );
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">{label}</h2>
+        {totals.length > 0 && (
+          <span className="font-mono text-xs text-foreground/70">
+            {formatDuration(totalMinutes)}
+          </span>
+        )}
+      </div>
+      {totals.length === 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No worklog entries in this range. Select a day on the heatmap or
+          chart to inspect it.
+        </p>
+      ) : (
+        <div className="mt-3 divide-y divide-border/60">
+          {totals.map((item) => (
+            <button
+              className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-1.5 text-left transition-colors duration-fast hover:bg-accent/40"
+              key={item.taskId}
+              onClick={() => onSelectTask(item.taskId)}
+              type="button"
+            >
+              <span className="truncate text-xs font-medium text-foreground">
+                {item.taskTitle}
+              </span>
+              <span className="font-mono text-xs text-foreground">
+                {formatDuration(item.minutes)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface WorklogPeriodItem {
   key: string;
   label: string;
@@ -2754,7 +2908,7 @@ function WorklogPeriodBreakdown({
                 <span
                   className={cn(
                     "block h-full rounded-full",
-                    hitGoal ? "bg-emerald-400/70" : "bg-primary/55",
+                    hitGoal ? "bg-success/70" : "bg-primary/55",
                   )}
                   style={{ width: `${fillPercent}%` }}
                 />
@@ -2771,7 +2925,7 @@ function WorklogPeriodBreakdown({
                 className={cn(
                   "text-right font-mono text-[10px] tabular-nums",
                   hitGoal
-                    ? "text-emerald-400"
+                    ? "text-success"
                     : rawPercent >= 75
                       ? "text-foreground"
                       : "text-muted-foreground",
@@ -3092,9 +3246,10 @@ function RailButton({
           aria-label={label}
           aria-pressed={active}
           className={cn(
-            "relative rounded-md",
+            "relative rounded-md transition-all duration-base ease-emphasized",
+            "before:absolute before:left-[-9px] before:top-1/2 before:h-0 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:transition-all before:duration-base before:ease-emphasized",
             active &&
-              "bg-secondary text-secondary-foreground before:absolute before:left-[-9px] before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+              "bg-secondary text-secondary-foreground before:h-5",
           )}
           onClick={onClick}
           size="icon-sm"
@@ -3128,8 +3283,8 @@ function StatusBar({
       <div className="flex min-w-0 items-center gap-2.5">
         <span className="inline-flex items-center gap-1.5 text-foreground/85">
           <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/45" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/45" />
+            <span className="relative inline-flex size-2 rounded-full bg-success" />
           </span>
           Local-first
         </span>
@@ -3389,7 +3544,7 @@ function SummaryTab({
                         <Check
                           aria-hidden
                           className="pointer-events-none size-3 text-primary opacity-0 peer-checked:opacity-100"
-                          strokeWidth={3}
+                          weight="bold"
                         />
                       </span>
                       <span className="min-w-0 truncate text-xs font-medium leading-5">
@@ -3489,39 +3644,47 @@ function SettingsDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="grid h-[580px] w-[min(860px,calc(100vw-32px))] max-w-none grid-cols-[180px_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-        <aside className="border-r border-border bg-card/60 p-3">
+      <DialogContent className="grid h-[min(640px,82vh)] w-[min(880px,calc(100vw-32px))] max-w-none grid-cols-[200px_minmax(0,1fr)] gap-0 overflow-hidden p-0">
+        <aside className="flex flex-col border-r border-border bg-card/60 p-3">
           <DialogTitle className="px-2 py-2 text-base">Settings</DialogTitle>
-          <div className="mt-3 space-y-1">
+          <div className="mt-2 space-y-0.5">
             <SettingsTabButton
               active={tab === "general"}
+              icon={SlidersHorizontal}
               label="General"
               onClick={() => setTab("general")}
             />
             <SettingsTabButton
               active={tab === "summary"}
+              icon={FileText}
               label="Summary"
               onClick={() => setTab("summary")}
             />
             <SettingsTabButton
               active={tab === "shortcuts"}
+              icon={KeyboardIcon}
               label="Shortcuts"
               onClick={() => setTab("shortcuts")}
             />
             <SettingsTabButton
               active={tab === "updates"}
+              icon={Download}
               label="Updates"
               marker={updateState === "available"}
               onClick={() => setTab("updates")}
             />
             <SettingsTabButton
               active={tab === "about"}
+              icon={Info}
               label="About"
               onClick={() => setTab("about")}
             />
           </div>
+          <div className="mt-auto px-2 pt-3 font-mono text-[10px] text-muted-foreground/70">
+            DevThread v{appVersion}
+          </div>
         </aside>
-        <section className="flex min-h-0 min-w-0 flex-col p-6">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-y-auto p-6">
           {tab === "general" ? (
             <>
               <DialogHeader>
@@ -3530,9 +3693,9 @@ function SettingsDialog({
                   Workspace preferences stored locally on this device.
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-6 max-w-sm space-y-2">
+              <div className="mt-6 max-w-sm space-y-2 rounded-md border border-border p-4">
                 <label
-                  className="text-xs font-medium text-muted-foreground"
+                  className="text-xs font-medium text-foreground"
                   htmlFor="theme-select"
                 >
                   Theme
@@ -3584,7 +3747,7 @@ function SettingsDialog({
                 </Select>
               </div>
 
-              <div className="mt-8 max-w-sm space-y-2 border-t border-border pt-6">
+              <div className="mt-4 max-w-sm space-y-2 rounded-md border border-border p-4">
                 <h3 className="text-sm font-medium">Worklog</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Used by the worklog charts. Set your target hours per workday
@@ -3683,12 +3846,9 @@ function SettingsDialog({
                       </p>
                     </div>
                     <label className="flex shrink-0 items-center gap-2 text-xs">
-                      <input
+                      <Switch
                         checked={updateAutoCheck}
-                        onChange={(event) =>
-                          onUpdateAutoCheckChange(event.target.checked)
-                        }
-                        type="checkbox"
+                        onCheckedChange={onUpdateAutoCheckChange}
                       />
                       <span>{updateAutoCheck ? "Enabled" : "Disabled"}</span>
                     </label>
@@ -3770,12 +3930,7 @@ function SettingsDialog({
                     </p>
                   )}
                   {updateState === "downloading" && (
-                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-[width]"
-                        style={{ width: `${downloadProgress}%` }}
-                      />
-                    </div>
+                    <Progress className="mt-4" value={downloadProgress} />
                   )}
                 </div>
               </div>
@@ -3816,11 +3971,13 @@ function SettingsDialog({
 
 function SettingsTabButton({
   active,
+  icon: Icon,
   label,
   marker,
   onClick,
 }: {
   active: boolean;
+  icon: LucideIcon;
   label: string;
   marker?: boolean;
   onClick: () => void;
@@ -3828,17 +3985,18 @@ function SettingsTabButton({
   return (
     <button
       className={cn(
-        "relative flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
+        "relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors duration-fast hover:bg-accent hover:text-foreground",
         active && "bg-secondary text-secondary-foreground",
       )}
       onClick={onClick}
       type="button"
     >
-      <span>{label}</span>
+      <Icon className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">{label}</span>
       {marker && (
         <span
           aria-hidden
-          className="ml-auto size-1.5 rounded-full bg-destructive"
+          className="ml-auto size-1.5 shrink-0 rounded-full bg-destructive"
         />
       )}
     </button>
@@ -3923,6 +4081,7 @@ function ThreadColumn({
   entryTypeFilter,
   onEntryTypeFilterChange,
   searchInputRef,
+  composerVisibilityToggleRef,
 }: {
   children: React.ReactNode;
   taskId: string;
@@ -3939,14 +4098,11 @@ function ThreadColumn({
   entryTypeFilter: EntryType | "all";
   onEntryTypeFilterChange: (value: EntryType | "all") => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  composerVisibilityToggleRef?: { current: (() => void) | null };
 }) {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
-  const stickyComposerRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
-  const compactComposerExpandedRef = useRef(false);
-  const [compactComposerVisible, setCompactComposerVisible] = useState(false);
-  const [compactComposerExpanded, setCompactComposerExpanded] = useState(false);
-  const [goTopVisible, setGoTopVisible] = useState(false);
+  const [goLatestVisible, setGoLatestVisible] = useState(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -3966,36 +4122,27 @@ function ThreadColumn({
     regex && !!search.trim() && !safelyCompileRegex(search).valid;
 
   useEffect(() => {
-    compactComposerExpandedRef.current = compactComposerExpanded;
-  }, [compactComposerExpanded]);
-
-  useEffect(() => {
     const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
     if (!viewport) return;
     viewportRef.current = viewport;
 
+    // The timeline reads oldest-to-newest, so "jump to latest" means the
+    // bottom of the scroll area, not the top.
     function handleScroll() {
-      const top = viewportRef.current?.scrollTop ?? 0;
-      setCompactComposerVisible(top > 140);
-      if (top <= 140) setCompactComposerExpanded(false);
-      else if (
-        compactComposerExpandedRef.current &&
-        !stickyComposerRef.current?.contains(document.activeElement)
-      ) {
-        setCompactComposerExpanded(false);
-      }
-      setGoTopVisible(top > 700);
+      const el = viewportRef.current;
+      if (!el) return;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setGoLatestVisible(distanceFromBottom > 400);
     }
 
     handleScroll();
+    // Land on the latest entry, right above the composer, instead of
+    // the oldest one at the top of a long history.
+    viewport.scrollTo?.({ top: viewport.scrollHeight });
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [taskId]);
-
-  useEffect(() => {
-    setCompactComposerExpanded(false);
   }, [taskId]);
 
   return (
@@ -4079,7 +4226,6 @@ function ThreadColumn({
               >
                 <MoreHorizontal
                   className="size-4 opacity-80"
-                  strokeWidth={1.75}
                 />
                 {activeMoreFilter?.label ?? "More"}
               </Button>
@@ -4106,39 +4252,36 @@ function ThreadColumn({
           </DropdownMenu>
         </div>
       </div>
-      {compactComposerVisible && (
-        <div
-          className="border-b border-border/70 bg-background/95 px-4 py-2 sm:px-6 lg:px-8"
-          ref={stickyComposerRef}
-        >
-          <div className="mx-auto w-full max-w-[920px]">
-            <Composer
-              compact={!compactComposerExpanded}
-              onCompactExpand={() => setCompactComposerExpanded(true)}
-              onSubmit={onSubmit}
-              taskId={taskId}
-            />
-          </div>
-        </div>
-      )}
       <ScrollArea className="min-h-0 flex-1" ref={scrollRootRef}>
         <div className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </div>
       </ScrollArea>
-      {goTopVisible && (
+      {goLatestVisible && (
         <Button
-          aria-label="Go to top"
-          className="absolute bottom-4 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
+          aria-label="Go to latest"
+          className="absolute bottom-32 right-4 z-20 size-8 border border-border bg-background/95 text-muted-foreground shadow-md hover:text-foreground"
           onClick={() =>
-            viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+            viewportRef.current?.scrollTo({
+              top: viewportRef.current.scrollHeight,
+              behavior: "smooth",
+            })
           }
           size="icon-sm"
           variant="secondary"
         >
-          <ArrowUp className="size-4" />
+          <ArrowDown className="size-4" />
         </Button>
       )}
+      <div className="px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-[920px]">
+          <Composer
+            onSubmit={onSubmit}
+            taskId={taskId}
+            visibilityToggleRef={composerVisibilityToggleRef}
+          />
+        </div>
+      </div>
     </div>
   );
 }
