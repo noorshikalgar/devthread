@@ -296,29 +296,44 @@ function TasksTabRow({
   task,
 }: TasksTabRowProps) {
   return (
-    <label
+    <div
+      aria-checked={selected}
+      aria-disabled={disabled || undefined}
+      aria-label={selected ? "Remove from release" : "Add to release"}
       className={cn(
-        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/60 hover:bg-accent/60 hover:text-foreground [&_*]:cursor-pointer",
+        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/60 hover:bg-accent/60 hover:text-foreground",
         selected && "bg-accent/60 text-foreground",
         disabled &&
-          "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground [&_*]:cursor-default",
+          "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground",
       )}
-      onMouseDown={(event) => {
-        if (event.button !== 0) event.preventDefault();
+      onClick={() => {
+        if (!disabled) onToggle();
       }}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+      role="checkbox"
+      tabIndex={disabled ? -1 : 0}
     >
       <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-        <input
-          aria-label={selected ? "Remove from release" : "Add to release"}
-          checked={selected}
-          disabled={disabled}
-          className="peer block size-3.5 appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onChange={onToggle}
-          type="checkbox"
+        <span
+          aria-hidden
+          className={cn(
+            "block size-3.5 rounded border border-border bg-background/70 transition-colors",
+            !disabled && "group-hover:border-primary/70",
+            selected && "border-primary bg-primary",
+          )}
         />
         <Check
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground transition-opacity",
+            selected ? "opacity-100" : "opacity-0",
+          )}
           weight="bold"
         />
       </span>
@@ -349,8 +364,7 @@ function TasksTabRow({
         className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
         data-testid="open-task-link"
         onClick={(e) => {
-          // Don't let the surrounding <label> also fire its onChange.
-          e.preventDefault();
+          // Don't let the row's own onClick also toggle selection.
           e.stopPropagation();
           onOpen();
         }}
@@ -359,7 +373,7 @@ function TasksTabRow({
       >
         <ExternalLink className="size-3" />
       </button>
-    </label>
+    </div>
   );
 }
 
