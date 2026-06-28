@@ -25,6 +25,12 @@ import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -131,7 +137,7 @@ function ReleaseSidebarRow({
   release: Release;
   selected: boolean;
 }) {
-  return (
+  const row = (
     <button
       aria-current={selected ? "page" : undefined}
       className={cn(
@@ -196,6 +202,29 @@ function ReleaseSidebarRow({
         </span>
       </span>
     </button>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onSelect(release.name)}>
+          <ExternalLink />
+          Open
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onPin(release.name)}>
+          {isPinned ? <PinOff /> : <Pin />}
+          {isPinned ? "Unpin release" : "Pin release"}
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          onSelect={() => onDelete(release)}
+        >
+          <Trash2 />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -295,7 +324,7 @@ function TasksTabRow({
   selected,
   task,
 }: TasksTabRowProps) {
-  return (
+  const row = (
     <div
       aria-checked={selected}
       aria-disabled={disabled || undefined}
@@ -374,6 +403,22 @@ function TasksTabRow({
         <ExternalLink className="size-3" />
       </button>
     </div>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onOpen}>
+          <ExternalLink />
+          Open task
+        </ContextMenuItem>
+        <ContextMenuItem disabled={disabled} onSelect={onToggle}>
+          {selected ? <X /> : <Check />}
+          {selected ? "Remove from release" : "Add to release"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

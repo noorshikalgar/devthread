@@ -152,6 +152,7 @@ import {
   type WorkLogRevision,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { menuContentClass, menuItemClass } from "@/components/ui/menu-styles";
 
 const SELECTED_TASK_KEY = "devthread:selected-task";
 const PINNED_TASKS_KEY = "devthread:pinned-tasks";
@@ -1913,12 +1914,14 @@ function AppContextMenu({
     onClose();
   }
 
-  const itemClass =
-    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent";
+  const itemClass = cn(
+    menuItemClass,
+    "w-full cursor-pointer text-left disabled:pointer-events-none disabled:opacity-50",
+  );
 
   return (
     <div
-      className="fixed z-50 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+      className={cn(menuContentClass, "fixed min-w-44")}
       onClick={(event) => event.stopPropagation()}
       style={{ left: menu.x, top: menu.y }}
     >
