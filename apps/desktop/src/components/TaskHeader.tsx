@@ -309,9 +309,10 @@ export function TaskHeader({
                     <button
                       aria-pressed={timelineViewMode === option.value}
                       className={cn(
-                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
-                        timelineViewMode === option.value &&
-                          "bg-foreground text-background shadow-sm",
+                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
+                        timelineViewMode === option.value
+                          ? "bg-foreground text-background shadow-sm"
+                          : "hover:text-foreground",
                       )}
                       key={option.value}
                       onClick={() => onTimelineViewModeChange(option.value)}

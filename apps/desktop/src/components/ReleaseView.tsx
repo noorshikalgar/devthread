@@ -1067,9 +1067,10 @@ export function ReleaseView({
                 <button
                   aria-pressed={sidebarTab === tab}
                   className={cn(
-                    "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
-                    sidebarTab === tab &&
-                      "bg-foreground text-background shadow-sm",
+                    "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
+                    sidebarTab === tab
+                      ? "bg-foreground text-background shadow-sm"
+                      : "hover:text-foreground",
                   )}
                   key={tab}
                   onClick={() => setSidebarTab(tab)}

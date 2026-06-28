@@ -130,10 +130,6 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.4" },
         },
-        breathe: {
-          "0%, 100%": { transform: "scale(0.9)", opacity: "0.18" },
-          "50%": { transform: "scale(1.08)", opacity: "0.34" },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -141,7 +137,6 @@ export default {
         shimmer: "shimmer 2s linear infinite",
         "scale-in": "scale-in 150ms cubic-bezier(0.16, 1, 0.3, 1)",
         "pulse-dot": "pulse-dot 1.6s ease-in-out infinite",
-        breathe: "breathe 4s ease-in-out infinite",
       },
     },
   },

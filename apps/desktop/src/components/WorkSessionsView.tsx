@@ -132,8 +132,10 @@ function SessionSetup({
             <button
               aria-pressed={kind === option}
               className={cn(
-                "h-7 flex-1 rounded text-xs font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
-                kind === option && "bg-foreground text-background shadow-sm",
+                "h-7 flex-1 rounded text-xs font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
+                kind === option
+                  ? "bg-foreground text-background shadow-sm"
+                  : "hover:text-foreground",
               )}
               key={option}
               onClick={() => setKind(option)}
@@ -329,19 +331,8 @@ function ActiveSession({
         </span>
       </div>
 
-      <div className="relative flex items-center justify-center">
-        <div
-          aria-hidden
-          className={cn(
-            "absolute size-72 rounded-full blur-3xl will-change-transform",
-            session.status === "paused" ? "" : "animate-breathe",
-            isWork ? "bg-primary" : "bg-success",
-          )}
-          style={{ opacity: session.status === "paused" ? 0.12 : undefined }}
-        />
-        <div className="relative text-8xl font-semibold tabular-nums tracking-tight text-foreground">
-          {formatSessionClock(session.remainingSeconds)}
-        </div>
+      <div className="text-8xl font-semibold tabular-nums tracking-tight text-foreground">
+        {formatSessionClock(session.remainingSeconds)}
       </div>
 
       <div className="h-1.5 w-64 overflow-hidden rounded-full bg-muted">

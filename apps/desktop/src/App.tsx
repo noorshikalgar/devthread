@@ -378,6 +378,11 @@ export default function App() {
   useEffect(() => {
     if (session.status !== "running") return;
     const id = window.setInterval(() => {
+      // Pure state transform only — no side effects here. setState
+      // updaters can run more than once per commit (React 18
+      // StrictMode intentionally double-invokes them to catch exactly
+      // this kind of impurity), so a toast/notification call here
+      // would fire twice per real phase change.
       setSession((current) => {
         if (current.status !== "running") return current;
         const elapsedWorkSeconds =
@@ -395,13 +400,6 @@ export default function App() {
             nextPhase === "work" ? current.workMinutes : current.restMinutes;
           const nextRound =
             nextPhase === "work" ? current.round + 1 : current.round;
-          const title = nextPhase === "work" ? "Back to work" : "Time for a break";
-          const body =
-            nextPhase === "work"
-              ? `Round ${nextRound} · ${current.workMinutes}m focus`
-              : `${current.restMinutes}m rest`;
-          toast(title, { description: body });
-          void notifyPhaseChange(title, body);
           return {
             ...current,
             phase: nextPhase,
@@ -421,6 +419,29 @@ export default function App() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [session.status]);
+
+  // Fires exactly once per real phase transition, regardless of how
+  // many times the updater above ran for it — keyed on round+phase so
+  // it only reacts to an actual change, not the initial mount/start.
+  const notifiedPhaseRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (session.status === "idle") {
+      notifiedPhaseRef.current = null;
+      return;
+    }
+    if (session.status !== "running") return;
+    const key = `${session.round}:${session.phase}`;
+    const isFirstPhaseOfSession = notifiedPhaseRef.current === null;
+    notifiedPhaseRef.current = key;
+    if (isFirstPhaseOfSession) return;
+    const title = session.phase === "work" ? "Back to work" : "Time for a break";
+    const body =
+      session.phase === "work"
+        ? `Round ${session.round} · ${session.workMinutes}m focus`
+        : `${session.restMinutes}m rest`;
+    toast(title, { description: body });
+    void notifyPhaseChange(title, body);
+  }, [session.status, session.phase, session.round]);
 
   function startSession(config: {
     workMinutes: number;
