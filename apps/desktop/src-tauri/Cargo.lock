@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "devthread"
-version = "0.4.1"
+version = "6.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",

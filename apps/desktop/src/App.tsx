@@ -489,17 +489,6 @@ export default function App() {
   }, [summaryOrder]);
 
   useEffect(() => {
-    function handleShortcut(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setPaletteOpen((open) => !open);
-      }
-    }
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
-
-  useEffect(() => {
     function close() {
       setContextMenu(null);
     }
@@ -1401,6 +1390,8 @@ export default function App() {
       const prev = list[(currentIndex - 1 + list.length) % list.length];
       setSelectedId(prev.id);
     },
+    onGoBack: goBackNav,
+    onGoForward: goForwardNav,
   });
 
   return (

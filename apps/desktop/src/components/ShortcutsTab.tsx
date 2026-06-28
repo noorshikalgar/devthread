@@ -43,9 +43,14 @@ const GROUPS: Group[] = [
     label: "Workspaces",
     icon: Compass,
     shortcuts: [
-      { keys: joinMod(MOD, "K"), description: "Open command palette" },
+      {
+        keys: joinMod(MOD, "K"),
+        description: "Open command palette (↑/↓ to navigate, ↵ to select)",
+      },
       { keys: joinMod(MOD, ","), description: "Open settings" },
       { keys: joinMod(MOD, "B"), description: "Toggle task sidebar" },
+      { keys: joinMod(MOD, "["), description: "Go back" },
+      { keys: joinMod(MOD, "]"), description: "Go forward" },
       {
         keys: joinMod(MOD, SHIFT, "A"),
         description: "Archive view",

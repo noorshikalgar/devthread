@@ -64,6 +64,7 @@ function formatDate(value: string) {
 }
 
 const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
+const RELEASE_SIDEBAR_TAB_KEY = "devthread:release-sidebar-tab";
 const PINNED_RELEASES_KEY = "devthread:pinned-releases";
 const DEFAULT_RELEASE_SIDEBAR_WIDTH = 320;
 const MIN_RELEASE_SIDEBAR_WIDTH = 240;
@@ -491,7 +492,16 @@ export function ReleaseView({
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [releaseSearch, setReleaseSearch] = useState("");
-  const [sidebarTab, setSidebarTab] = useState<"drafts" | "released">("drafts");
+  const [sidebarTab, setSidebarTabState] = useState<"drafts" | "released">(
+    () =>
+      localStorage.getItem(RELEASE_SIDEBAR_TAB_KEY) === "released"
+        ? "released"
+        : "drafts",
+  );
+  function setSidebarTab(tab: "drafts" | "released") {
+    setSidebarTabState(tab);
+    localStorage.setItem(RELEASE_SIDEBAR_TAB_KEY, tab);
+  }
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [pinnedReleaseNames, setPinnedReleaseNames] = useState<string[]>(
     loadPinnedReleaseNames,
