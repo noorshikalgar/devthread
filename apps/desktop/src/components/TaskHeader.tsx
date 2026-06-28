@@ -311,7 +311,7 @@ export function TaskHeader({
                       className={cn(
                         "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
                         timelineViewMode === option.value &&
-                          "bg-background text-foreground shadow-xs",
+                          "bg-foreground text-background shadow-sm",
                       )}
                       key={option.value}
                       onClick={() => onTimelineViewModeChange(option.value)}

@@ -1069,7 +1069,7 @@ export function ReleaseView({
                   className={cn(
                     "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
                     sidebarTab === tab &&
-                      "bg-background text-foreground shadow-xs",
+                      "bg-foreground text-background shadow-sm",
                   )}
                   key={tab}
                   onClick={() => setSidebarTab(tab)}

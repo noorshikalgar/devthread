@@ -133,7 +133,7 @@ function SessionSetup({
               aria-pressed={kind === option}
               className={cn(
                 "h-7 flex-1 rounded text-xs font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
-                kind === option && "bg-background text-foreground shadow-xs",
+                kind === option && "bg-foreground text-background shadow-sm",
               )}
               key={option}
               onClick={() => setKind(option)}
