@@ -329,7 +329,7 @@ function ActiveSession({
         </span>
       </div>
 
-      <div className="text-7xl font-semibold tabular-nums tracking-tight text-foreground">
+      <div className="text-8xl font-semibold tabular-nums tracking-tight text-foreground">
         {formatSessionClock(session.remainingSeconds)}
       </div>
 
