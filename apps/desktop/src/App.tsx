@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   Clock as Clock4,
+  ClockCounterClockwise,
   ClipboardText as ClipboardPaste,
   Copy,
   Download,
@@ -53,6 +54,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
 import { ReleaseView } from "@/components/ReleaseView";
 import { WorkSessionsView } from "@/components/WorkSessionsView";
+import { GlobalTimelineView } from "@/components/GlobalTimelineView";
 import {
   formatSessionClock,
   IDLE_SESSION,
@@ -1422,7 +1424,13 @@ export default function App() {
   }
 
   function selectEntry(taskId: string, entryId: string) {
-    if (selectedId !== taskId || workspaceMode === "releases" || workspaceMode === "worklog") {
+    if (
+      selectedId !== taskId ||
+      workspaceMode === "releases" ||
+      workspaceMode === "worklog" ||
+      workspaceMode === "sessions" ||
+      workspaceMode === "timeline"
+    ) {
       jumpToTask(taskId);
     }
     setTimeout(() => {
@@ -1615,6 +1623,7 @@ export default function App() {
             }
             setSidebarOpen((open) => !open);
           }}
+          onTimelineOpen={() => setWorkspaceMode("timeline")}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
           releasesOpen={releaseSidebarOpen}
@@ -1622,6 +1631,7 @@ export default function App() {
           sessionsActive={workspaceMode === "sessions"}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
+          timelineActive={workspaceMode === "timeline"}
           updateAvailable={updateState === "available"}
           worklogActive={workspaceMode === "worklog"}
         />
@@ -1764,6 +1774,8 @@ export default function App() {
               session={session}
               tasks={sidebarTasks}
             />
+          ) : workspaceMode === "timeline" ? (
+            <GlobalTimelineView onSelectEntry={selectEntry} />
           ) : selectedTask ? (
             <>
               <TaskHeader
@@ -1888,6 +1900,7 @@ function AppRail({
   onSessionsOpen,
   onSettingsOpen,
   onTaskToggle,
+  onTimelineOpen,
   onWorklogOpen,
   releasesActive,
   releasesOpen,
@@ -1895,6 +1908,7 @@ function AppRail({
   sessionsActive,
   tasksActive,
   tasksOpen,
+  timelineActive,
   updateAvailable,
   worklogActive,
 }: {
@@ -1905,6 +1919,7 @@ function AppRail({
   onSessionsOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
+  onTimelineOpen: () => void;
   onWorklogOpen: () => void;
   releasesActive: boolean;
   releasesOpen: boolean;
@@ -1912,6 +1927,7 @@ function AppRail({
   sessionsActive: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
+  timelineActive: boolean;
   updateAvailable: boolean;
   worklogActive: boolean;
 }) {
@@ -1926,6 +1942,13 @@ function AppRail({
           }
           onClick={onTaskToggle}
           tooltip="Tasks"
+        />
+        <RailButton
+          active={timelineActive}
+          icon={ClockCounterClockwise}
+          label="Open global timeline"
+          onClick={onTimelineOpen}
+          tooltip="Timeline"
         />
         <RailButton
           active={worklogActive}

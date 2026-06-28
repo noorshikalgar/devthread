@@ -79,6 +79,17 @@ export interface WorklogMetricEntry {
   durationMinutes: number;
 }
 
+export interface GlobalTimelineEntry {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  taskStatus: TaskStatus;
+  entryType: EntryType;
+  contentMarkdown: string;
+  occurredAt: string;
+  durationMinutes: number | null;
+}
+
 export interface WorkLogRevision {
   id: string;
   workLogEntryId: string;

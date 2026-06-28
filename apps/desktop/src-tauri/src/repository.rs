@@ -168,6 +168,20 @@ pub struct WorklogMetricEntry {
     pub duration_minutes: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalTimelineEntry {
+    pub id: String,
+    pub task_id: String,
+    pub task_title: String,
+    pub task_status: String,
+    pub entry_type: String,
+    pub content_markdown: String,
+    pub occurred_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_minutes: Option<i64>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateEntryInput {
@@ -1117,6 +1131,46 @@ impl Database {
         Ok(entries)
     }
 
+    pub fn list_global_timeline(
+        &self,
+        start_at: Option<String>,
+        end_at: Option<String>,
+        limit: u32,
+    ) -> Result<Vec<GlobalTimelineEntry>> {
+        let connection = self.connection()?;
+        let start = start_at.unwrap_or_else(|| "0000-01-01T00:00:00Z".into());
+        let end = end_at.unwrap_or_else(|| "9999-12-31T23:59:59Z".into());
+        let mut statement = connection.prepare(
+            "SELECT work_log_entries.id, work_log_entries.task_id, tasks.title,
+                    tasks.status, work_log_entries.entry_type,
+                    work_log_entries.content_markdown, work_log_entries.occurred_at,
+                    work_log_entries.duration_minutes
+             FROM work_log_entries
+             JOIN tasks ON tasks.id = work_log_entries.task_id
+             WHERE work_log_entries.deleted_at IS NULL
+               AND tasks.deleted_at IS NULL
+               AND work_log_entries.occurred_at >= ?1
+               AND work_log_entries.occurred_at <= ?2
+             ORDER BY work_log_entries.occurred_at DESC, work_log_entries.id DESC
+             LIMIT ?3",
+        )?;
+        let entries = statement
+            .query_map(params![start, end, limit], |row| {
+                Ok(GlobalTimelineEntry {
+                    id: row.get(0)?,
+                    task_id: row.get(1)?,
+                    task_title: row.get(2)?,
+                    task_status: row.get(3)?,
+                    entry_type: row.get(4)?,
+                    content_markdown: row.get(5)?,
+                    occurred_at: row.get(6)?,
+                    duration_minutes: row.get(7)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(entries)
+    }
+
     pub fn create_entry(&self, input: CreateEntryInput) -> Result<WorkLogEntry> {
         allowed(&input.entry_type, ENTRY_TYPES, "entry type")?;
         allowed(&input.visibility, VISIBILITIES, "visibility")?;
@@ -1905,6 +1959,47 @@ mod tests {
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].duration_minutes, 90);
         assert_eq!(metrics[0].task_title, "Ship task threads");
+    }
+
+    #[test]
+    fn global_timeline_includes_every_entry_type_across_tasks_with_task_context() {
+        let database = Database::memory().unwrap();
+        let first_task = task(&database);
+        let second = database.create_task(CreateTaskInput {
+            title: "Second task".into(),
+        });
+        let second_task = second.unwrap();
+        database
+            .create_entry(CreateEntryInput {
+                task_id: first_task.id.clone(),
+                entry_type: "blocker".into(),
+                content_markdown: "Blocked on infra.".into(),
+                visibility: "private".into(),
+                duration_minutes: None,
+                occurred_at: None,
+                started_at: None,
+            })
+            .unwrap();
+        database
+            .create_entry(CreateEntryInput {
+                task_id: second_task.id.clone(),
+                entry_type: "worklog".into(),
+                content_markdown: "Logged time on the other task.".into(),
+                visibility: "private".into(),
+                duration_minutes: Some(30),
+                occurred_at: None,
+                started_at: None,
+            })
+            .unwrap();
+
+        let timeline = database
+            .list_global_timeline(None, None, 100)
+            .unwrap();
+        assert_eq!(timeline.len(), 2);
+        assert_eq!(timeline[0].task_title, "Second task");
+        assert_eq!(timeline[0].entry_type, "worklog");
+        assert_eq!(timeline[1].task_title, "Ship task threads");
+        assert_eq!(timeline[1].entry_type, "blocker");
     }
 
     #[test]
