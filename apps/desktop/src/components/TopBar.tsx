@@ -7,18 +7,31 @@ import {
   ListChecks as ListTodo,
   MagnifyingGlass as Search,
   Tag,
+  Timer,
 } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases";
+export type WorkspaceMode =
+  | "tasks"
+  | "archive"
+  | "worklog"
+  | "releases"
+  | "sessions";
 
 const WORKSPACE_META: Record<WorkspaceMode, { label: string; icon: typeof ListTodo }> = {
   tasks: { label: "Tasks", icon: ListTodo },
   archive: { label: "Archive", icon: Archive },
   worklog: { label: "Worklog", icon: BarChart3 },
   releases: { label: "Releases", icon: Tag },
+  sessions: { label: "Sessions", icon: Timer },
 };
+
+interface SessionPillInfo {
+  label: string;
+  phase: "work" | "rest";
+  paused: boolean;
+}
 
 interface Props {
   workspaceMode: WorkspaceMode;
@@ -29,6 +42,8 @@ interface Props {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
+  sessionPill?: SessionPillInfo | null;
+  onSessionPillClick?: () => void;
 }
 
 const isMac = /Mac|iPhone|iPad/i.test(navigator.platform);
@@ -51,6 +66,8 @@ export function TopBar({
   canGoForward,
   onGoBack,
   onGoForward,
+  sessionPill,
+  onSessionPillClick,
 }: Props) {
   const meta = WORKSPACE_META[workspaceMode];
   const Icon = meta.icon;
@@ -111,7 +128,25 @@ export function TopBar({
         </kbd>
       </button>
 
-      <div className="flex w-[88px] shrink-0 items-center justify-end gap-1.5">
+      <div className="flex shrink-0 items-center justify-end gap-1.5">
+        {sessionPill && (
+          <button
+            aria-label={`Work session in progress, ${sessionPill.label} remaining. Click to return to the session.`}
+            className={cn(
+              "flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium tabular-nums transition-colors",
+              sessionPill.paused
+                ? "border-border/70 bg-muted/50 text-muted-foreground"
+                : sessionPill.phase === "work"
+                  ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+                  : "border-success/30 bg-success/10 text-success hover:bg-success/15",
+            )}
+            onClick={onSessionPillClick}
+            type="button"
+          >
+            <Timer className="size-3" />
+            {sessionPill.label}
+          </button>
+        )}
         {updateAvailable && (
           <span
             aria-hidden

@@ -25,6 +25,12 @@ import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -58,6 +64,7 @@ function formatDate(value: string) {
 }
 
 const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
+const RELEASE_SIDEBAR_TAB_KEY = "devthread:release-sidebar-tab";
 const PINNED_RELEASES_KEY = "devthread:pinned-releases";
 const DEFAULT_RELEASE_SIDEBAR_WIDTH = 320;
 const MIN_RELEASE_SIDEBAR_WIDTH = 240;
@@ -131,7 +138,7 @@ function ReleaseSidebarRow({
   release: Release;
   selected: boolean;
 }) {
-  return (
+  const row = (
     <button
       aria-current={selected ? "page" : undefined}
       className={cn(
@@ -196,6 +203,29 @@ function ReleaseSidebarRow({
         </span>
       </span>
     </button>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onSelect(release.name)}>
+          <ExternalLink />
+          Open
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onPin(release.name)}>
+          {isPinned ? <PinOff /> : <Pin />}
+          {isPinned ? "Unpin release" : "Pin release"}
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          onSelect={() => onDelete(release)}
+        >
+          <Trash2 />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -295,30 +325,45 @@ function TasksTabRow({
   selected,
   task,
 }: TasksTabRowProps) {
-  return (
-    <label
+  const row = (
+    <div
+      aria-checked={selected}
+      aria-disabled={disabled || undefined}
+      aria-label={selected ? "Remove from release" : "Add to release"}
       className={cn(
-        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/60 hover:bg-accent/60 hover:text-foreground [&_*]:cursor-pointer",
+        "group flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/60 hover:bg-accent/60 hover:text-foreground",
         selected && "bg-accent/60 text-foreground",
         disabled &&
-          "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground [&_*]:cursor-default",
+          "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground",
       )}
-      onMouseDown={(event) => {
-        if (event.button !== 0) event.preventDefault();
+      onClick={() => {
+        if (!disabled) onToggle();
       }}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+      role="checkbox"
+      tabIndex={disabled ? -1 : 0}
     >
       <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-        <input
-          aria-label={selected ? "Remove from release" : "Add to release"}
-          checked={selected}
-          disabled={disabled}
-          className="peer block size-3.5 appearance-none rounded border border-border bg-background/70 transition-colors checked:border-primary checked:bg-primary hover:border-primary/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onChange={onToggle}
-          type="checkbox"
+        <span
+          aria-hidden
+          className={cn(
+            "block size-3.5 rounded border border-border bg-background/70 transition-colors",
+            !disabled && "group-hover:border-primary/70",
+            selected && "border-primary bg-primary",
+          )}
         />
         <Check
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground transition-opacity",
+            selected ? "opacity-100" : "opacity-0",
+          )}
           weight="bold"
         />
       </span>
@@ -349,8 +394,7 @@ function TasksTabRow({
         className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
         data-testid="open-task-link"
         onClick={(e) => {
-          // Don't let the surrounding <label> also fire its onChange.
-          e.preventDefault();
+          // Don't let the row's own onClick also toggle selection.
           e.stopPropagation();
           onOpen();
         }}
@@ -359,7 +403,23 @@ function TasksTabRow({
       >
         <ExternalLink className="size-3" />
       </button>
-    </label>
+    </div>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onOpen}>
+          <ExternalLink />
+          Open task
+        </ContextMenuItem>
+        <ContextMenuItem disabled={disabled} onSelect={onToggle}>
+          {selected ? <X /> : <Check />}
+          {selected ? "Remove from release" : "Add to release"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -432,7 +492,16 @@ export function ReleaseView({
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [releaseSearch, setReleaseSearch] = useState("");
-  const [sidebarTab, setSidebarTab] = useState<"drafts" | "released">("drafts");
+  const [sidebarTab, setSidebarTabState] = useState<"drafts" | "released">(
+    () =>
+      localStorage.getItem(RELEASE_SIDEBAR_TAB_KEY) === "released"
+        ? "released"
+        : "drafts",
+  );
+  function setSidebarTab(tab: "drafts" | "released") {
+    setSidebarTabState(tab);
+    localStorage.setItem(RELEASE_SIDEBAR_TAB_KEY, tab);
+  }
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [pinnedReleaseNames, setPinnedReleaseNames] = useState<string[]>(
     loadPinnedReleaseNames,
@@ -998,9 +1067,10 @@ export function ReleaseView({
                 <button
                   aria-pressed={sidebarTab === tab}
                   className={cn(
-                    "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
-                    sidebarTab === tab &&
-                      "bg-background text-foreground shadow-xs",
+                    "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
+                    sidebarTab === tab
+                      ? "bg-foreground text-background shadow-sm"
+                      : "hover:text-foreground",
                   )}
                   key={tab}
                   onClick={() => setSidebarTab(tab)}

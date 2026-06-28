@@ -26,6 +26,8 @@ export interface ShortcutConfig {
   onFocusSearch: () => void;
   onNextTask: () => void;
   onPrevTask: () => void;
+  onGoBack: () => void;
+  onGoForward: () => void;
 }
 
 export function useShortcuts(config: ShortcutConfig) {
@@ -76,6 +78,14 @@ export function useShortcuts(config: ShortcutConfig) {
               event.preventDefault();
               c.onOpenLogTime();
             }
+            return;
+          case "[":
+            event.preventDefault();
+            c.onGoBack();
+            return;
+          case "]":
+            event.preventDefault();
+            c.onGoForward();
             return;
         }
         if (event.key === "Backspace" && c.isTaskOpen) {

@@ -1,6 +1,6 @@
 {
   "name": "@devthread/desktop",
-  "version": "0.3.1",
+  "version": "6.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -44,6 +44,7 @@
     "@radix-ui/react-toggle-group": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
