@@ -25,6 +25,7 @@ import {
   SlidersHorizontal,
   Sun,
   Tag,
+  Timer,
   Trash as Trash2,
   X,
   type Icon as LucideIcon,
@@ -51,10 +52,36 @@ import { toast } from "sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
 import { ReleaseView } from "@/components/ReleaseView";
+import { WorkSessionsView } from "@/components/WorkSessionsView";
+import {
+  formatSessionClock,
+  IDLE_SESSION,
+  type SessionPhase,
+  type WorkSessionState,
+} from "@/lib/workSession";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+
+async function notifyPhaseChange(title: string, body: string) {
+  if (!("isTauri" in window && window.isTauri)) return;
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      granted = (await requestPermission()) === "granted";
+    }
+    if (granted) sendNotification({ title, body });
+  } catch {
+    // Notifications are a nice-to-have for background phase changes —
+    // never let a permission/platform hiccup break the timer itself.
+  }
+}
 import { TaskHeader } from "@/components/TaskHeader";
 import { TaskSidebar } from "@/components/TaskSidebar";
 import { Timeline, type TimelineViewMode } from "@/components/Timeline";
-import { TopBar } from "@/components/TopBar";
+import { TopBar, type WorkspaceMode } from "@/components/TopBar";
 import { ShortcutsTab } from "@/components/ShortcutsTab";
 import { WorklogHoursChart } from "@/components/WorklogHoursChart";
 import { WorklogHeatmap } from "@/components/WorklogHeatmap";
@@ -182,7 +209,6 @@ type UpdateState =
   | "downloading"
   | "installed"
   | "error";
-type WorkspaceMode = "tasks" | "archive" | "worklog" | "releases";
 interface AppContextMenuState {
   x: number;
   y: number;
@@ -348,6 +374,118 @@ export default function App() {
   const [pendingReleaseName, setPendingReleaseName] = useState<string | null>(
     null,
   );
+  const [session, setSession] = useState<WorkSessionState>(IDLE_SESSION);
+  useEffect(() => {
+    if (session.status !== "running") return;
+    const id = window.setInterval(() => {
+      setSession((current) => {
+        if (current.status !== "running") return current;
+        const elapsedWorkSeconds =
+          current.phase === "work"
+            ? current.elapsedWorkSeconds + 1
+            : current.elapsedWorkSeconds;
+        const elapsedRestSeconds =
+          current.phase === "rest"
+            ? current.elapsedRestSeconds + 1
+            : current.elapsedRestSeconds;
+        if (current.remainingSeconds <= 1) {
+          const nextPhase: SessionPhase =
+            current.phase === "work" ? "rest" : "work";
+          const nextMinutes =
+            nextPhase === "work" ? current.workMinutes : current.restMinutes;
+          const nextRound =
+            nextPhase === "work" ? current.round + 1 : current.round;
+          const title = nextPhase === "work" ? "Back to work" : "Time for a break";
+          const body =
+            nextPhase === "work"
+              ? `Round ${nextRound} · ${current.workMinutes}m focus`
+              : `${current.restMinutes}m rest`;
+          toast(title, { description: body });
+          void notifyPhaseChange(title, body);
+          return {
+            ...current,
+            phase: nextPhase,
+            remainingSeconds: nextMinutes * 60,
+            elapsedWorkSeconds,
+            elapsedRestSeconds,
+            round: nextRound,
+          };
+        }
+        return {
+          ...current,
+          remainingSeconds: current.remainingSeconds - 1,
+          elapsedWorkSeconds,
+          elapsedRestSeconds,
+        };
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [session.status]);
+
+  function startSession(config: {
+    workMinutes: number;
+    restMinutes: number;
+    linkedTaskId: string | null;
+  }) {
+    setSession({
+      status: "running",
+      phase: "work",
+      workMinutes: config.workMinutes,
+      restMinutes: config.restMinutes,
+      remainingSeconds: config.workMinutes * 60,
+      elapsedWorkSeconds: 0,
+      elapsedRestSeconds: 0,
+      round: 1,
+      linkedTaskId: config.linkedTaskId,
+    });
+  }
+  function pauseSession() {
+    setSession((s) => (s.status === "running" ? { ...s, status: "paused" } : s));
+  }
+  function resumeSession() {
+    setSession((s) => (s.status === "paused" ? { ...s, status: "running" } : s));
+  }
+  function stopSession() {
+    setSession((s) =>
+      s.status === "running" || s.status === "paused"
+        ? { ...s, status: "finished" }
+        : s,
+    );
+  }
+  function discardSession() {
+    setSession(IDLE_SESSION);
+  }
+  async function logSessionAsWorklog() {
+    const taskId = session.linkedTaskId;
+    if (!taskId) return;
+    const minutes = Math.max(1, Math.round(session.elapsedWorkSeconds / 60));
+    const nowIso = new Date().toISOString();
+    const entry = await api.createEntry(
+      taskId,
+      "worklog",
+      "Logged from a work session.",
+      "private",
+      minutes,
+      nowIso,
+      nowIso,
+    );
+    if (taskId === selectedId) {
+      setEntries((current) => {
+        const next = [entry, ...current];
+        next.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+        updateCachedTaskData(taskId, { entries: next });
+        return next;
+      });
+    } else {
+      const cached = getCachedTaskData(taskId);
+      updateCachedTaskData(taskId, {
+        entries: [entry, ...(cached?.entries ?? [])],
+      });
+    }
+    await loadTasks();
+    setSession(IDLE_SESSION);
+    toast.success("Logged as work session");
+  }
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
     null,
@@ -1402,7 +1540,17 @@ export default function App() {
         onGoBack={goBackNav}
         onGoForward={goForwardNav}
         onSearchOpen={() => setPaletteOpen(true)}
+        onSessionPillClick={() => setWorkspaceMode("sessions")}
         selectedTask={selectedTask}
+        sessionPill={
+          session.status === "running" || session.status === "paused"
+            ? {
+                label: formatSessionClock(session.remainingSeconds),
+                phase: session.phase,
+                paused: session.status === "paused",
+              }
+            : null
+        }
         updateAvailable={updateState === "available"}
         workspaceMode={workspaceMode}
       />
@@ -1436,6 +1584,7 @@ export default function App() {
               return next;
             });
           }}
+          onSessionsOpen={() => setWorkspaceMode("sessions")}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTaskToggle={() => {
             if (workspaceMode !== "tasks") {
@@ -1448,6 +1597,8 @@ export default function App() {
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
           releasesOpen={releaseSidebarOpen}
+          sessionActive={session.status === "running" || session.status === "paused"}
+          sessionsActive={workspaceMode === "sessions"}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
           updateAvailable={updateState === "available"}
@@ -1580,6 +1731,18 @@ export default function App() {
               sidebarOpen={releaseSidebarOpen}
               tasks={sidebarTasks}
             />
+          ) : workspaceMode === "sessions" ? (
+            <WorkSessionsView
+              onDiscard={discardSession}
+              onGoToTask={(taskId) => jumpToTask(taskId)}
+              onLog={() => void logSessionAsWorklog()}
+              onPause={pauseSession}
+              onResume={resumeSession}
+              onStart={startSession}
+              onStop={stopSession}
+              session={session}
+              tasks={sidebarTasks}
+            />
           ) : selectedTask ? (
             <>
               <TaskHeader
@@ -1701,11 +1864,14 @@ function AppRail({
   archiveOpen,
   onArchiveToggle,
   onReleasesToggle,
+  onSessionsOpen,
   onSettingsOpen,
   onTaskToggle,
   onWorklogOpen,
   releasesActive,
   releasesOpen,
+  sessionActive,
+  sessionsActive,
   tasksActive,
   tasksOpen,
   updateAvailable,
@@ -1715,11 +1881,14 @@ function AppRail({
   archiveOpen: boolean;
   onArchiveToggle: () => void;
   onReleasesToggle: () => void;
+  onSessionsOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
   onWorklogOpen: () => void;
   releasesActive: boolean;
   releasesOpen: boolean;
+  sessionActive: boolean;
+  sessionsActive: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
   updateAvailable: boolean;
@@ -1756,6 +1925,14 @@ function AppRail({
           }
           onClick={onReleasesToggle}
           tooltip="Releases"
+        />
+        <RailButton
+          active={sessionsActive}
+          dot={sessionActive}
+          icon={Timer}
+          label="Open work sessions"
+          onClick={onSessionsOpen}
+          tooltip="Sessions"
         />
       </div>
 
@@ -3222,12 +3399,14 @@ function stripOneLine(value: string) {
 
 function RailButton({
   active,
+  dot,
   label,
   tooltip,
   icon: Icon,
   onClick,
 }: {
   active: boolean;
+  dot?: boolean;
   label: string;
   tooltip: string;
   icon: typeof ListTodo;
@@ -3250,6 +3429,12 @@ function RailButton({
           variant="ghost"
         >
           <Icon />
+          {dot && (
+            <span
+              aria-hidden
+              className="absolute right-1 top-1 size-1.5 rounded-full bg-primary ring-2 ring-card"
+            />
+          )}
         </Button>
       </TooltipTrigger>
       <TooltipContent side="right">{tooltip}</TooltipContent>
