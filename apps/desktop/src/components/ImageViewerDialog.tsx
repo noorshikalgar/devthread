@@ -1,5 +1,10 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  ArrowCounterClockwise as RotateCcw,
+  X,
+  MagnifyingGlassPlus as ZoomIn,
+  MagnifyingGlassMinus as ZoomOut,
+} from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

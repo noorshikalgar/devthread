@@ -15,6 +15,7 @@ export interface ShortcutConfig {
   onToggleSidebar: () => void;
   onToggleArchive: () => void;
   onOpenWorklog: () => void;
+  onOpenReleases: () => void;
   onEditTitle: () => void;
   onOpenLogTime: () => void;
   onCopyMarkdown: () => void;
@@ -107,6 +108,10 @@ export function useShortcuts(config: ShortcutConfig) {
           case "w":
             event.preventDefault();
             c.onOpenWorklog();
+            return;
+          case "r":
+            event.preventDefault();
+            c.onOpenReleases();
             return;
           case "c":
             if (c.isTaskOpen) {

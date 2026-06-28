@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { DotsSixVertical as GripVertical } from "@phosphor-icons/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 

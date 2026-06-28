@@ -25,6 +25,7 @@ function formatShortDate(value: string): string {
 export interface WorklogHoursChartProps {
   days: ReadonlyArray<WorklogDay>;
   onSelectDay?: (key: string) => void;
+  selectedDay?: string | null;
   settings: WorklogSettings;
 }
 
@@ -111,6 +112,7 @@ function buildChartData(
 export function WorklogHoursChart({
   days,
   onSelectDay,
+  selectedDay,
   settings,
 }: WorklogHoursChartProps) {
   const goalHours = effectiveDailyGoalMinutes(settings) / 60;
@@ -118,6 +120,9 @@ export function WorklogHoursChart({
     () => buildChartData(days, goalHours),
     [days, goalHours],
   );
+  const selectedLabel = selectedDay
+    ? data.find((d) => d.date === selectedDay)?.dateLabel ?? null
+    : null;
 
   // The chart colours come from the active theme's --chart-* CSS
   // variables, so reading them on every render keeps them in sync if
@@ -277,6 +282,14 @@ export function WorklogHoursChart({
               strokeDasharray="6 4"
               y={goalHours}
             />
+            {selectedLabel && (
+              <ReferenceLine
+                ifOverflow="extendDomain"
+                stroke={palette.primary}
+                strokeWidth={1.5}
+                x={selectedLabel}
+              />
+            )}
             <Area
               activeDot={{ fill: palette.primary, r: 3, strokeWidth: 0 }}
               dataKey="hours"

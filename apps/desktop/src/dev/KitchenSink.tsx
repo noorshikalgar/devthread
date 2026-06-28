@@ -1,16 +1,16 @@
 import {
-  AlertTriangle,
+  Warning as AlertTriangle,
   Bell,
   Calendar as CalendarIcon,
-  CheckCircle2,
-  ChevronRight,
+  CheckCircle as CheckCircle2,
+  CaretRight as ChevronRight,
   Flag,
   Folder,
   Info,
   Plus,
-  Search,
-  Settings,
-} from "lucide-react";
+  MagnifyingGlass as Search,
+  Gear as Settings,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

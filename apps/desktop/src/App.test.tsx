@@ -436,9 +436,9 @@ describe("TaskHeader", () => {
 
     const handle = await screen.findByLabelText("Resize task sidebar");
     const shell = handle.parentElement;
-    expect(shell).toHaveStyle({ width: "280px" });
+    expect(shell).toHaveStyle({ width: "320px" });
 
-    fireEvent.mouseDown(handle, { clientX: 280 });
+    fireEvent.mouseDown(handle, { clientX: 320 });
     fireEvent.mouseMove(window, { clientX: 1200 });
     fireEvent.mouseUp(window);
 
@@ -446,7 +446,7 @@ describe("TaskHeader", () => {
     expect(localStorage.getItem("devthread:sidebar-width")).toBe("420");
 
     fireEvent.doubleClick(handle);
-    expect(shell).toHaveStyle({ width: "280px" });
+    expect(shell).toHaveStyle({ width: "320px" });
   });
 
   it("toggles the task sidebar from the app rail", async () => {
@@ -625,7 +625,14 @@ describe("TaskHeader", () => {
     fireEvent.click(
       await screen.findByLabelText("Status: Active. Click to change."),
     );
-    fireEvent.click(screen.getByText("Done"));
+    // The sidebar's status filter chips also render a "Done" label, so
+    // disambiguate: the popover's status option is a plain rounded-sm row,
+    // the filter chip is a rounded-full pill.
+    const doneOptions = await screen.findAllByText("Done");
+    const popoverDone = doneOptions.find((el) =>
+      el.closest("button")?.className.includes("rounded-sm"),
+    );
+    fireEvent.click(popoverDone!);
 
     await waitFor(() =>
       expect(api.createEntry).toHaveBeenCalledWith(
@@ -895,7 +902,7 @@ describe("App workspace mode transitions", () => {
     ) as HTMLInputElement;
     await waitFor(() => {
       // The search input's parent <aside> is rendered inside two
-      // wrapper <div>s: the inner one has a fixed `width: 280px`
+      // wrapper <div>s: the inner one has a fixed `width: 320px`
       // and the outer one toggles to `width: 0` when hidden.
       // Walking up via `style` is the only way to observe the
       // toggle in jsdom (no layout).
@@ -916,7 +923,7 @@ describe("App workspace mode transitions", () => {
     await waitFor(() => {
       const aside = searchInput.closest("aside");
       const outerWrapper = aside?.parentElement?.parentElement;
-      expect(outerWrapper?.style.width).toBe("280px");
+      expect(outerWrapper?.style.width).toBe("320px");
     });
     // The rail label flips back to "Hide archive sidebar" because
     // the sidebar is now visible again.

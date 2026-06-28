@@ -84,8 +84,10 @@ describe("CommandPalette", () => {
         onOpenChange={() => {}}
         onSelectEntry={onSelectEntry}
         onSelectFolder={onSelectFolder}
+        onSelectRelease={() => {}}
         onSelectTask={onSelectTask}
         open
+        releases={[]}
         tasks={tasks}
       />,
     );
@@ -94,11 +96,15 @@ describe("CommandPalette", () => {
       target: { value: "dark" },
     });
 
-    expect(screen.getByText("Ship dark mode")).toBeInTheDocument();
+    // "Ship dark mode" appears twice: once as the task row's title, and
+    // once as the entry row's meta (its parent task name).
+    expect(screen.getAllByText("Ship dark mode").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Rolled out the dark mode toggle"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Backlog")).not.toBeInTheDocument();
+    // "Backlog" is the matched task's folder, shown as its own meta tag —
+    // there should be no separate "Folders" result group for this query.
+    expect(screen.queryByText("Folders")).not.toBeInTheDocument();
   });
 
   it("invokes onSelectTask with the chosen task id", () => {
@@ -110,8 +116,10 @@ describe("CommandPalette", () => {
         onOpenChange={() => {}}
         onSelectEntry={() => {}}
         onSelectFolder={() => {}}
+        onSelectRelease={() => {}}
         onSelectTask={onSelectTask}
         open
+        releases={[]}
         tasks={tasks}
       />,
     );
@@ -132,8 +140,10 @@ describe("CommandPalette", () => {
         onOpenChange={() => {}}
         onSelectEntry={() => {}}
         onSelectFolder={() => {}}
+        onSelectRelease={() => {}}
         onSelectTask={() => {}}
         open
+        releases={[]}
         tasks={tasks}
       />,
     );
@@ -154,8 +164,10 @@ describe("CommandPalette", () => {
         onOpenChange={() => {}}
         onSelectEntry={() => {}}
         onSelectFolder={() => {}}
+        onSelectRelease={() => {}}
         onSelectTask={() => {}}
         open
+        releases={[]}
         tasks={tasks}
       />,
     );
@@ -194,8 +206,10 @@ describe("CommandPalette", () => {
           onOpenChange={() => {}}
           onSelectEntry={() => {}}
           onSelectFolder={() => {}}
+          onSelectRelease={() => {}}
           onSelectTask={() => {}}
           open
+          releases={[]}
           tasks={manyTasks}
         />,
       );

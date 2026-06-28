@@ -1,20 +1,21 @@
 import {
-  AlertTriangle,
-  Braces,
+  Warning as AlertTriangle,
+  BracketsCurly as Braces,
   Calendar,
   Check,
-  ChevronRight,
+  CaretRight as ChevronRight,
   Copy,
-  ExternalLink,
+  ArrowSquareOut as ExternalLink,
   FileText,
   ListChecks,
-  Pin,
+  PushPin as Pin,
+  PushPinSlash as PinOff,
   Plus,
-  Regex,
-  Search,
-  Trash2,
+  Asterisk as Regex,
+  MagnifyingGlass as Search,
+  Trash as Trash2,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
@@ -58,7 +59,7 @@ function formatDate(value: string) {
 
 const RELEASE_SIDEBAR_WIDTH_KEY = "devthread:release-sidebar-width";
 const PINNED_RELEASES_KEY = "devthread:pinned-releases";
-const DEFAULT_RELEASE_SIDEBAR_WIDTH = 280;
+const DEFAULT_RELEASE_SIDEBAR_WIDTH = 320;
 const MIN_RELEASE_SIDEBAR_WIDTH = 240;
 const MAX_RELEASE_SIDEBAR_WIDTH = 420;
 const RELEASE_STATUS_ORDER: ReleaseStatus[] = [
@@ -147,38 +148,52 @@ function ReleaseSidebarRow({
         aria-hidden
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          dimmed ? "bg-muted-foreground/35" : "bg-primary",
+          dimmed ? "bg-muted-foreground/35" : RELEASE_STATUS_DOT[release.releaseStatus],
         )}
       />
       <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
         {release.name}
-      </span>
-      <span
-        aria-label={isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`}
-        className={cn(
-          "hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100",
-          isPinned && "flex opacity-80 text-primary",
+        {release.version && (
+          <span className="ml-1.5 text-xs text-muted-foreground/70">
+            {release.version}
+          </span>
         )}
-        onClick={(event) => {
-          event.stopPropagation();
-          onPin(release.name);
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        <Pin className="size-3.5" />
       </span>
-      <span
-        aria-label={`Delete ${release.name}`}
-        className="hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100"
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete(release);
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        <Trash2 className="size-3.5" />
+      <span className="hidden shrink-0 text-[10px] text-muted-foreground/70 group-hover/release:hidden sm:inline">
+        {RELEASE_STATUS_LABEL[release.releaseStatus]}
+      </span>
+      <span className="flex shrink-0 items-center gap-0.5">
+        <span
+          aria-label={isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`}
+          className={cn(
+            "hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100",
+            isPinned && "flex opacity-80 text-primary",
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPin(release.name);
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          {isPinned ? (
+            <PinOff className="size-3.5" />
+          ) : (
+            <Pin className="size-3.5" />
+          )}
+        </span>
+        <span
+          aria-label={`Delete ${release.name}`}
+          className="hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(release);
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <Trash2 className="size-3.5" />
+        </span>
       </span>
     </button>
   );
@@ -288,6 +303,9 @@ function TasksTabRow({
         disabled &&
           "cursor-default opacity-75 hover:bg-transparent hover:text-muted-foreground [&_*]:cursor-default",
       )}
+      onMouseDown={(event) => {
+        if (event.button !== 0) event.preventDefault();
+      }}
     >
       <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
         <input
@@ -301,7 +319,7 @@ function TasksTabRow({
         <Check
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 text-primary-foreground opacity-0 peer-checked:opacity-100"
-          strokeWidth={2.5}
+          weight="bold"
         />
       </span>
       <span
@@ -370,6 +388,8 @@ interface ReleaseViewProps {
   onSelectTask: (id: string) => void;
   onTagTask: (taskId: string, name: string) => Promise<void>;
   releases: Release[];
+  requestedReleaseName?: string | null;
+  onRequestedReleaseNameHandled?: () => void;
   sidebarOpen?: boolean;
   tasks: Task[];
 }
@@ -381,10 +401,23 @@ export function ReleaseView({
   onSelectTask,
   onTagTask,
   releases,
+  requestedReleaseName,
+  onRequestedReleaseNameHandled,
   sidebarOpen = true,
   tasks,
 }: ReleaseViewProps) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!requestedReleaseName) return;
+    setSelectedName(requestedReleaseName);
+    const target = releases.find(
+      (release) => release.name === requestedReleaseName,
+    );
+    if (target) {
+      setSidebarTab(getReleaseStatus(target) === "released" ? "released" : "drafts");
+    }
+    onRequestedReleaseNameHandled?.();
+  }, [requestedReleaseName, releases, onRequestedReleaseNameHandled]);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
   const [confirmReleaseOpen, setConfirmReleaseOpen] = useState(false);
@@ -399,7 +432,7 @@ export function ReleaseView({
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [releaseSearch, setReleaseSearch] = useState("");
-  const [releasedExpanded, setReleasedExpanded] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"drafts" | "released">("drafts");
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [pinnedReleaseNames, setPinnedReleaseNames] = useState<string[]>(
     loadPinnedReleaseNames,
@@ -922,33 +955,7 @@ export function ReleaseView({
           className="flex h-full min-h-0 flex-col bg-card/95 text-card-foreground"
           style={{ width: sidebarWidth }}
         >
-          <div className="flex items-center justify-between gap-2 px-3.5 pb-3 pt-5">
-            <div className="flex min-w-0 items-center gap-2 text-foreground/85">
-              <Calendar
-                className="size-4 shrink-0 text-current"
-                strokeWidth={1.75}
-              />
-              <div className="min-w-0">
-                <h1 className="truncate text-sm font-medium text-current">
-                  Releases
-                </h1>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                aria-label="New release"
-                className="size-7 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                onClick={() => setNewDialogOpen(true)}
-                size="icon-sm"
-                title="New release"
-                type="button"
-                variant="ghost"
-              >
-                <Plus strokeWidth={1.75} />
-              </Button>
-            </div>
-          </div>
-          <div className="px-3.5 pb-4">
+          <div className="px-3.5 pb-4 pt-5">
             <div className="relative">
               {releaseSearch ? (
                 <button
@@ -957,12 +964,11 @@ export function ReleaseView({
                   onClick={() => setReleaseSearch("")}
                   type="button"
                 >
-                  <X className="size-3.5" strokeWidth={1.75} />
+                  <X className="size-3.5" />
                 </button>
               ) : (
                 <Search
                   className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-                  strokeWidth={1.75}
                 />
               )}
               <Input
@@ -982,122 +988,152 @@ export function ReleaseView({
               />
             </div>
           </div>
+          <div className="px-3.5 pb-3">
+            <div
+              aria-label="Release list filter"
+              className="flex h-7 items-center rounded-md bg-muted/45 p-0.5"
+              role="group"
+            >
+              {(["drafts", "released"] as const).map((tab) => (
+                <button
+                  aria-pressed={sidebarTab === tab}
+                  className={cn(
+                    "h-6 flex-1 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized hover:text-foreground",
+                    sidebarTab === tab &&
+                      "bg-background text-foreground shadow-xs",
+                  )}
+                  key={tab}
+                  onClick={() => setSidebarTab(tab)}
+                  type="button"
+                >
+                  {tab === "drafts" ? "Drafts" : "Released"}
+                </button>
+              ))}
+            </div>
+          </div>
           <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
             <nav
               aria-label="Releases"
               className="flex w-full min-w-0 flex-col overflow-hidden px-3.5 pb-3"
             >
-              {!searchActive && pinnedReleases.length > 0 && (
-                <section aria-label="Pinned releases" className="mb-3">
-                  <button
-                    aria-expanded={pinnedExpanded}
-                    className="mb-1 flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    onClick={() => setPinnedExpanded((open) => !open)}
-                    type="button"
-                  >
-                    <ChevronRight
-                      aria-hidden
-                      className={cn(
-                        "size-3.5 shrink-0 transition-transform",
-                        pinnedExpanded && "rotate-90",
-                      )}
-                      strokeWidth={1.75}
-                    />
-                    <span className="min-w-0 flex-1 truncate">
-                      Pinned releases
-                    </span>
-                  </button>
-                  {pinnedExpanded && (
-                    <div className="flex min-w-0 flex-col gap-px overflow-hidden">
-                      {pinnedReleases.map((release) => (
-                        <ReleaseSidebarRow
-                          dimmed={getReleaseStatus(release) === "released"}
-                          isPinned={pinnedReleaseNames.includes(release.name)}
-                          key={release.name}
-                          onDelete={setReleaseToDelete}
-                          onPin={togglePinnedRelease}
-                          onSelect={setSelectedName}
-                          release={release}
-                          selected={selectedRelease?.name === release.name}
+              {sidebarTab === "drafts" ? (
+                <>
+                  {!searchActive && pinnedReleases.length > 0 && (
+                    <section aria-label="Pinned releases" className="mb-3">
+                      <button
+                        aria-expanded={pinnedExpanded}
+                        className="mb-1 flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        onClick={() => setPinnedExpanded((open) => !open)}
+                        type="button"
+                      >
+                        <ChevronRight
+                          aria-hidden
+                          className={cn(
+                            "size-3.5 shrink-0 transition-transform",
+                            pinnedExpanded && "rotate-90",
+                          )}
                         />
-                      ))}
+                        <span className="min-w-0 flex-1 truncate">
+                          Pinned releases
+                        </span>
+                      </button>
+                      {pinnedExpanded && (
+                        <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                          {pinnedReleases.map((release) => (
+                            <ReleaseSidebarRow
+                              dimmed={getReleaseStatus(release) === "released"}
+                              isPinned={pinnedReleaseNames.includes(release.name)}
+                              key={release.name}
+                              onDelete={setReleaseToDelete}
+                              onPin={togglePinnedRelease}
+                              onSelect={setSelectedName}
+                              release={release}
+                              selected={selectedRelease?.name === release.name}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                  <div className="flex items-center justify-between gap-2 px-0.5 pb-1">
+                    <span className="truncate text-[11px] font-semibold text-foreground">
+                      {searchActive ? "Draft results" : "All Drafts"}
+                    </span>
+                    <Button
+                      aria-label="New release"
+                      className="size-5 shrink-0 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                      onClick={() => setNewDialogOpen(true)}
+                      size="icon-sm"
+                      title="New release"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                    {filteredDraftReleases.map((release) => (
+                      <ReleaseSidebarRow
+                        isPinned={pinnedReleaseNames.includes(release.name)}
+                        key={release.name}
+                        onDelete={setReleaseToDelete}
+                        onPin={togglePinnedRelease}
+                        onSelect={setSelectedName}
+                        release={release}
+                        selected={selectedRelease?.name === release.name}
+                      />
+                    ))}
+                  </div>
+                  {!filteredDraftReleases.length && (
+                    <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
+                      <Calendar
+                        className="size-5 opacity-60"
+                      />
+                      <span>
+                        {draftReleases.length
+                          ? searchActive
+                            ? `No draft releases match “${releaseSearch.trim()}”.`
+                            : "No draft releases yet."
+                          : "No draft releases yet."}
+                      </span>
                     </div>
                   )}
-                </section>
-              )}
-              <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
-                {searchActive ? "Draft results" : "All Drafts"}
-              </div>
-              <div className="flex min-w-0 flex-col gap-px overflow-hidden">
-                {filteredDraftReleases.map((release) => (
-                  <ReleaseSidebarRow
-                    isPinned={pinnedReleaseNames.includes(release.name)}
-                    key={release.name}
-                    onDelete={setReleaseToDelete}
-                    onPin={togglePinnedRelease}
-                    onSelect={setSelectedName}
-                    release={release}
-                    selected={selectedRelease?.name === release.name}
-                  />
-                ))}
-              </div>
-              {!filteredDraftReleases.length && (
-                <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-                  <Calendar className="size-5 opacity-60" strokeWidth={1.75} />
-                  <span>
-                    {draftReleases.length
-                      ? searchActive
-                        ? `No draft releases match “${releaseSearch.trim()}”.`
-                        : "No draft releases yet."
-                      : "No draft releases yet."}
-                  </span>
-                </div>
+                </>
+              ) : (
+                <>
+                  <div className="px-0.5 pb-1 text-[11px] font-semibold text-foreground">
+                    {searchActive ? "Released results" : "All Released"}
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-px overflow-hidden">
+                    {filteredReleasedReleases.map((release) => (
+                      <ReleaseSidebarRow
+                        dimmed
+                        isPinned={pinnedReleaseNames.includes(release.name)}
+                        key={release.name}
+                        onDelete={setReleaseToDelete}
+                        onPin={togglePinnedRelease}
+                        onSelect={setSelectedName}
+                        release={release}
+                        selected={selectedRelease?.name === release.name}
+                      />
+                    ))}
+                  </div>
+                  {!filteredReleasedReleases.length && (
+                    <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
+                      <Calendar
+                        className="size-5 opacity-60"
+                      />
+                      <span>
+                        {releasedReleases.length
+                          ? `No released releases match “${releaseSearch.trim()}”.`
+                          : "No released releases yet."}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </nav>
           </ScrollArea>
-          <div className="shrink-0 border-t border-border/80 px-3.5 py-2">
-            <button
-              aria-expanded={releasedExpanded}
-              className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded px-0.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onClick={() => setReleasedExpanded((expanded) => !expanded)}
-              type="button"
-            >
-              <ChevronRight
-                aria-hidden
-                className={cn(
-                  "size-3.5 shrink-0 transition-transform",
-                  releasedExpanded && "rotate-90",
-                )}
-                strokeWidth={1.75}
-              />
-              <span className="min-w-0 flex-1 truncate">Released</span>
-            </button>
-            {releasedExpanded && (
-              <ScrollArea className="max-h-[260px] pt-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
-                <div className="flex min-w-0 flex-col gap-px overflow-hidden pb-1">
-                  {filteredReleasedReleases.map((release) => (
-                    <ReleaseSidebarRow
-                      dimmed
-                      isPinned={pinnedReleaseNames.includes(release.name)}
-                      key={release.name}
-                      onDelete={setReleaseToDelete}
-                      onPin={togglePinnedRelease}
-                      onSelect={setSelectedName}
-                      release={release}
-                      selected={selectedRelease?.name === release.name}
-                    />
-                  ))}
-                  {!filteredReleasedReleases.length && (
-                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                      {releasedReleases.length
-                        ? `No released releases match “${releaseSearch.trim()}”.`
-                        : "No released releases yet."}
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
         </aside>
         {sidebarOpen && (
           <button

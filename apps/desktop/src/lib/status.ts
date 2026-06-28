@@ -1,4 +1,9 @@
-import { type EntryType, type TaskStatus, type Visibility } from "./types";
+import {
+  type EntryType,
+  type ReleaseStatus,
+  type TaskStatus,
+  type Visibility,
+} from "./types";
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   planned: "Planned",
@@ -70,6 +75,18 @@ export const ENTRY_BG: Record<EntryType, string> = {
   worklog: "bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))]",
   status: "bg-[hsl(var(--chart-1)/0.15)] text-[hsl(var(--chart-1))]",
   estimate: "bg-[hsl(var(--chart-2)/0.15)] text-[hsl(var(--chart-2))]",
+};
+
+export const RELEASE_STATUS_LABEL: Record<ReleaseStatus, string> = {
+  draft: "Draft",
+  pre_release: "Pre-release",
+  released: "Released",
+};
+
+export const RELEASE_STATUS_DOT: Record<ReleaseStatus, string> = {
+  draft: "bg-muted-foreground/50",
+  pre_release: "bg-warning",
+  released: "bg-success",
 };
 
 export const VISIBILITY_LABEL: Record<Visibility, string> = {

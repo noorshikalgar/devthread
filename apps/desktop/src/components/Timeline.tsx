@@ -1,13 +1,13 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
-  ChevronDown,
-  Clock4,
-  ExternalLink,
-  History,
-  RotateCcw,
-  SquarePen,
-  Trash2,
-} from "lucide-react";
+  CaretDown as ChevronDown,
+  Clock as Clock4,
+  ArrowSquareOut as ExternalLink,
+  ClockCounterClockwise as History,
+  ArrowCounterClockwise as RotateCcw,
+  NotePencil as SquarePen,
+  Trash as Trash2,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -98,11 +98,25 @@ export function Timeline({
     );
   }
 
-  const groups = groupByDate(entries);
+  // `entries` arrives newest-first (the data layer sorts that way for
+  // search/pagination), but the timeline reads top-to-bottom like a
+  // chat log: oldest at the top, most recent right above the composer.
+  // Reverse only for display — grouping itself still relies on same-day
+  // entries being contiguous, which holds regardless of sort direction.
+  const groups = groupByDate(entries)
+    .map((group) => ({ ...group, items: [...group.items].reverse() }))
+    .reverse();
   const compact = viewMode === "compact";
 
   return (
     <section aria-label="Task timeline" className="flex flex-col gap-5 pt-5">
+      {hasMore && !readOnly && onLoadMore && (
+        <div className="flex justify-center pb-2">
+          <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
+            Load older updates
+          </Button>
+        </div>
+      )}
       {groups.map((group) => (
         <div key={group.label} className="group/day flex flex-col gap-2">
           {compact ? (
@@ -157,14 +171,6 @@ export function Timeline({
           </ol>
         </div>
       ))}
-
-      {hasMore && !readOnly && onLoadMore && (
-        <div className="flex justify-center pt-2">
-          <Button onClick={() => void onLoadMore()} size="sm" variant="outline">
-            Load older updates
-          </Button>
-        </div>
-      )}
     </section>
   );
 }
