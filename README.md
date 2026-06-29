@@ -19,10 +19,13 @@ shape, data model, release flow, and documentation are still changing.
 - [Screenshots](#screenshots)
 - [How It Compares](#how-it-compares)
 - [Project Status](#project-status)
+- [Tech Stack](#tech-stack)
 - [Development](#development)
 - [Local Data](#local-data)
 - [Releases](#releases)
+- [Roadmap](#roadmap)
 - [Contributing](#contributing)
+- [Security And Privacy](#security-and-privacy)
 - [License](#license)
 
 ## Why DevThread Exists
@@ -51,12 +54,27 @@ again.
 - **Timeline-first memory**: every useful bit of context lives where it happened.
 - **Local attachments and link previews**: keep screenshots and references next
   to the update that made them relevant.
-- **Command palette search**: quickly find tasks, folders, and timeline entries.
+- **Command palette search**: quickly find tasks, folders, releases, and
+  timeline entries from anywhere, with back/forward navigation history
+  (`⌘[` / `⌘]`) once you jump.
 - **Archive view**: move finished or stale work out of the active workspace
   without deleting the history.
 - **Worklog view**: see where time is going across tasks and days.
+- **Global timeline**: a single cross-task activity feed — grouped by day,
+  then by task — for "what did I actually do" recall without opening every
+  task one by one. Filterable by entry type and time range (Today / Week /
+  Month / All).
+- **Work sessions**: a focus timer (Pomodoro presets or custom work/rest
+  minutes), optionally linked to a task. Runs in the background with a
+  status pill in the title bar while you work elsewhere, and logs completed
+  focus time straight into that task's worklog. Native OS notifications on
+  phase changes.
 - **Release view**: collect tasks into release notes with a simple Markdown
-  editor and preview flow.
+  editor and preview flow, with a clean Drafts/Released split and read-only
+  protection once a release ships.
+- **13 themes**: a curated set of dark and light themes (Dracula, Gruvbox,
+  Nord, Tokyo Night, and more), plus Catppuccin Mocha, Everforest, and
+  Kanagawa available to trial.
 - **Local SQLite storage**: your working memory is stored locally by default.
 
 DevThread is intentionally not trying to become a company-wide planning tool.
@@ -96,6 +114,27 @@ It is a quiet companion for individual engineering context.
 <summary><strong>Release Notes</strong></summary>
 
 ![DevThread Release Notes](docs/images/DevThread-Releases-Notes.png)
+
+</details>
+
+<details>
+<summary><strong>Global Timeline</strong></summary>
+
+![DevThread Global Timeline](docs/images/DevThread-GlobalTimeline.png)
+
+</details>
+
+<details>
+<summary><strong>Work Sessions</strong></summary>
+
+![DevThread Work Sessions](docs/images/DevThread-Sessions.png)
+
+</details>
+
+<details>
+<summary><strong>Themes</strong></summary>
+
+![DevThread Themes](docs/images/DevThread-Themes.png)
 
 </details>
 
@@ -141,6 +180,7 @@ important work history.
 - CodeMirror
 - Radix UI
 - Tailwind CSS
+- Phosphor Icons
 - Vitest
 
 ## Development
