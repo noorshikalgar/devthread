@@ -385,7 +385,9 @@ export function Composer({
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card/95 px-2 py-1.5 shadow-sm">
         <Input
           aria-label="Add quick update"
+          autoCapitalize="off"
           autoComplete="off"
+          autoCorrect="off"
           className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
           onClick={onCompactExpand}
           onChange={(event) => changeContent(event.target.value)}
@@ -435,6 +437,8 @@ export function Composer({
         <div className="relative">
           <Textarea
             aria-label="What happened?"
+            autoCapitalize="off"
+            autoCorrect="off"
             autoFocus
             className="max-h-[132px] min-h-[84px] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
             onBlur={() => setFocused(false)}

@@ -401,6 +401,8 @@ function TimelineEntryCard({
         {editing ? (
           <div className="space-y-2">
             <Textarea
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               className="min-h-[120px] text-sm leading-6"
               onChange={(event) => setContent(event.target.value)}

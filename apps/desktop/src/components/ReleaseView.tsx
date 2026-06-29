@@ -1231,6 +1231,8 @@ export function ReleaseView({
                 {editingName ? (
                   <Input
                     aria-label="Release name"
+                    autoCapitalize="off"
+                    autoCorrect="off"
                     className="h-8 w-full text-base font-semibold"
                     disabled={busy}
                     onBlur={() => void handleRename()}
@@ -1537,8 +1539,11 @@ export function ReleaseView({
                             <Input
                               aria-label="Search available tasks"
                               aria-invalid={tasksSearchInvalid || undefined}
+                              autoCapitalize="off"
+                              autoCorrect="off"
                               className="h-8 pl-7 pr-9 text-xs"
                               onChange={(e) => setTasksSearch(e.target.value)}
+                              spellCheck={false}
                               onKeyDown={(e) => {
                                 if (e.key === "Escape" && tasksSearch) {
                                   e.preventDefault();
@@ -1803,6 +1808,8 @@ export function ReleaseView({
                 Name <span className="text-destructive">*</span>
               </label>
               <Input
+                autoCapitalize="off"
+                autoCorrect="off"
                 id="new-release-name"
                 placeholder="e.g. UI refresh"
                 ref={newNameRef}

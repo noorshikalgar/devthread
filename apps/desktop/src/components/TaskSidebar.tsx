@@ -1156,6 +1156,8 @@ function FolderDialog({
           <div className="space-y-2">
             <Label htmlFor="folder-name">Name</Label>
             <Input
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               id="folder-name"
               onChange={(event) => setName(event.target.value)}

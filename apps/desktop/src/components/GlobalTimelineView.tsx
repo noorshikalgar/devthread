@@ -200,9 +200,12 @@ export function GlobalTimelineView({
             </button>
           )}
           <Input
+            autoCapitalize="off"
+            autoCorrect="off"
             className="h-9 pl-8 pr-8 text-sm"
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search across every task…"
+            spellCheck={false}
             value={search}
           />
         </div>
