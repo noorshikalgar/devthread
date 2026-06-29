@@ -445,7 +445,11 @@ export function TaskHeader({
                   <span className="font-medium">{statusLabel}</span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-44 p-1">
+              <PopoverContent
+                align="start"
+                aria-label="Change status"
+                className="w-44 p-1"
+              >
                 <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Status
                 </p>

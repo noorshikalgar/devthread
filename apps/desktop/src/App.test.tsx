@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { TaskHeader } from "./App";
 import type { Task, TaskQuickLink } from "./lib/types";
@@ -625,14 +631,13 @@ describe("TaskHeader", () => {
     fireEvent.click(
       await screen.findByLabelText("Status: Active. Click to change."),
     );
-    // The sidebar's status filter chips also render a "Done" label, so
-    // disambiguate: the popover's status option is a plain rounded-sm row,
-    // the filter chip is a rounded-full pill.
-    const doneOptions = await screen.findAllByText("Done");
-    const popoverDone = doneOptions.find((el) =>
-      el.closest("button")?.className.includes("rounded-sm"),
-    );
-    fireEvent.click(popoverDone!);
+    // The sidebar's status filter chips and the timeline's own "Status"
+    // entry-type filter both render a "Done"/"Status" label, so scope
+    // to the popover itself (it has its own aria-label) instead of
+    // matching on text or a CSS class substring — the previous
+    // approach was timing-fragile on slower CI runners.
+    const popover = await screen.findByLabelText("Change status");
+    fireEvent.click(within(popover).getByText("Done"));
 
     await waitFor(() =>
       expect(api.createEntry).toHaveBeenCalledWith(
