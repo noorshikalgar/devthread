@@ -114,6 +114,12 @@ export const APP_THEMES = [
     family: "Kanagawa",
     dark: true,
   },
+  {
+    id: "everforest-light-testing",
+    label: "Everforest Light (testing)",
+    family: "Everforest",
+    dark: false,
+  },
 ] as const satisfies readonly AppTheme[];
 
 export type AppThemeId = (typeof APP_THEMES)[number]["id"];

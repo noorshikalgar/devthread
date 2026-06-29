@@ -567,6 +567,33 @@
     --chart-4: 263 29% 61%;
     --chart-grid: 240 12% 26%;
   }
+
+  .theme-everforest-light-testing {
+    --background: 44 86% 94%;
+    --foreground: 202 11% 40%;
+    --card: 51 55% 90%;
+    --card-foreground: 202 11% 40%;
+    --popover: 52 46% 88%;
+    --popover-foreground: 202 11% 40%;
+    --primary: 67 99% 32%;
+    --primary-foreground: 44 86% 96%;
+    --secondary: 52 46% 88%;
+    --secondary-foreground: 202 11% 40%;
+    --muted: 51 55% 90%;
+    --muted-foreground: 78 15% 45%;
+    --accent: 51 34% 85%;
+    --accent-foreground: 202 11% 40%;
+    --destructive: 1 92% 65%;
+    --destructive-foreground: 44 86% 96%;
+    --border: 51 34% 80%;
+    --input: 51 34% 85%;
+    --ring: 67 99% 32%;
+    --chart-1: 67 99% 32%;
+    --chart-2: 25 91% 56%;
+    --chart-3: 43 100% 44%;
+    --chart-4: 135 40% 45%;
+    --chart-grid: 51 34% 80%;
+  }
 }
 
 @layer components {
