@@ -120,21 +120,14 @@ It is a quiet companion for individual engineering context.
 <details>
 <summary><strong>Global Timeline</strong></summary>
 
-![DevThread Global Timeline](docs/images/DevThread-GlobalTimeline.png)
+![DevThread Global Timeline](docs/images/DevThread-Global-Timeline.png)
 
 </details>
 
 <details>
 <summary><strong>Work Sessions</strong></summary>
 
-![DevThread Work Sessions](docs/images/DevThread-Sessions.png)
-
-</details>
-
-<details>
-<summary><strong>Themes</strong></summary>
-
-![DevThread Themes](docs/images/DevThread-Themes.png)
+![DevThread Work Sessions](docs/images/DevThread-Pomodoro-Timer.png)
 
 </details>
 
