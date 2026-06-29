@@ -11,12 +11,8 @@ export const menuSubContentClass =
 // gap-2.5 + size-3.5 icons gives icon and text room to breathe without
 // the row feeling icon-heavy; rounded-sm matches the content shell's
 // rounded-md at one step down, same scale used across ui/select.tsx etc.
-// Cursor intentionally excluded: ContextMenu uses cursor-default
-// (matches native OS context menus), DropdownMenu uses cursor-pointer
-// (it's a clicked-open menu, feels more like a button). Each
-// primitive appends its own.
 export const menuItemClass =
-  "relative flex select-none items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-xs leading-none outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0";
+  "relative flex cursor-pointer select-none items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-xs leading-none outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0";
 
 export const menuLabelClass = "px-2.5 py-1.5 text-xs font-semibold";
 

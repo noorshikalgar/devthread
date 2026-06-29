@@ -185,6 +185,10 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { menuContentClass, menuItemClass } from "@/components/ui/menu-styles";
+import {
+  readText as readClipboardText,
+  writeText as writeClipboardText,
+} from "@tauri-apps/plugin-clipboard-manager";
 
 const SELECTED_TASK_KEY = "devthread:selected-task";
 const PINNED_TASKS_KEY = "devthread:pinned-tasks";
@@ -706,9 +710,9 @@ export default function App() {
         return;
       }
       let canPaste = false;
-      if (editableTarget && navigator.clipboard?.readText) {
+      if (editableTarget) {
         try {
-          canPaste = (await navigator.clipboard.readText()).length > 0;
+          canPaste = (await readClipboardText()).length > 0;
         } catch {
           canPaste = false;
         }
@@ -2094,13 +2098,13 @@ function AppContextMenu({
   const hasSelection = activeMenu.selectedText.length > 0;
 
   async function copy(value: string) {
-    await navigator.clipboard.writeText(value);
+    await writeClipboardText(value);
     onClose();
   }
 
   async function copyFromEditor() {
     if (activeMenu.editorView) {
-      await navigator.clipboard.writeText(
+      await writeClipboardText(
         getCodeMirrorSelectedText(activeMenu.editorView),
       );
       activeMenu.editorView.focus();
@@ -2116,7 +2120,7 @@ function AppContextMenu({
     if (activeMenu.editorView) {
       const view = activeMenu.editorView;
       const selectedText = getCodeMirrorSelectedText(view);
-      if (selectedText) await navigator.clipboard.writeText(selectedText);
+      if (selectedText) await writeClipboardText(selectedText);
       if (!view.state.readOnly) view.dispatch(view.state.replaceSelection(""));
       view.focus();
       onClose();
@@ -2131,7 +2135,7 @@ function AppContextMenu({
     if (activeMenu.editorView) {
       activeMenu.editorView.focus();
       try {
-        const text = await navigator.clipboard.readText();
+        const text = await readClipboardText();
         if (text && !activeMenu.editorView.state.readOnly) {
           activeMenu.editorView.dispatch(
             activeMenu.editorView.state.replaceSelection(text),
@@ -2145,7 +2149,7 @@ function AppContextMenu({
     }
     activeMenu.editableTarget?.focus({ preventScroll: true });
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readClipboardText();
       if (text) {
         document.execCommand("insertText", false, text);
       } else {
@@ -2612,12 +2616,8 @@ function WorklogMetricsHeader({
       <div className="flex min-w-0 items-center gap-2.5">
         <BarChart3 className="size-4 shrink-0 text-foreground/80" />
         <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
-          WorkLog
-        </h1>
-        <span className="text-foreground/30">/</span>
-        <span className="truncate text-sm font-normal text-foreground/70">
           Time spent across tasks
-        </span>
+        </h1>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Select
