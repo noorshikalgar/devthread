@@ -54,7 +54,10 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
 import { ReleaseView } from "@/components/ReleaseView";
 import { WorkSessionsView } from "@/components/WorkSessionsView";
-import { GlobalTimelineView } from "@/components/GlobalTimelineView";
+import {
+  GlobalTimelineView,
+  type TimelineRange,
+} from "@/components/GlobalTimelineView";
 import {
   formatSessionClock,
   IDLE_SESSION,
@@ -376,6 +379,13 @@ export default function App() {
   const [pendingReleaseName, setPendingReleaseName] = useState<string | null>(
     null,
   );
+  const [globalTimelineRange, setGlobalTimelineRange] =
+    useState<TimelineRange>("today");
+  const [globalTimelineTypeFilter, setGlobalTimelineTypeFilter] = useState<
+    EntryType | "all"
+  >("all");
+  const [globalTimelineSearch, setGlobalTimelineSearch] = useState("");
+  const globalTimelineScrollRef = useRef(0);
   const [session, setSession] = useState<WorkSessionState>(IDLE_SESSION);
   useEffect(() => {
     if (session.status !== "running") return;
@@ -1775,7 +1785,19 @@ export default function App() {
               tasks={sidebarTasks}
             />
           ) : workspaceMode === "timeline" ? (
-            <GlobalTimelineView onSelectEntry={selectEntry} />
+            <GlobalTimelineView
+              initialScrollTop={globalTimelineScrollRef.current}
+              onRangeChange={setGlobalTimelineRange}
+              onScrollPositionChange={(top) => {
+                globalTimelineScrollRef.current = top;
+              }}
+              onSearchChange={setGlobalTimelineSearch}
+              onSelectEntry={selectEntry}
+              onTypeFilterChange={setGlobalTimelineTypeFilter}
+              range={globalTimelineRange}
+              search={globalTimelineSearch}
+              typeFilter={globalTimelineTypeFilter}
+            />
           ) : selectedTask ? (
             <>
               <TaskHeader

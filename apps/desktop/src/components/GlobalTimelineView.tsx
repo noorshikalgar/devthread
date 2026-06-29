@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClockCounterClockwise, MagnifyingGlass as Search, X } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -6,20 +6,28 @@ import { ENTRY_DOT, ENTRY_LABEL, STATUS_DOT } from "@/lib/status";
 import { ENTRY_TYPES, type EntryType, type GlobalTimelineEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+export type TimelineRange = "today" | "week" | "month" | "all";
+
 interface Props {
   onSelectEntry: (taskId: string, entryId: string) => void;
+  range: TimelineRange;
+  onRangeChange: (range: TimelineRange) => void;
+  typeFilter: EntryType | "all";
+  onTypeFilterChange: (filter: EntryType | "all") => void;
+  search: string;
+  onSearchChange: (search: string) => void;
+  initialScrollTop: number;
+  onScrollPositionChange: (scrollTop: number) => void;
 }
 
-type Range = "today" | "week" | "month" | "all";
-
-const RANGE_OPTIONS: { value: Range; label: string }[] = [
+const RANGE_OPTIONS: { value: TimelineRange; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "week", label: "This week" },
   { value: "month", label: "This month" },
   { value: "all", label: "All time" },
 ];
 
-function rangeStart(range: Range): string {
+function rangeStart(range: TimelineRange): string {
   const now = new Date();
   if (range === "all") return "0000-01-01T00:00:00Z";
   if (range === "today") {
@@ -114,13 +122,22 @@ function groupByDateThenTask(entries: GlobalTimelineEntry[]): DateGroup[] {
   return dateGroups;
 }
 
-export function GlobalTimelineView({ onSelectEntry }: Props) {
-  const [range, setRange] = useState<Range>("today");
-  const [typeFilter, setTypeFilter] = useState<EntryType | "all">("all");
-  const [search, setSearch] = useState("");
+export function GlobalTimelineView({
+  onSelectEntry,
+  range,
+  onRangeChange,
+  typeFilter,
+  onTypeFilterChange,
+  search,
+  onSearchChange,
+  initialScrollTop,
+  onScrollPositionChange,
+}: Props) {
   const [entries, setEntries] = useState<GlobalTimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const restoredScrollRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +158,17 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
       cancelled = true;
     };
   }, [range]);
+
+  // Restore scroll position exactly once per mount, after the first
+  // real render of content — restoring before content exists just
+  // snaps back to 0 once the list grows to its real height.
+  useEffect(() => {
+    if (restoredScrollRef.current) return;
+    if (loading) return;
+    restoredScrollRef.current = true;
+    const node = scrollRef.current;
+    if (node && initialScrollTop > 0) node.scrollTop = initialScrollTop;
+  }, [loading, initialScrollTop]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -165,7 +193,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
             <button
               aria-label="Clear search"
               className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => setSearch("")}
+              onClick={() => onSearchChange("")}
               type="button"
             >
               <X className="size-3.5" />
@@ -173,7 +201,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
           )}
           <Input
             className="h-9 pl-8 pr-8 text-sm"
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search across every task…"
             value={search}
           />
@@ -191,7 +219,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
                     : "hover:text-foreground",
                 )}
                 key={option.value}
-                onClick={() => setRange(option.value)}
+                onClick={() => onRangeChange(option.value)}
                 type="button"
               >
                 {option.label}
@@ -207,7 +235,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
                   ? "border-transparent bg-secondary text-secondary-foreground"
                   : "border-border/70 text-muted-foreground hover:border-ring/40 hover:text-foreground",
               )}
-              onClick={() => setTypeFilter("all")}
+              onClick={() => onTypeFilterChange("all")}
               type="button"
             >
               All
@@ -221,7 +249,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
                     : "border-border/70 text-muted-foreground hover:border-ring/40 hover:text-foreground",
                 )}
                 key={type}
-                onClick={() => setTypeFilter(type)}
+                onClick={() => onTypeFilterChange(type)}
                 type="button"
               >
                 <span
@@ -235,7 +263,13 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
+      <div
+        className="min-h-0 flex-1 overflow-auto px-6 py-4"
+        onScroll={(event) =>
+          onScrollPositionChange(event.currentTarget.scrollTop)
+        }
+        ref={scrollRef}
+      >
         {error && (
           <p className="text-sm text-destructive">{error}</p>
         )}
@@ -252,7 +286,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.label}>
-              <div className="sticky top-0 z-10 -mx-6 flex items-baseline gap-2 bg-background/95 px-6 py-1.5 backdrop-blur-sm">
+              <div className="sticky top-0 z-20 -mx-6 flex h-7 items-center gap-2 bg-background/90 px-6 backdrop-blur-md">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </p>
@@ -265,7 +299,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
                 {group.taskGroups.map((taskGroup) => (
                   <div key={taskGroup.taskId}>
                     <button
-                      className="group/task flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/40"
+                      className="group/task sticky top-7 z-10 -mx-6 flex h-8 w-[calc(100%+3rem)] items-center gap-2 bg-background/80 px-6 text-left backdrop-blur-md transition-colors hover:bg-accent/40"
                       onClick={() =>
                         onSelectEntry(taskGroup.taskId, taskGroup.items[0].id)
                       }
