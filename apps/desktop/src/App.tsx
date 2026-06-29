@@ -264,6 +264,7 @@ export default function App() {
   const [revisions, setRevisions] = useState<WorkLogRevision[]>([]);
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [releaseSidebarOpen, setReleaseSidebarOpen] = useState(
     () => localStorage.getItem(RELEASE_SIDEBAR_OPEN_KEY) !== "false",
@@ -1234,14 +1235,19 @@ export default function App() {
   }
 
   async function loadMore() {
-    if (!selectedId) return;
-    const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
-    setEntries((current) => {
-      const merged = [...current, ...next];
-      updateCachedTaskData(selectedId, { entries: merged });
-      return merged;
-    });
-    setHasMore(next.length === PAGE_SIZE);
+    if (!selectedId || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    try {
+      const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
+      setEntries((current) => {
+        const merged = [...current, ...next];
+        updateCachedTaskData(selectedId, { entries: merged });
+        return merged;
+      });
+      setHasMore(next.length === PAGE_SIZE);
+    } finally {
+      loadingMoreRef.current = false;
+    }
   }
 
   async function createFolder(name: string) {
@@ -1833,7 +1839,10 @@ export default function App() {
                 <ThreadColumn
                   composerVisibilityToggleRef={composerVisibilityToggleRef}
                   entryTypeFilter={entryTypeFilter}
+                  hasEntries={entries.length > 0}
+                  hasMore={hasMore}
                   onEntryTypeFilterChange={setEntryTypeFilter}
+                  onLoadMore={loadMore}
                   onRegexChange={setTimelineRegex}
                   onSearchChange={setTimelineSearch}
                   onSubmit={createEntry}
@@ -4318,6 +4327,9 @@ function clampSidebarWidth(value: number) {
 function ThreadColumn({
   children,
   taskId,
+  hasEntries,
+  hasMore,
+  onLoadMore,
   onSubmit,
   search,
   regex,
@@ -4330,6 +4342,9 @@ function ThreadColumn({
 }: {
   children: React.ReactNode;
   taskId: string;
+  hasEntries: boolean;
+  hasMore: boolean;
+  onLoadMore: () => Promise<void>;
   onSubmit: (
     type: EntryType,
     content: string,
@@ -4348,6 +4363,11 @@ function ThreadColumn({
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
   const [goLatestVisible, setGoLatestVisible] = useState(false);
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const onLoadMoreRef = useRef(onLoadMore);
+  onLoadMoreRef.current = onLoadMore;
+  const loadingOlderRef = useRef(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -4374,12 +4394,39 @@ function ThreadColumn({
     viewportRef.current = viewport;
 
     // The timeline reads oldest-to-newest, so "jump to latest" means the
-    // bottom of the scroll area, not the top.
+    // bottom of the scroll area, not the top, and "load older" lives at
+    // the top instead of the bottom.
     function handleScroll() {
       const el = viewportRef.current;
       if (!el) return;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       setGoLatestVisible(distanceFromBottom > 400);
+
+      if (
+        el.scrollTop < 80 &&
+        hasMoreRef.current &&
+        !loadingOlderRef.current
+      ) {
+        loadingOlderRef.current = true;
+        const previousHeight = el.scrollHeight;
+        const previousTop = el.scrollTop;
+        void onLoadMoreRef.current().finally(() => {
+          // Wait for the browser to actually paint the prepended
+          // entries before measuring — react's state commit doesn't
+          // guarantee layout has happened yet on this tick. Without
+          // this, the scroll-position fixup races the height change
+          // it's supposed to compensate for.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const node = viewportRef.current;
+              if (node) {
+                node.scrollTop = previousTop + (node.scrollHeight - previousHeight);
+              }
+              loadingOlderRef.current = false;
+            });
+          });
+        });
+      }
     }
 
     handleScroll();
@@ -4388,7 +4435,14 @@ function ThreadColumn({
     viewport.scrollTo?.({ top: viewport.scrollHeight });
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [taskId]);
+    // hasEntries is the real trigger for not-yet-cached tasks: entries
+    // load async, so taskId changes (and this effect fires) while the
+    // timeline is still empty. Re-running once hasEntries flips to
+    // true lands on the bottom of the content that actually rendered,
+    // instead of the empty state that existed when taskId first
+    // changed. It deliberately ignores search/filter-driven changes —
+    // callers pass the raw entry count, not the filtered one.
+  }, [taskId, hasEntries]);
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-col">
