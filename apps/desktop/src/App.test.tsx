@@ -476,16 +476,16 @@ describe("TaskHeader", () => {
 
     fireEvent.click(screen.getByLabelText("Open settings"));
     fireEvent.click(screen.getByRole("combobox", { name: "Theme" }));
-    fireEvent.click(await screen.findByText("Tokyo Night Light"));
+    fireEvent.click(await screen.findByText("Gruvbox Light"));
 
-    expect(localStorage.getItem("devthread:theme")).toBe("tokyo-night-light");
+    expect(localStorage.getItem("devthread:theme")).toBe("gruvbox-light");
   });
 
   it("persists theme preference when changing it from settings", async () => {
-    localStorage.setItem("devthread:theme", "zed-dark");
+    localStorage.setItem("devthread:theme", "dracula-dark");
     render(<App />);
 
-    expect(document.documentElement).toHaveClass("theme-zed-dark");
+    expect(document.documentElement).toHaveClass("theme-dracula-dark");
     expect(document.documentElement).toHaveClass("dark");
     expect(document.documentElement).not.toHaveClass("theme-tokyo-night-dark");
     expect(document.documentElement).not.toHaveClass("theme-default-dark");
@@ -499,11 +499,11 @@ describe("TaskHeader", () => {
     expect(root).toHaveClass("theme-default-dark");
     expect(root).toHaveClass("dark");
     for (const stale of [
-      "theme-zed-dark",
-      "theme-zed-light",
+      "theme-dracula-dark",
+      "theme-nord-dark",
       "theme-tokyo-night-dark",
-      "theme-tokyo-night-light",
       "theme-default-light",
+      "theme-gruvbox-light",
     ]) {
       expect(root).not.toHaveClass(stale);
     }

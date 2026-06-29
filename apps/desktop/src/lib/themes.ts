@@ -25,12 +25,6 @@ export const APP_THEMES = [
     dark: true,
   },
   {
-    id: "zed-dark",
-    label: "Zed One Dark",
-    family: "Zed",
-    dark: true,
-  },
-  {
     id: "gruvbox-dark",
     label: "Gruvbox",
     family: "Gruvbox",
@@ -49,45 +43,15 @@ export const APP_THEMES = [
     dark: true,
   },
   {
-    id: "rose-pine-moon-dark",
-    label: "Rosé Pine Moon",
-    family: "Rosé Pine",
-    dark: true,
-  },
-  {
     id: "default-light",
     label: "Default Light",
     family: "Default",
     dark: false,
   },
   {
-    id: "light-gray",
-    label: "Light Gray",
-    family: "Neutral",
-    dark: false,
-  },
-  {
-    id: "tokyo-night-light",
-    label: "Tokyo Night Light",
-    family: "Tokyo Night",
-    dark: false,
-  },
-  {
-    id: "zed-light",
-    label: "Zed One Light",
-    family: "Zed",
-    dark: false,
-  },
-  {
     id: "gruvbox-light",
     label: "Gruvbox Light",
     family: "Gruvbox",
-    dark: false,
-  },
-  {
-    id: "nord-light",
-    label: "Nord Light",
-    family: "Nord",
     dark: false,
   },
   {
