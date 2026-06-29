@@ -74,15 +74,44 @@ function formatTime(value: string) {
   });
 }
 
-function groupByDate(entries: GlobalTimelineEntry[]) {
-  const groups: { label: string; items: GlobalTimelineEntry[] }[] = [];
+interface TaskGroup {
+  taskId: string;
+  taskTitle: string;
+  taskStatus: GlobalTimelineEntry["taskStatus"];
+  items: GlobalTimelineEntry[];
+}
+
+interface DateGroup {
+  label: string;
+  taskGroups: TaskGroup[];
+}
+
+/** Entries arrive newest-first; grouping by first-occurrence preserves
+ *  that order, so the most recently touched task's group sorts first. */
+function groupByDateThenTask(entries: GlobalTimelineEntry[]): DateGroup[] {
+  const dateGroups: DateGroup[] = [];
   for (const entry of entries) {
     const label = dateLabel(entry.occurredAt);
-    const last = groups.at(-1);
-    if (last && last.label === label) last.items.push(entry);
-    else groups.push({ label, items: [entry] });
+    let dateGroup = dateGroups.at(-1);
+    if (!dateGroup || dateGroup.label !== label) {
+      dateGroup = { label, taskGroups: [] };
+      dateGroups.push(dateGroup);
+    }
+    let taskGroup = dateGroup.taskGroups.find(
+      (group) => group.taskId === entry.taskId,
+    );
+    if (!taskGroup) {
+      taskGroup = {
+        taskId: entry.taskId,
+        taskTitle: entry.taskTitle,
+        taskStatus: entry.taskStatus,
+        items: [],
+      };
+      dateGroup.taskGroups.push(taskGroup);
+    }
+    taskGroup.items.push(entry);
   }
-  return groups;
+  return dateGroups;
 }
 
 export function GlobalTimelineView({ onSelectEntry }: Props) {
@@ -125,7 +154,7 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
     });
   }, [entries, typeFilter, search]);
 
-  const groups = useMemo(() => groupByDate(filtered), [filtered]);
+  const groups = useMemo(() => groupByDateThenTask(filtered), [filtered]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -220,56 +249,79 @@ export function GlobalTimelineView({ onSelectEntry }: Props) {
             </span>
           </div>
         )}
-        <div className="space-y-5">
+        <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.label}>
-              <p className="sticky top-0 -mx-6 bg-background/95 px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
-                {group.label}
-              </p>
-              <div className="mt-1 flex flex-col">
-                {group.items.map((entry) => (
-                  <button
-                    className="group flex w-full items-start gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent/50"
-                    key={entry.id}
-                    onClick={() => onSelectEntry(entry.taskId, entry.id)}
-                    type="button"
-                  >
-                    <span className="mt-1.5 w-12 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                      {formatTime(entry.occurredAt)}
-                    </span>
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "mt-1.5 size-1.5 shrink-0 rounded-full",
-                        ENTRY_DOT[entry.entryType],
-                      )}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-foreground">
-                        {stripMarkdown(entry.contentMarkdown) || "—"}
+              <div className="sticky top-0 z-10 -mx-6 flex items-baseline gap-2 bg-background/95 px-6 py-1.5 backdrop-blur-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.label}
+                </p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  {group.taskGroups.length}{" "}
+                  {group.taskGroups.length === 1 ? "task" : "tasks"}
+                </p>
+              </div>
+              <div className="mt-2 flex flex-col gap-4">
+                {group.taskGroups.map((taskGroup) => (
+                  <div key={taskGroup.taskId}>
+                    <button
+                      className="group/task flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/40"
+                      onClick={() =>
+                        onSelectEntry(taskGroup.taskId, taskGroup.items[0].id)
+                      }
+                      type="button"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          STATUS_DOT[taskGroup.taskStatus],
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground group-hover/task:underline">
+                        {taskGroup.taskTitle}
                       </span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            STATUS_DOT[entry.taskStatus],
-                          )}
-                        />
-                        <span className="truncate group-hover:text-foreground">
-                          {entry.taskTitle}
-                        </span>
-                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                          {ENTRY_LABEL[entry.entryType]}
-                        </span>
-                        {entry.durationMinutes ? (
-                          <span className="shrink-0">
-                            {entry.durationMinutes}m
+                      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {taskGroup.items.length}
+                      </span>
+                    </button>
+                    <div className="ml-3.5 flex flex-col border-l border-border/60 pl-4">
+                      {taskGroup.items.map((entry) => (
+                        <button
+                          className="group flex w-full items-start gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
+                          key={entry.id}
+                          onClick={() => onSelectEntry(entry.taskId, entry.id)}
+                          type="button"
+                        >
+                          <span className="mt-1 w-11 shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            {formatTime(entry.occurredAt)}
                           </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </button>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "mt-1.5 size-1.5 shrink-0 rounded-full",
+                              ENTRY_DOT[entry.entryType],
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm text-foreground">
+                              {stripMarkdown(entry.contentMarkdown) || "—"}
+                            </span>
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                                {ENTRY_LABEL[entry.entryType]}
+                              </span>
+                              {entry.durationMinutes ? (
+                                <span className="shrink-0">
+                                  {entry.durationMinutes}m
+                                </span>
+                              ) : null}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
