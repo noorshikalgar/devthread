@@ -579,22 +579,6 @@ export function Composer({
             ref={fileInput}
             type="file"
           />
-          {(content.trim() || images.length > 0) && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  aria-label="Clear draft"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={resetComposer}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <Eraser />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Clear draft</TooltipContent>
-            </Tooltip>
-          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -622,22 +606,40 @@ export function Composer({
             <span className="hidden sm:inline"> (progress, blocker, etc)</span>
           </span>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              className="h-7 gap-1.5 px-3 text-xs font-medium [&_svg]:size-3.5"
-              disabled={submitDisabled}
-              onClick={() => void submit()}
-              size="sm"
-            >
-              <Send />
-              {saving ? "Adding…" : "Add"}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {metaKey} + ↵ to add · Type @ to switch type
-          </TooltipContent>
-        </Tooltip>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {(content.trim() || images.length > 0) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  aria-label="Clear draft"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={resetComposer}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <Eraser />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Clear draft</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="h-7 gap-1.5 px-3 text-xs font-medium [&_svg]:size-3.5"
+                disabled={submitDisabled}
+                onClick={() => void submit()}
+                size="sm"
+              >
+                <Send />
+                {saving ? "Adding…" : "Add"}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {metaKey} + ↵ to add · Type @ to switch type
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {error && (
