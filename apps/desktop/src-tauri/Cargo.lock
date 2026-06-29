@@ -923,7 +923,7 @@ dependencies = [
 
 [[package]]
 name = "devthread"
-version = "6.1.0"
+version = "6.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
