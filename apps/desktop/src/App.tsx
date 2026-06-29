@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   Clock as Clock4,
+  ClockCounterClockwise,
   ClipboardText as ClipboardPaste,
   Copy,
   Download,
@@ -53,6 +54,10 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
 import { ReleaseView } from "@/components/ReleaseView";
 import { WorkSessionsView } from "@/components/WorkSessionsView";
+import {
+  GlobalTimelineView,
+  type TimelineRange,
+} from "@/components/GlobalTimelineView";
 import {
   formatSessionClock,
   IDLE_SESSION,
@@ -180,6 +185,10 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { menuContentClass, menuItemClass } from "@/components/ui/menu-styles";
+import {
+  readText as readClipboardText,
+  writeText as writeClipboardText,
+} from "@tauri-apps/plugin-clipboard-manager";
 
 const SELECTED_TASK_KEY = "devthread:selected-task";
 const PINNED_TASKS_KEY = "devthread:pinned-tasks";
@@ -259,6 +268,7 @@ export default function App() {
   const [revisions, setRevisions] = useState<WorkLogRevision[]>([]);
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [releaseSidebarOpen, setReleaseSidebarOpen] = useState(
     () => localStorage.getItem(RELEASE_SIDEBAR_OPEN_KEY) !== "false",
@@ -374,6 +384,13 @@ export default function App() {
   const [pendingReleaseName, setPendingReleaseName] = useState<string | null>(
     null,
   );
+  const [globalTimelineRange, setGlobalTimelineRange] =
+    useState<TimelineRange>("today");
+  const [globalTimelineTypeFilter, setGlobalTimelineTypeFilter] = useState<
+    EntryType | "all"
+  >("all");
+  const [globalTimelineSearch, setGlobalTimelineSearch] = useState("");
+  const globalTimelineScrollRef = useRef(0);
   const [session, setSession] = useState<WorkSessionState>(IDLE_SESSION);
   useEffect(() => {
     if (session.status !== "running") return;
@@ -693,9 +710,9 @@ export default function App() {
         return;
       }
       let canPaste = false;
-      if (editableTarget && navigator.clipboard?.readText) {
+      if (editableTarget) {
         try {
-          canPaste = (await navigator.clipboard.readText()).length > 0;
+          canPaste = (await readClipboardText()).length > 0;
         } catch {
           canPaste = false;
         }
@@ -1222,14 +1239,19 @@ export default function App() {
   }
 
   async function loadMore() {
-    if (!selectedId) return;
-    const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
-    setEntries((current) => {
-      const merged = [...current, ...next];
-      updateCachedTaskData(selectedId, { entries: merged });
-      return merged;
-    });
-    setHasMore(next.length === PAGE_SIZE);
+    if (!selectedId || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    try {
+      const next = await api.listEntries(selectedId, PAGE_SIZE, entries.length);
+      setEntries((current) => {
+        const merged = [...current, ...next];
+        updateCachedTaskData(selectedId, { entries: merged });
+        return merged;
+      });
+      setHasMore(next.length === PAGE_SIZE);
+    } finally {
+      loadingMoreRef.current = false;
+    }
   }
 
   async function createFolder(name: string) {
@@ -1422,7 +1444,13 @@ export default function App() {
   }
 
   function selectEntry(taskId: string, entryId: string) {
-    if (selectedId !== taskId || workspaceMode === "releases" || workspaceMode === "worklog") {
+    if (
+      selectedId !== taskId ||
+      workspaceMode === "releases" ||
+      workspaceMode === "worklog" ||
+      workspaceMode === "sessions" ||
+      workspaceMode === "timeline"
+    ) {
       jumpToTask(taskId);
     }
     setTimeout(() => {
@@ -1615,6 +1643,7 @@ export default function App() {
             }
             setSidebarOpen((open) => !open);
           }}
+          onTimelineOpen={() => setWorkspaceMode("timeline")}
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
           releasesOpen={releaseSidebarOpen}
@@ -1622,6 +1651,7 @@ export default function App() {
           sessionsActive={workspaceMode === "sessions"}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
+          timelineActive={workspaceMode === "timeline"}
           updateAvailable={updateState === "available"}
           worklogActive={workspaceMode === "worklog"}
         />
@@ -1764,6 +1794,20 @@ export default function App() {
               session={session}
               tasks={sidebarTasks}
             />
+          ) : workspaceMode === "timeline" ? (
+            <GlobalTimelineView
+              initialScrollTop={globalTimelineScrollRef.current}
+              onRangeChange={setGlobalTimelineRange}
+              onScrollPositionChange={(top) => {
+                globalTimelineScrollRef.current = top;
+              }}
+              onSearchChange={setGlobalTimelineSearch}
+              onSelectEntry={selectEntry}
+              onTypeFilterChange={setGlobalTimelineTypeFilter}
+              range={globalTimelineRange}
+              search={globalTimelineSearch}
+              typeFilter={globalTimelineTypeFilter}
+            />
           ) : selectedTask ? (
             <>
               <TaskHeader
@@ -1799,7 +1843,10 @@ export default function App() {
                 <ThreadColumn
                   composerVisibilityToggleRef={composerVisibilityToggleRef}
                   entryTypeFilter={entryTypeFilter}
+                  hasEntries={entries.length > 0}
+                  hasMore={hasMore}
                   onEntryTypeFilterChange={setEntryTypeFilter}
+                  onLoadMore={loadMore}
                   onRegexChange={setTimelineRegex}
                   onSearchChange={setTimelineSearch}
                   onSubmit={createEntry}
@@ -1888,6 +1935,7 @@ function AppRail({
   onSessionsOpen,
   onSettingsOpen,
   onTaskToggle,
+  onTimelineOpen,
   onWorklogOpen,
   releasesActive,
   releasesOpen,
@@ -1895,6 +1943,7 @@ function AppRail({
   sessionsActive,
   tasksActive,
   tasksOpen,
+  timelineActive,
   updateAvailable,
   worklogActive,
 }: {
@@ -1905,6 +1954,7 @@ function AppRail({
   onSessionsOpen: () => void;
   onSettingsOpen: () => void;
   onTaskToggle: () => void;
+  onTimelineOpen: () => void;
   onWorklogOpen: () => void;
   releasesActive: boolean;
   releasesOpen: boolean;
@@ -1912,6 +1962,7 @@ function AppRail({
   sessionsActive: boolean;
   tasksActive: boolean;
   tasksOpen: boolean;
+  timelineActive: boolean;
   updateAvailable: boolean;
   worklogActive: boolean;
 }) {
@@ -1926,6 +1977,13 @@ function AppRail({
           }
           onClick={onTaskToggle}
           tooltip="Tasks"
+        />
+        <RailButton
+          active={timelineActive}
+          icon={ClockCounterClockwise}
+          label="Open global timeline"
+          onClick={onTimelineOpen}
+          tooltip="Timeline"
         />
         <RailButton
           active={worklogActive}
@@ -2040,13 +2098,13 @@ function AppContextMenu({
   const hasSelection = activeMenu.selectedText.length > 0;
 
   async function copy(value: string) {
-    await navigator.clipboard.writeText(value);
+    await writeClipboardText(value);
     onClose();
   }
 
   async function copyFromEditor() {
     if (activeMenu.editorView) {
-      await navigator.clipboard.writeText(
+      await writeClipboardText(
         getCodeMirrorSelectedText(activeMenu.editorView),
       );
       activeMenu.editorView.focus();
@@ -2062,7 +2120,7 @@ function AppContextMenu({
     if (activeMenu.editorView) {
       const view = activeMenu.editorView;
       const selectedText = getCodeMirrorSelectedText(view);
-      if (selectedText) await navigator.clipboard.writeText(selectedText);
+      if (selectedText) await writeClipboardText(selectedText);
       if (!view.state.readOnly) view.dispatch(view.state.replaceSelection(""));
       view.focus();
       onClose();
@@ -2077,7 +2135,7 @@ function AppContextMenu({
     if (activeMenu.editorView) {
       activeMenu.editorView.focus();
       try {
-        const text = await navigator.clipboard.readText();
+        const text = await readClipboardText();
         if (text && !activeMenu.editorView.state.readOnly) {
           activeMenu.editorView.dispatch(
             activeMenu.editorView.state.replaceSelection(text),
@@ -2091,7 +2149,7 @@ function AppContextMenu({
     }
     activeMenu.editableTarget?.focus({ preventScroll: true });
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readClipboardText();
       if (text) {
         document.execCommand("insertText", false, text);
       } else {
@@ -2558,12 +2616,8 @@ function WorklogMetricsHeader({
       <div className="flex min-w-0 items-center gap-2.5">
         <BarChart3 className="size-4 shrink-0 text-foreground/80" />
         <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
-          WorkLog
-        </h1>
-        <span className="text-foreground/30">/</span>
-        <span className="truncate text-sm font-normal text-foreground/70">
           Time spent across tasks
-        </span>
+        </h1>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Select
@@ -4273,6 +4327,9 @@ function clampSidebarWidth(value: number) {
 function ThreadColumn({
   children,
   taskId,
+  hasEntries,
+  hasMore,
+  onLoadMore,
   onSubmit,
   search,
   regex,
@@ -4285,6 +4342,9 @@ function ThreadColumn({
 }: {
   children: React.ReactNode;
   taskId: string;
+  hasEntries: boolean;
+  hasMore: boolean;
+  onLoadMore: () => Promise<void>;
   onSubmit: (
     type: EntryType,
     content: string,
@@ -4303,6 +4363,11 @@ function ThreadColumn({
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
   const [goLatestVisible, setGoLatestVisible] = useState(false);
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const onLoadMoreRef = useRef(onLoadMore);
+  onLoadMoreRef.current = onLoadMore;
+  const loadingOlderRef = useRef(false);
   const FILTERS: { value: EntryType | "all"; label: string }[] = [
     { value: "all", label: "All" },
     { value: "worklog", label: "Worklog" },
@@ -4329,12 +4394,39 @@ function ThreadColumn({
     viewportRef.current = viewport;
 
     // The timeline reads oldest-to-newest, so "jump to latest" means the
-    // bottom of the scroll area, not the top.
+    // bottom of the scroll area, not the top, and "load older" lives at
+    // the top instead of the bottom.
     function handleScroll() {
       const el = viewportRef.current;
       if (!el) return;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       setGoLatestVisible(distanceFromBottom > 400);
+
+      if (
+        el.scrollTop < 80 &&
+        hasMoreRef.current &&
+        !loadingOlderRef.current
+      ) {
+        loadingOlderRef.current = true;
+        const previousHeight = el.scrollHeight;
+        const previousTop = el.scrollTop;
+        void onLoadMoreRef.current().finally(() => {
+          // Wait for the browser to actually paint the prepended
+          // entries before measuring — react's state commit doesn't
+          // guarantee layout has happened yet on this tick. Without
+          // this, the scroll-position fixup races the height change
+          // it's supposed to compensate for.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const node = viewportRef.current;
+              if (node) {
+                node.scrollTop = previousTop + (node.scrollHeight - previousHeight);
+              }
+              loadingOlderRef.current = false;
+            });
+          });
+        });
+      }
     }
 
     handleScroll();
@@ -4343,7 +4435,14 @@ function ThreadColumn({
     viewport.scrollTo?.({ top: viewport.scrollHeight });
     viewport.addEventListener("scroll", handleScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [taskId]);
+    // hasEntries is the real trigger for not-yet-cached tasks: entries
+    // load async, so taskId changes (and this effect fires) while the
+    // timeline is still empty. Re-running once hasEntries flips to
+    // true lands on the bottom of the content that actually rendered,
+    // instead of the empty state that existed when taskId first
+    // changed. It deliberately ignores search/filter-driven changes —
+    // callers pass the raw entry count, not the filtered one.
+  }, [taskId, hasEntries]);
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-col">

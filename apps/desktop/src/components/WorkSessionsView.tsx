@@ -134,7 +134,7 @@ function SessionSetup({
               className={cn(
                 "h-7 flex-1 rounded text-xs font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
                 kind === option
-                  ? "bg-foreground text-background shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "hover:text-foreground",
               )}
               key={option}
@@ -172,9 +172,11 @@ function SessionSetup({
                 Work (min)
               </span>
               <Input
+                autoCorrect="off"
                 className="h-8 w-20 text-center text-sm"
                 inputMode="numeric"
                 onChange={(event) => setCustomWork(event.target.value)}
+                spellCheck={false}
                 value={customWork}
               />
             </label>
@@ -183,9 +185,11 @@ function SessionSetup({
                 Rest (min)
               </span>
               <Input
+                autoCorrect="off"
                 className="h-8 w-20 text-center text-sm"
                 inputMode="numeric"
                 onChange={(event) => setCustomRest(event.target.value)}
+                spellCheck={false}
                 value={customRest}
               />
             </label>
@@ -234,9 +238,12 @@ function SessionSetup({
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70" />
                 <Input
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   className="h-8 pl-8 text-xs"
                   onChange={(event) => setTaskQuery(event.target.value)}
                   placeholder="Search tasks…"
+                  spellCheck={false}
                   value={taskQuery}
                 />
                 {taskResults.length > 0 && (

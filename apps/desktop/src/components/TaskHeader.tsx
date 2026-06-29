@@ -258,6 +258,8 @@ export function TaskHeader({
           ) : (
             <Input
               aria-label="Task title"
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               className="h-8 flex-1 border-border bg-transparent px-1.5 text-[20px] font-semibold leading-tight tracking-tight shadow-none focus-visible:ring-1"
               maxLength={TITLE_MAX_LENGTH}
@@ -311,7 +313,7 @@ export function TaskHeader({
                       className={cn(
                         "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
                         timelineViewMode === option.value
-                          ? "bg-foreground text-background shadow-sm"
+                          ? "bg-primary text-primary-foreground shadow-sm"
                           : "hover:text-foreground",
                       )}
                       key={option.value}
@@ -1140,8 +1142,11 @@ function QuickLinkDialog({
           <div className="space-y-2">
             <Label htmlFor="quick-link-url">Link</Label>
             <Input
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               id="quick-link-url"
+              spellCheck={false}
               onChange={(event) => {
                 setUrl(event.target.value);
                 if (error) setError("");
@@ -1243,8 +1248,11 @@ function EstimateDialog({
             <Label htmlFor="estimate-duration">Estimate</Label>
             <Input
               aria-describedby="estimate-duration-hint"
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               className="font-mono"
+              spellCheck={false}
               id="estimate-duration"
               onChange={(event) => {
                 setDuration(event.target.value);

@@ -4,6 +4,7 @@ import {
   ChartBar as BarChart3,
   CaretLeft as ChevronLeft,
   CaretRight as ChevronRight,
+  ClockCounterClockwise,
   ListChecks as ListTodo,
   MagnifyingGlass as Search,
   Tag,
@@ -17,7 +18,8 @@ export type WorkspaceMode =
   | "archive"
   | "worklog"
   | "releases"
-  | "sessions";
+  | "sessions"
+  | "timeline";
 
 const WORKSPACE_META: Record<WorkspaceMode, { label: string; icon: typeof ListTodo }> = {
   tasks: { label: "Tasks", icon: ListTodo },
@@ -25,6 +27,7 @@ const WORKSPACE_META: Record<WorkspaceMode, { label: string; icon: typeof ListTo
   worklog: { label: "Worklog", icon: BarChart3 },
   releases: { label: "Releases", icon: Tag },
   sessions: { label: "Sessions", icon: Timer },
+  timeline: { label: "Timeline", icon: ClockCounterClockwise },
 };
 
 interface SessionPillInfo {

@@ -3,6 +3,7 @@ import type {
   Attachment,
   EntryType,
   Folder,
+  GlobalTimelineEntry,
   LinkMetadata,
   Release,
   Task,
@@ -49,6 +50,12 @@ export const api = {
     invoke<WorkLogEntry[]>("list_entries", { taskId, limit, offset }),
   listWorklogMetrics: (startAt: string, endAt: string) =>
     invoke<WorklogMetricEntry[]>("list_worklog_metrics", { startAt, endAt }),
+  listGlobalTimeline: (startAt: string, endAt: string, limit = 500) =>
+    invoke<GlobalTimelineEntry[]>("list_global_timeline", {
+      startAt,
+      endAt,
+      limit,
+    }),
   createEntry: (
     taskId: string,
     entryType: EntryType,

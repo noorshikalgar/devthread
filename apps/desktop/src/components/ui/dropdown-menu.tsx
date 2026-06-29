@@ -33,7 +33,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       menuItemClass,
-      "cursor-pointer data-[state=open]:bg-accent",
+      "data-[state=open]:bg-accent",
       inset && menuInsetClass,
       className,
     )}
@@ -82,12 +82,7 @@ const DropdownMenuItem = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
-    className={cn(
-      menuItemClass,
-      "cursor-pointer",
-      inset && menuInsetClass,
-      className,
-    )}
+    className={cn(menuItemClass, inset && menuInsetClass, className)}
     {...props}
   />
 ));
@@ -99,7 +94,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 >(({ className, children, checked, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
-    className={cn(menuItemClass, "cursor-pointer pl-8", className)}
+    className={cn(menuItemClass, "pl-8", className)}
     checked={checked}
     {...props}
   >
@@ -120,7 +115,7 @@ const DropdownMenuRadioItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
-    className={cn(menuItemClass, "cursor-pointer pl-8", className)}
+    className={cn(menuItemClass, "pl-8", className)}
     {...props}
   >
     <span className={menuIndicatorWrapperClass}>

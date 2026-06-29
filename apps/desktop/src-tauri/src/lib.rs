@@ -120,6 +120,18 @@ fn list_worklog_metrics(
 }
 
 #[tauri::command]
+fn list_global_timeline(
+    database: tauri::State<'_, Database>,
+    start_at: Option<String>,
+    end_at: Option<String>,
+    limit: u32,
+) -> Result<Vec<repository::GlobalTimelineEntry>, String> {
+    database
+        .list_global_timeline(start_at, end_at, limit)
+        .map_err(to_message)
+}
+
+#[tauri::command]
 fn create_entry(
     database: tauri::State<'_, Database>,
     input: CreateEntryInput,
@@ -525,6 +537,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -552,6 +565,7 @@ pub fn run() {
             unassign_folder_tasks,
             list_entries,
             list_worklog_metrics,
+            list_global_timeline,
             create_entry,
             update_entry,
             list_revisions,

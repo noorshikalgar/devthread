@@ -178,9 +178,12 @@ export function ShortcutsTab() {
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           aria-label="Filter shortcuts"
+          autoCapitalize="off"
+          autoCorrect="off"
           className="h-8 pl-7 text-xs"
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Filter shortcuts…"
+          spellCheck={false}
           value={query}
         />
       </div>

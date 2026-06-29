@@ -33,7 +33,7 @@ const ContextMenuSubTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       menuItemClass,
-      "cursor-default data-[state=open]:bg-accent",
+      "data-[state=open]:bg-accent",
       inset && menuInsetClass,
       className,
     )}
@@ -79,7 +79,7 @@ const ContextMenuItem = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
   <ContextMenuPrimitive.Item
     ref={ref}
-    className={cn(menuItemClass, "cursor-default", inset && menuInsetClass, className)}
+    className={cn(menuItemClass, inset && menuInsetClass, className)}
     {...props}
   />
 ));
@@ -91,7 +91,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
 >(({ className, children, checked, ...props }, ref) => (
   <ContextMenuPrimitive.CheckboxItem
     ref={ref}
-    className={cn(menuItemClass, "cursor-default pl-8", className)}
+    className={cn(menuItemClass, "pl-8", className)}
     checked={checked}
     {...props}
   >
@@ -112,7 +112,7 @@ const ContextMenuRadioItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <ContextMenuPrimitive.RadioItem
     ref={ref}
-    className={cn(menuItemClass, "cursor-default pl-8", className)}
+    className={cn(menuItemClass, "pl-8", className)}
     {...props}
   >
     <span className={menuIndicatorWrapperClass}>

@@ -345,6 +345,8 @@ export function LogTimeDialog({
             <Label htmlFor="log-duration">Time spent</Label>
             <Input
               aria-describedby="log-duration-hint"
+              autoCapitalize="off"
+              autoCorrect="off"
               autoFocus
               className="font-mono"
               id="log-duration"
@@ -353,6 +355,7 @@ export function LogTimeDialog({
                 if (error) setError("");
               }}
               placeholder="1d 3h"
+              spellCheck={false}
               value={duration}
             />
             <div className="grid grid-cols-6 gap-1.5">
@@ -383,6 +386,8 @@ export function LogTimeDialog({
           <div className="space-y-2">
             <Label htmlFor="log-note">Note (optional)</Label>
             <Input
+              autoCapitalize="off"
+              autoCorrect="off"
               id="log-note"
               onChange={(event) => setNote(event.target.value)}
               placeholder="What did you work on?"
