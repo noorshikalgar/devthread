@@ -264,7 +264,7 @@ export function GlobalTimelineView({
       </div>
 
       <div
-        className="min-h-0 flex-1 overflow-auto px-6 py-4"
+        className="min-h-0 flex-1 overflow-auto px-6 pb-4"
         onScroll={(event) =>
           onScrollPositionChange(event.currentTarget.scrollTop)
         }
@@ -299,7 +299,7 @@ export function GlobalTimelineView({
                 {group.taskGroups.map((taskGroup) => (
                   <div key={taskGroup.taskId}>
                     <button
-                      className="group/task sticky top-7 z-10 -mx-6 flex h-8 w-[calc(100%+3rem)] items-center gap-2 bg-background/80 px-6 text-left backdrop-blur-md transition-colors hover:bg-accent/40"
+                      className="group/task sticky top-7 z-10 -mx-6 flex h-8 w-[calc(100%_+_3rem)] items-center gap-2 bg-background/80 px-6 text-left backdrop-blur-md transition-colors hover:bg-accent/40"
                       onClick={() =>
                         onSelectEntry(taskGroup.taskId, taskGroup.items[0].id)
                       }
