@@ -311,7 +311,7 @@ export function TaskHeader({
                       className={cn(
                         "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
                         timelineViewMode === option.value
-                          ? "bg-foreground text-background shadow-sm"
+                          ? "bg-primary text-primary-foreground shadow-sm"
                           : "hover:text-foreground",
                       )}
                       key={option.value}

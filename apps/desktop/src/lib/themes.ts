@@ -96,6 +96,24 @@ export const APP_THEMES = [
     family: "Rosé Pine",
     dark: false,
   },
+  {
+    id: "catppuccin-mocha-testing",
+    label: "Catppuccin Mocha (testing)",
+    family: "Catppuccin",
+    dark: true,
+  },
+  {
+    id: "everforest-dark-testing",
+    label: "Everforest (testing)",
+    family: "Everforest",
+    dark: true,
+  },
+  {
+    id: "kanagawa-testing",
+    label: "Kanagawa (testing)",
+    family: "Kanagawa",
+    dark: true,
+  },
 ] as const satisfies readonly AppTheme[];
 
 export type AppThemeId = (typeof APP_THEMES)[number]["id"];

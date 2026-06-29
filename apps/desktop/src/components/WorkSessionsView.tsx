@@ -134,7 +134,7 @@ function SessionSetup({
               className={cn(
                 "h-7 flex-1 rounded text-xs font-medium text-muted-foreground transition-all duration-fast ease-emphasized",
                 kind === option
-                  ? "bg-foreground text-background shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "hover:text-foreground",
               )}
               key={option}
