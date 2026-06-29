@@ -32,8 +32,14 @@ function SortableRow({
   id: string;
   children: (dragHandle: React.ReactNode) => React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -53,7 +59,11 @@ function SortableRow({
     </button>
   );
 
-  return <div ref={setNodeRef} style={style}>{children(dragHandle)}</div>;
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandle)}
+    </div>
+  );
 }
 
 function SortableList<T extends { id: string }>({
@@ -64,7 +74,9 @@ function SortableList<T extends { id: string }>({
 }: SortableListProps<T>) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -80,8 +92,15 @@ function SortableList<T extends { id: string }>({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={items.map((item) => item.id)}
+        strategy={verticalListSortingStrategy}
+      >
         <div className={cn("flex flex-col", className)}>
           {items.map((item) => (
             <SortableRow key={item.id} id={item.id}>

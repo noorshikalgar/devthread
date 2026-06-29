@@ -121,7 +121,7 @@ export function WorklogHoursChart({
     [days, goalHours],
   );
   const selectedLabel = selectedDay
-    ? data.find((d) => d.date === selectedDay)?.dateLabel ?? null
+    ? (data.find((d) => d.date === selectedDay)?.dateLabel ?? null)
     : null;
 
   // The chart colours come from the active theme's --chart-* CSS

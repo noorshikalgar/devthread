@@ -12,7 +12,8 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import KitchenSink from "./dev/KitchenSink";
 import "./styles.css";
 
-const showKitchenSink = import.meta.env.DEV && new URLSearchParams(location.search).has("ds");
+const showKitchenSink =
+  import.meta.env.DEV && new URLSearchParams(location.search).has("ds");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

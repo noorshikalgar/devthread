@@ -25,7 +25,11 @@ const NavItem = React.forwardRef<HTMLButtonElement, NavItemProps>(
         )}
         {...props}
       >
-        {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
+        {icon && (
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+            {icon}
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate">{children}</span>
         {badge && <span className="shrink-0">{badge}</span>}
       </Comp>

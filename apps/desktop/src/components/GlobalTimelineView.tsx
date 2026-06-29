@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClockCounterClockwise, MagnifyingGlass as Search, X } from "@phosphor-icons/react";
+import {
+  ClockCounterClockwise,
+  MagnifyingGlass as Search,
+  X,
+} from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { ENTRY_DOT, ENTRY_LABEL, STATUS_DOT } from "@/lib/status";
-import { ENTRY_TYPES, type EntryType, type GlobalTimelineEntry } from "@/lib/types";
+import {
+  ENTRY_TYPES,
+  type EntryType,
+  type GlobalTimelineEntry,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type TimelineRange = "today" | "week" | "month" | "all";
@@ -273,9 +281,7 @@ export function GlobalTimelineView({
         }
         ref={scrollRef}
       >
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         {!error && !loading && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-16 text-center text-sm text-muted-foreground">
             <ClockCounterClockwise className="size-6 opacity-60" />

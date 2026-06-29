@@ -21,7 +21,10 @@ export type WorkspaceMode =
   | "sessions"
   | "timeline";
 
-const WORKSPACE_META: Record<WorkspaceMode, { label: string; icon: typeof ListTodo }> = {
+const WORKSPACE_META: Record<
+  WorkspaceMode,
+  { label: string; icon: typeof ListTodo }
+> = {
   tasks: { label: "Tasks", icon: ListTodo },
   archive: { label: "Archive", icon: Archive },
   worklog: { label: "Worklog", icon: BarChart3 },

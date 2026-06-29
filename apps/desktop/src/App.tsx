@@ -451,7 +451,8 @@ export default function App() {
     const isFirstPhaseOfSession = notifiedPhaseRef.current === null;
     notifiedPhaseRef.current = key;
     if (isFirstPhaseOfSession) return;
-    const title = session.phase === "work" ? "Back to work" : "Time for a break";
+    const title =
+      session.phase === "work" ? "Back to work" : "Time for a break";
     const body =
       session.phase === "work"
         ? `Round ${session.round} · ${session.workMinutes}m focus`
@@ -478,10 +479,14 @@ export default function App() {
     });
   }
   function pauseSession() {
-    setSession((s) => (s.status === "running" ? { ...s, status: "paused" } : s));
+    setSession((s) =>
+      s.status === "running" ? { ...s, status: "paused" } : s,
+    );
   }
   function resumeSession() {
-    setSession((s) => (s.status === "paused" ? { ...s, status: "running" } : s));
+    setSession((s) =>
+      s.status === "paused" ? { ...s, status: "running" } : s,
+    );
   }
   function stopSession() {
     setSession((s) =>
@@ -1647,7 +1652,9 @@ export default function App() {
           onWorklogOpen={() => setWorkspaceMode("worklog")}
           releasesActive={workspaceMode === "releases"}
           releasesOpen={releaseSidebarOpen}
-          sessionActive={session.status === "running" || session.status === "paused"}
+          sessionActive={
+            session.status === "running" || session.status === "paused"
+          }
           sessionsActive={workspaceMode === "sessions"}
           tasksActive={workspaceMode === "tasks"}
           tasksOpen={sidebarOpen}
@@ -2933,8 +2940,8 @@ function WorklogInspectorPanel({
       </div>
       {totals.length === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          No worklog entries in this range. Select a day on the heatmap or
-          chart to inspect it.
+          No worklog entries in this range. Select a day on the heatmap or chart
+          to inspect it.
         </p>
       ) : (
         <div className="mt-3 divide-y divide-border/60">
@@ -3496,8 +3503,7 @@ function RailButton({
           className={cn(
             "relative rounded-md transition-all duration-base ease-emphasized",
             "before:absolute before:left-[-9px] before:top-1/2 before:h-0 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:transition-all before:duration-base before:ease-emphasized",
-            active &&
-              "bg-secondary text-secondary-foreground before:h-5",
+            active && "bg-secondary text-secondary-foreground before:h-5",
           )}
           onClick={onClick}
           size="icon-sm"
@@ -4399,14 +4405,11 @@ function ThreadColumn({
     function handleScroll() {
       const el = viewportRef.current;
       if (!el) return;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
       setGoLatestVisible(distanceFromBottom > 400);
 
-      if (
-        el.scrollTop < 80 &&
-        hasMoreRef.current &&
-        !loadingOlderRef.current
-      ) {
+      if (el.scrollTop < 80 && hasMoreRef.current && !loadingOlderRef.current) {
         loadingOlderRef.current = true;
         const previousHeight = el.scrollHeight;
         const previousTop = el.scrollTop;
@@ -4420,7 +4423,8 @@ function ThreadColumn({
             requestAnimationFrame(() => {
               const node = viewportRef.current;
               if (node) {
-                node.scrollTop = previousTop + (node.scrollHeight - previousHeight);
+                node.scrollTop =
+                  previousTop + (node.scrollHeight - previousHeight);
               }
               loadingOlderRef.current = false;
             });
@@ -4523,9 +4527,7 @@ function ThreadColumn({
                 size="sm"
                 variant={activeMoreFilter ? "secondary" : "ghost"}
               >
-                <MoreHorizontal
-                  className="size-4 opacity-80"
-                />
+                <MoreHorizontal className="size-4 opacity-80" />
                 {activeMoreFilter?.label ?? "More"}
               </Button>
             </DropdownMenuTrigger>

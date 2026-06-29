@@ -21,7 +21,12 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Folder as FolderModel, Release, Task, TaskStatus } from "@/lib/types";
+import type {
+  Folder as FolderModel,
+  Release,
+  Task,
+  TaskStatus,
+} from "@/lib/types";
 import { STATUS_DOT, STATUS_LABEL } from "@/lib/status";
 import { hasComposerDraft } from "@/lib/composerDraftStore";
 import { Button } from "@/components/ui/button";
@@ -307,9 +312,7 @@ function ActiveSidebar({
               <X className="size-3.5" />
             </button>
           ) : (
-            <Search
-              className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-            />
+            <Search className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80" />
           )}
           <Input
             aria-label="Search tasks"
@@ -760,9 +763,7 @@ function ArchiveSidebar({
               <X className="size-3.5" />
             </button>
           ) : (
-            <Search
-              className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-            />
+            <Search className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80" />
           )}
           <Input
             aria-label={searchPlaceholder}

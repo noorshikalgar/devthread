@@ -187,7 +187,7 @@ export function CommandPalette({
           id: `release:${release.name}`,
           kind: "release",
           title: release.name,
-          meta: release.version,
+          meta: release.version ?? undefined,
           dotColor: RELEASE_STATUS_DOT[release.releaseStatus],
           group: "Releases",
           onSelect: () => {

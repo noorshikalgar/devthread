@@ -63,7 +63,12 @@ export function WorkSessionsView({
   }
   if (session.status === "finished") {
     return (
-      <FinishedSession onDiscard={onDiscard} onLog={onLog} session={session} tasks={tasks} />
+      <FinishedSession
+        onDiscard={onDiscard}
+        onLog={onLog}
+        session={session}
+        tasks={tasks}
+      />
     );
   }
   return <SessionSetup onStart={onStart} tasks={tasks} />;
@@ -313,8 +318,7 @@ function ActiveSession({
 }) {
   const linkedTask = tasks.find((task) => task.id === session.linkedTaskId);
   const totalSeconds =
-    (session.phase === "work" ? session.workMinutes : session.restMinutes) *
-    60;
+    (session.phase === "work" ? session.workMinutes : session.restMinutes) * 60;
   const progress = 1 - session.remainingSeconds / totalSeconds;
   const isWork = session.phase === "work";
 
@@ -329,7 +333,11 @@ function ActiveSession({
               : "bg-success/10 text-success",
           )}
         >
-          {isWork ? <Timer className="size-3.5" /> : <Coffee className="size-3.5" />}
+          {isWork ? (
+            <Timer className="size-3.5" />
+          ) : (
+            <Coffee className="size-3.5" />
+          )}
           {isWork ? "Focus" : "Break"}
           {session.status === "paused" && " · Paused"}
         </div>

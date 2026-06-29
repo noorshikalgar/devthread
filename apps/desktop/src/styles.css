@@ -37,10 +37,18 @@
     --info-foreground: 0 0% 100%;
     --shadow-color: 220 20% 14%;
     --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.05);
-    --shadow-sm: 0 1px 2px -1px hsl(var(--shadow-color) / 0.08), 0 1px 3px 0 hsl(var(--shadow-color) / 0.06);
-    --shadow-md: 0 4px 6px -2px hsl(var(--shadow-color) / 0.06), 0 6px 10px -3px hsl(var(--shadow-color) / 0.1);
-    --shadow-lg: 0 8px 16px -4px hsl(var(--shadow-color) / 0.1), 0 12px 24px -6px hsl(var(--shadow-color) / 0.12);
-    --shadow-xl: 0 16px 32px -8px hsl(var(--shadow-color) / 0.14), 0 24px 48px -12px hsl(var(--shadow-color) / 0.16);
+    --shadow-sm:
+      0 1px 2px -1px hsl(var(--shadow-color) / 0.08),
+      0 1px 3px 0 hsl(var(--shadow-color) / 0.06);
+    --shadow-md:
+      0 4px 6px -2px hsl(var(--shadow-color) / 0.06),
+      0 6px 10px -3px hsl(var(--shadow-color) / 0.1);
+    --shadow-lg:
+      0 8px 16px -4px hsl(var(--shadow-color) / 0.1),
+      0 12px 24px -6px hsl(var(--shadow-color) / 0.12);
+    --shadow-xl:
+      0 16px 32px -8px hsl(var(--shadow-color) / 0.14),
+      0 24px 48px -12px hsl(var(--shadow-color) / 0.16);
   }
 
   .dark {
@@ -76,10 +84,18 @@
     --info-foreground: 217 60% 10%;
     --shadow-color: 0 0% 0%;
     --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.3);
-    --shadow-sm: 0 1px 2px -1px hsl(var(--shadow-color) / 0.4), 0 1px 3px 0 hsl(var(--shadow-color) / 0.3);
-    --shadow-md: 0 4px 6px -2px hsl(var(--shadow-color) / 0.35), 0 6px 10px -3px hsl(var(--shadow-color) / 0.45);
-    --shadow-lg: 0 8px 16px -4px hsl(var(--shadow-color) / 0.45), 0 12px 24px -6px hsl(var(--shadow-color) / 0.5);
-    --shadow-xl: 0 16px 32px -8px hsl(var(--shadow-color) / 0.55), 0 24px 48px -12px hsl(var(--shadow-color) / 0.6);
+    --shadow-sm:
+      0 1px 2px -1px hsl(var(--shadow-color) / 0.4),
+      0 1px 3px 0 hsl(var(--shadow-color) / 0.3);
+    --shadow-md:
+      0 4px 6px -2px hsl(var(--shadow-color) / 0.35),
+      0 6px 10px -3px hsl(var(--shadow-color) / 0.45);
+    --shadow-lg:
+      0 8px 16px -4px hsl(var(--shadow-color) / 0.45),
+      0 12px 24px -6px hsl(var(--shadow-color) / 0.5);
+    --shadow-xl:
+      0 16px 32px -8px hsl(var(--shadow-color) / 0.55),
+      0 24px 48px -12px hsl(var(--shadow-color) / 0.6);
   }
 
   .theme-default-dark {

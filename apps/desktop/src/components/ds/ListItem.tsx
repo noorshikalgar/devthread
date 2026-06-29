@@ -1,7 +1,10 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export interface ListItemProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface ListItemProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   title: React.ReactNode;
@@ -12,7 +15,16 @@ export interface ListItemProps extends Omit<React.HTMLAttributes<HTMLDivElement>
 
 const ListItem = React.forwardRef<HTMLDivElement, ListItemProps>(
   (
-    { className, leading, trailing, title, subtitle, selected, interactive = true, ...props },
+    {
+      className,
+      leading,
+      trailing,
+      title,
+      subtitle,
+      selected,
+      interactive = true,
+      ...props
+    },
     ref,
   ) => (
     <div

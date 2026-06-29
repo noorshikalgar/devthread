@@ -155,7 +155,9 @@ function ReleaseSidebarRow({
         aria-hidden
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          dimmed ? "bg-muted-foreground/35" : RELEASE_STATUS_DOT[release.releaseStatus],
+          dimmed
+            ? "bg-muted-foreground/35"
+            : RELEASE_STATUS_DOT[release.releaseStatus],
         )}
       />
       <span className="min-w-0 flex-1 truncate text-sm font-normal text-current">
@@ -171,7 +173,9 @@ function ReleaseSidebarRow({
       </span>
       <span className="flex shrink-0 items-center gap-0.5">
         <span
-          aria-label={isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`}
+          aria-label={
+            isPinned ? `Unpin ${release.name}` : `Pin ${release.name}`
+          }
           className={cn(
             "hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/release:flex group-hover/release:opacity-100 focus-visible:flex focus-visible:opacity-100",
             isPinned && "flex opacity-80 text-primary",
@@ -474,7 +478,9 @@ export function ReleaseView({
       (release) => release.name === requestedReleaseName,
     );
     if (target) {
-      setSidebarTab(getReleaseStatus(target) === "released" ? "released" : "drafts");
+      setSidebarTab(
+        getReleaseStatus(target) === "released" ? "released" : "drafts",
+      );
     }
     onRequestedReleaseNameHandled?.();
   }, [requestedReleaseName, releases, onRequestedReleaseNameHandled]);
@@ -1036,9 +1042,7 @@ export function ReleaseView({
                   <X className="size-3.5" />
                 </button>
               ) : (
-                <Search
-                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80"
-                />
+                <Search className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80" />
               )}
               <Input
                 aria-label="Search releases"
@@ -1112,7 +1116,9 @@ export function ReleaseView({
                           {pinnedReleases.map((release) => (
                             <ReleaseSidebarRow
                               dimmed={getReleaseStatus(release) === "released"}
-                              isPinned={pinnedReleaseNames.includes(release.name)}
+                              isPinned={pinnedReleaseNames.includes(
+                                release.name,
+                              )}
                               key={release.name}
                               onDelete={setReleaseToDelete}
                               onPin={togglePinnedRelease}
@@ -1156,9 +1162,7 @@ export function ReleaseView({
                   </div>
                   {!filteredDraftReleases.length && (
                     <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-                      <Calendar
-                        className="size-5 opacity-60"
-                      />
+                      <Calendar className="size-5 opacity-60" />
                       <span>
                         {draftReleases.length
                           ? searchActive
@@ -1190,9 +1194,7 @@ export function ReleaseView({
                   </div>
                   {!filteredReleasedReleases.length && (
                     <div className="flex flex-col items-center gap-2 px-2 py-8 text-center text-xs text-muted-foreground">
-                      <Calendar
-                        className="size-5 opacity-60"
-                      />
+                      <Calendar className="size-5 opacity-60" />
                       <span>
                         {releasedReleases.length
                           ? `No released releases match “${releaseSearch.trim()}”.`

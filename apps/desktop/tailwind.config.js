@@ -76,7 +76,8 @@ export default {
         md: "var(--shadow-md)",
         lg: "var(--shadow-lg)",
         xl: "var(--shadow-xl)",
-        focus: "0 0 0 1px hsl(var(--background)), 0 0 0 3px hsl(var(--ring) / 0.45)",
+        focus:
+          "0 0 0 1px hsl(var(--background)), 0 0 0 3px hsl(var(--ring) / 0.45)",
       },
       fontFamily: {
         sans: [
